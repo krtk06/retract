@@ -42,7 +42,7 @@ PILLAR_WEIGHTS = {
     "architecture": 0.15,
 }
 
-SCALE = 10.0  # penalty per KLOC multiplier
+SCALE = 2.0  # penalty per KLOC multiplier; one medium per KLOC costs ~2 points
 
 
 def _clamp(value: float, low: int = 0, high: int = 100) -> int:

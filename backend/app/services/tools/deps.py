@@ -19,7 +19,6 @@ NPM_URL = "https://registry.npmjs.org/{name}"
 MAX_DEPS_CHECKED = 60
 HTTP_TIMEOUT = 20.0
 
-_RE_NPM_RANGE = re.compile(r"^[\^~>=< ]*")
 
 
 @dataclass
@@ -55,12 +54,24 @@ def _parse_requirements(path: Path, source: str) -> list[Dep]:
                 req = Requirement(line)
             except Exception:  # noqa: BLE001
                 continue
-            version = next(iter(req.specifier)).version if req.specifier else ""
+            version = _exact_pin_version(req)
             if version:
                 out.append(Dep(req.name, version, "PyPI", source, line_no))
     except OSError:
         pass
     return out
+
+
+def _exact_pin_version(req: Requirement) -> str | None:
+    """Only exact pins (==) represent an installed version.
+
+    Floor pins like idna>=2.5 are minimum requirements, not what's installed —
+    checking them against OSV/latest would be a false positive.
+    """
+    for spec in req.specifier:
+        if spec.operator == "==" and "*" not in spec.version:
+            return spec.version
+    return None
 
 
 def _parse_pyproject(path: Path, source: str) -> list[Dep]:
@@ -77,7 +88,7 @@ def _parse_pyproject(path: Path, source: str) -> list[Dep]:
             req = Requirement(raw)
         except Exception:  # noqa: BLE001
             continue
-        version = next(iter(req.specifier)).version if req.specifier else ""
+        version = _exact_pin_version(req)
         if version:
             out.append(Dep(req.name, version, "PyPI", source))
     return out
@@ -91,9 +102,12 @@ def _parse_package_json(path: Path, source: str) -> list[Dep]:
     out: list[Dep] = []
     for section in ("dependencies", "devDependencies"):
         for name, spec in (data.get(section) or {}).items():
-            version = _RE_NPM_RANGE.sub("", str(spec)).split("+")[0]
-            if version and version[0].isdigit():
-                out.append(Dep(name, version, "npm", source))
+            spec_str = str(spec)
+            # npm ranges (>=, ^, ~, *, x) are not exact pins — skip them.
+            if any(ch in spec_str for ch in ">^~*x"):
+                continue
+            version = spec_str
+            out.append(Dep(name, version, "npm", source))
     return out
 
 
