@@ -1,0 +1,76 @@
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_DB: ${POSTGRES_DB:-ai_intel}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    ports:
+      - "5432:5432"
+
+  redis:
+    image: redis:7-alpine
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    ports:
+      - "6379:6379"
+
+  api:
+    build: ../backend
+    env_file:
+      - path: ../.env
+        required: false
+    environment:
+      AI_INTEL_DATABASE_URL: postgresql+psycopg://postgres:postgres@postgres:5432/ai_intel
+      AI_INTEL_REDIS_URL: redis://redis:6379/0
+      AI_INTEL_DATA_DIR: /data
+    command: >
+      sh -c "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000"
+    volumes:
+      - repo_data:/data
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    ports:
+      - "8000:8000"
+
+  worker:
+    build: ../backend
+    env_file:
+      - path: ../.env
+        required: false
+    environment:
+      AI_INTEL_DATABASE_URL: postgresql+psycopg://postgres:postgres@postgres:5432/ai_intel
+      AI_INTEL_REDIS_URL: redis://redis:6379/0
+      AI_INTEL_DATA_DIR: /data
+    command: celery -A app.tasks.celery_app:celery_app worker --loglevel=info --concurrency=2
+    volumes:
+      - repo_data:/data
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  frontend:
+    build: ../frontend
+    ports:
+      - "5173:5173"
+    depends_on:
+      - api
+
+volumes:
+  postgres_data:
+  repo_data:
