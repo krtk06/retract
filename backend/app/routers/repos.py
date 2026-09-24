@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.config import get_settings
 from app.db import get_db
 from app.deps import get_current_user
 from app.models import Analysis, AnalysisStatus, Repository, User
@@ -36,12 +37,26 @@ def create_repo(
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ) -> RepoOut:
+    settings = get_settings()
     try:
         owner, name = parse_github_url(payload.url)
-    except InvalidRepoUrl as exc:
-        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(exc)) from exc
+        url = canonical_url(owner, name)
+    except InvalidRepoUrl as github_error:
+        if settings.allow_local_repos and payload.url.startswith("local://"):
+            from pathlib import Path
 
-    url = canonical_url(owner, name)
+            source = Path(payload.url.removeprefix("local://"))
+            if not source.is_dir():
+                raise HTTPException(
+                    status.HTTP_422_UNPROCESSABLE_CONTENT,
+                    detail=f"Local path does not exist: {source}",
+                ) from github_error
+            owner, name = "local", source.name
+            url = f"local://{source}"
+        else:
+            raise HTTPException(
+                status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(github_error)
+            ) from github_error
     repo = db.scalar(select(Repository).where(Repository.url == url))
     if repo is None:
         repo = Repository(owner=owner, name=name, url=url, added_by=user.id)

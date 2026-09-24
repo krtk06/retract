@@ -27,7 +27,15 @@ class Settings(BaseSettings):
 
     dev_login: bool = False
 
+    # Dev-only: allow local:// path URLs (for the seedy benchmark repo).
+    allow_local_repos: bool = False
+
     data_dir: Path = Path("./data")
+
+    # Analysis tool paths (blank → auto-detect: venv sibling, then PATH)
+    semgrep_path: str = ""
+    gitleaks_path: str = ""
+    semgrep_config: str = "p/default"
 
     cors_origins: str = "http://localhost:5173"
 

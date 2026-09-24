@@ -80,17 +80,20 @@ def test_analysis_flow_end_to_end(auth_client: TestClient, monkeypatch) -> None:
     body = detail.json()
     assert body["status"] == "done"
     assert body["commit_sha"] == "abc123def456"
-    assert body["finding_count"] == 1
+    # Empty fake repo: inventory + no-tests + no-README findings at minimum.
+    assert body["finding_count"] >= 3
 
     findings = auth_client.get(f"/api/analyses/{analysis['id']}/findings")
     assert findings.status_code == 200
     items = findings.json()
-    assert len(items) == 1
-    finding = items[0]
-    assert finding["agent"] == "ingestion"
-    assert finding["status"] == "verified"
-    assert finding["confidence"] == 1.0
-    assert finding["evidence_json"]["languages"] == {"Python": 1, "TypeScript": 1}
+    ingestion_finding = next(f for f in items if f["agent"] == "ingestion")
+    assert ingestion_finding["status"] == "verified"
+    assert ingestion_finding["confidence"] == 1.0
+    assert ingestion_finding["evidence_json"]["languages"] == {"Python": 1, "TypeScript": 1}
+    # The empty fake repo has no tests and no README.
+    categories = {f["category"] for f in items}
+    assert "coverage" in categories
+    assert "readme" in categories
 
     # Conflict while an analysis is "active": simulate a pending one.
     monkeypatch.setattr("app.routers.repos.run_analysis.delay", lambda _id: None)

@@ -47,6 +47,7 @@ class FileEntry:
     path: str
     size: int
     ext: str
+    lines: int = 0
 
 
 @dataclass
@@ -57,7 +58,30 @@ class IngestionResult:
     files: list[FileEntry] = field(default_factory=list)
     languages: dict[str, int] = field(default_factory=dict)
     total_files: int = 0
+    total_loc: int = 0
     truncated: bool = False
+
+
+def is_code_file(ext: str) -> bool:
+    return ext in EXTENSION_LANGUAGES and EXTENSION_LANGUAGES[ext] not in {
+        "Markdown",
+        "YAML",
+        "TOML",
+        "JSON",
+        "SQL",
+        "HTML",
+        "CSS",
+    }
+
+
+def count_lines(path: Path) -> int:
+    try:
+        if path.stat().st_size > MAX_FILE_SIZE_BYTES:
+            return 0
+        with path.open("rb") as handle:
+            return sum(1 for _ in handle)
+    except OSError:
+        return 0
 
 
 def _git(*args: str, cwd: Path | None = None) -> str:
@@ -110,7 +134,9 @@ def build_inventory(root: Path) -> tuple[list[FileEntry], int, bool]:
             except OSError:
                 continue
             rel = full.relative_to(root).as_posix()
-            entries.append(FileEntry(path=rel, size=size, ext=full.suffix.lower()))
+            ext = full.suffix.lower()
+            lines = count_lines(full) if is_code_file(ext) else 0
+            entries.append(FileEntry(path=rel, size=size, ext=ext, lines=lines))
     return entries, total, truncated
 
 
@@ -124,6 +150,8 @@ def detect_languages(files: list[FileEntry]) -> dict[str, int]:
 
 
 def ingest(url: str, dest: Path) -> IngestionResult:
+    if url.startswith("local://"):
+        return _ingest_local(url, dest)
     clone_repo(url, dest)
     files, total, truncated = build_inventory(dest)
     return IngestionResult(
@@ -133,5 +161,29 @@ def ingest(url: str, dest: Path) -> IngestionResult:
         files=files,
         languages=detect_languages(files),
         total_files=total,
+        total_loc=sum(f.lines for f in files),
+        truncated=truncated,
+    )
+
+
+def _ingest_local(url: str, dest: Path) -> IngestionResult:
+    """Dev-only ingestion from a local directory (local://path)."""
+    import shutil
+
+    source = Path(url.removeprefix("local://"))
+    if not source.is_dir():
+        raise RuntimeError(f"Local repository path does not exist: {source}")
+    if dest.exists():
+        shutil.rmtree(dest)
+    shutil.copytree(source, dest, ignore=shutil.ignore_patterns(".git"))
+    files, total, truncated = build_inventory(dest)
+    return IngestionResult(
+        dest=dest,
+        commit_sha="local",
+        branch="local",
+        files=files,
+        languages=detect_languages(files),
+        total_files=total,
+        total_loc=sum(f.lines for f in files),
         truncated=truncated,
     )

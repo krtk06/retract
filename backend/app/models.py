@@ -69,6 +69,18 @@ class Repository(Base):
     analyses: Mapped[list["Analysis"]] = relationship(back_populates="repository")
 
 
+class SymbolKind(enum.StrEnum):
+    MODULE = "module"
+    CLASS = "class"
+    FUNCTION = "function"
+    METHOD = "method"
+
+
+class EdgeKind(enum.StrEnum):
+    IMPORTS = "imports"
+    CALLS = "calls"
+
+
 class Analysis(Base):
     __tablename__ = "analyses"
 
@@ -83,10 +95,13 @@ class Analysis(Base):
     finished_at: Mapped[datetime | None] = mapped_column(nullable=True)
     error: Mapped[str | None] = mapped_column(Text, nullable=True)
     cost_json: Mapped[dict | None] = mapped_column(JSONVariant, nullable=True)
+    loc: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    score_json: Mapped[dict | None] = mapped_column(JSONVariant, nullable=True)
     created_at: Mapped[datetime] = mapped_column(default=utcnow)
 
     repository: Mapped[Repository] = relationship(back_populates="analyses")
     findings: Mapped[list["Finding"]] = relationship(back_populates="analysis")
+    symbols: Mapped[list["Symbol"]] = relationship(back_populates="analysis")
 
 
 class Finding(Base):
@@ -143,3 +158,45 @@ class CalibrationStat(Base):
     accepted: Mapped[int] = mapped_column(Integer, default=0)
     dismissed: Mapped[int] = mapped_column(Integer, default=0)
     updated_at: Mapped[datetime] = mapped_column(default=utcnow, onupdate=utcnow)
+
+
+class Symbol(Base):
+    __tablename__ = "symbols"
+    __table_args__ = (
+        UniqueConstraint(
+            "analysis_id", "file_path", "name", "kind", "line_start", name="uq_symbol"
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    analysis_id: Mapped[int] = mapped_column(ForeignKey("analyses.id"), index=True)
+    file_path: Mapped[str] = mapped_column(index=True)
+    name: Mapped[str]
+    kind: Mapped[SymbolKind] = mapped_column(
+        Enum(SymbolKind, native_enum=False, validate_strings=True)
+    )
+    line_start: Mapped[int]
+    line_end: Mapped[int]
+
+    analysis: Mapped[Analysis] = relationship(back_populates="symbols")
+    outgoing_edges: Mapped[list["Edge"]] = relationship(
+        back_populates="src_symbol", foreign_keys="Edge.src_symbol_id"
+    )
+
+
+class Edge(Base):
+    __tablename__ = "edges"
+    __table_args__ = (UniqueConstraint("src_symbol_id", "dst_name", "kind", name="uq_edge"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    analysis_id: Mapped[int] = mapped_column(ForeignKey("analyses.id"), index=True)
+    src_symbol_id: Mapped[int] = mapped_column(ForeignKey("symbols.id"), index=True)
+    dst_name: Mapped[str]
+    dst_symbol_id: Mapped[int | None] = mapped_column(
+        ForeignKey("symbols.id"), nullable=True, index=True
+    )
+    kind: Mapped[EdgeKind] = mapped_column(Enum(EdgeKind, native_enum=False, validate_strings=True))
+
+    src_symbol: Mapped[Symbol] = relationship(
+        back_populates="outgoing_edges", foreign_keys=[src_symbol_id]
+    )

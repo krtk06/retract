@@ -43,6 +43,9 @@ class AnalysisOut(BaseModel):
     error: str | None
     created_at: datetime
     finding_count: int = 0
+    loc: int | None = None
+    score_json: dict[str, Any] | None = None
+    repository: RepoOut | None = None
 
 
 class FindingOut(BaseModel):
@@ -69,6 +72,14 @@ class AnalysisEvent(BaseModel):
     type: str
     payload: dict[str, Any]
     ts: float
+
+
+class ScoreOut(BaseModel):
+    version: int
+    overall: int
+    loc: int | None
+    kloc: float
+    pillars: dict[str, dict[str, Any]]
 
 
 class HealthOut(BaseModel):

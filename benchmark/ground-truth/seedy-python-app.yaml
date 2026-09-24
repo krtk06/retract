@@ -1,0 +1,38 @@
+# Ground truth for benchmark/seedy-python-app
+# Used by the benchmark harness (Phase 7) to compute precision/recall.
+# Each expectation: category + file path. The harness matches findings by
+# category and file (line numbers verified where noted).
+
+repo: seedy-python-app
+expectations:
+  - category: secret
+    file: app/settings.py
+    line: 2
+    note: gitleaks AWS key
+  - category: vulnerability
+    file: app/db.py
+    line: 8
+    note: semgrep f-string SQL injection
+  - category: duplication
+    file: app/logic_beta.py
+    note: duplicated block logic_alpha.py vs logic_beta.py
+  - category: complexity
+    file: app/complex.py
+    line: 2
+    note: radon CC >= 10
+  - category: coverage
+    note: no test suite at all
+  - category: docstring
+    file: app/db.py
+    note: public functions without docstrings
+  - category: readme
+    note: no README
+  - category: outdated-dependency
+    file: requirements.txt
+    note: requests==2.6.0 and flask==0.12.2 are old
+  - category: vulnerable-dependency
+    file: requirements.txt
+    note: requests 2.6.0 has known CVEs (OSV)
+  - category: import-cycle
+    file: app/module_a.py
+    note: module_a <-> module_b circular import

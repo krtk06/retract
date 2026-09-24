@@ -8,11 +8,12 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 from sse_starlette.sse import EventSourceResponse
 
+from app.analysis_engine.scoring import compute_score
 from app.db import get_db
 from app.deps import get_current_user
 from app.events import get_bus
 from app.models import Analysis, Finding, User
-from app.schemas import AnalysisOut, FindingOut
+from app.schemas import AnalysisOut, FindingOut, ScoreOut
 
 router = APIRouter(prefix="/analyses", tags=["analyses"])
 
@@ -36,6 +37,21 @@ def get_analysis(
         db.scalar(select(func.count(Finding.id)).where(Finding.analysis_id == analysis_id)) or 0
     )
     return out
+
+
+@router.get("/{analysis_id}/score", response_model=ScoreOut)
+def get_score(
+    analysis_id: int,
+    db: Session = Depends(get_db),
+    _: User = Depends(get_current_user),
+) -> ScoreOut:
+    analysis = _get_analysis(db, analysis_id)
+    if analysis.score_json:
+        return ScoreOut.model_validate(analysis.score_json)
+    score = compute_score(db, analysis_id)
+    analysis.score_json = score
+    db.commit()
+    return ScoreOut.model_validate(score)
 
 
 @router.get("/{analysis_id}/findings", response_model=list[FindingOut])
