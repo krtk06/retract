@@ -76,17 +76,17 @@ Decisions made during planning (each grounded in research):
 
 ---
 
-## Phase 2 — Deterministic Analysis Layer (no LLM) `[ ]`
+## Phase 2 — Deterministic Analysis Layer (no LLM) `[x]`
 
 **Goal:** a useful product with zero LLM calls: real findings from real tools, all with file:line citations.
 
 ### Tasks
-1. `[ ]` **Ingestion service**: shallow clone to `/data/repos/{repo_id}/{commit}`, language detection (extensions + shebangs), file inventory table or JSONB on `analyses`.
-2. `[ ]` **tree-sitter indexer** (Python, JS/TS first; grammar packs pinned):
+1. `[x]` **Ingestion service**: shallow clone to `/data/repos/{repo_id}/{commit}`, language detection (extensions + shebangs), file inventory table or JSONB on `analyses`.
+2. `[x]` **tree-sitter indexer** (Python, JS/TS first; grammar packs pinned):
    - Per file: AST → symbols (functions/classes), imports, call edges (best-effort intra-file + import-resolved cross-file).
    - Persist to tables `symbols(id, repo_file, name, kind, line_start, line_end)` and `edges(src_symbol, dst_symbol, kind[imports|calls])`.
    - *Decision D4: this graph is the ONLY source of structural truth for later agents.*
-3. `[ ]` **Tool runners** (each = isolated Celery subtask, timeout + output parsing → `findings` rows with `verifier='tool:<name>'`, `status='verified'`, `confidence=1.0`):
+3. `[x]` **Tool runners** (each = isolated Celery subtask, timeout + output parsing → `findings` rows with `verifier='tool:<name>'`, `status='verified'`, `confidence=1.0`):
    - Semgrep (default rulesets per language: security + smells).
    - gitleaks (secrets).
    - OSV-Scanner (vulnerable deps) + simple outdated-deps check (PyPI/npm registry latest vs. lockfile).
@@ -94,9 +94,9 @@ Decisions made during planning (each grounded in research):
    - Duplication: token-hash sliding window (jscpd-like, Python impl) → duplicated-block findings.
    - Test presence: detect test dirs/frameworks; if runnable, `pytest --cov` → coverage %; else heuristic "missing tests" finding per source dir.
    - Docs: README presence/sections, docstring coverage per public symbol (from tree-sitter symbols).
-4. `[ ]` **Health score v1** (`analysis_engine/scoring.py`): per-pillar score = `100 − Σ severity_weight(finding)` normalized per KLOC, clamped [0,100]; pillars: Code Quality, Security, Testing, Documentation, Dependencies, Architecture.
-5. `[ ]` API: `GET /analyses/{id}/findings?agent=&severity=&status=` (paged), `GET /analyses/{id}/score`.
-6. `[ ]` Frontend: dashboard page — six score bars, findings table with file:line links, severity badges, filter by pillar.
+4. `[x]` **Health score v1** (`analysis_engine/scoring.py`): per-pillar score = `100 − Σ severity_weight(finding)` normalized per KLOC, clamped [0,100]; pillars: Code Quality, Security, Testing, Documentation, Dependencies, Architecture.
+5. `[x]` API: `GET /analyses/{id}/findings?agent=&severity=&status=` (paged), `GET /analyses/{id}/score`.
+6. `[x]` Frontend: dashboard page — six score bars, findings table with file:line links, severity badges, filter by pillar.
 
 **Acceptance criteria**
 - Analyzing a deliberately-seedy sample repo (create `benchmark/seedy-python-app/` with a hardcoded secret, SQL injection, duplicated function, no tests, old deps) yields findings in every pillar with correct file:line.
