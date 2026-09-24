@@ -3,12 +3,21 @@ import { useParams } from "react-router-dom";
 
 import { useAnalysis, useFindings } from "../api/hooks";
 import type { AnalysisEvent } from "../api/types";
+import { FindingsTable } from "../components/FindingsTable";
+import { ScorePanel } from "../components/ScorePanel";
 import { StatusPill } from "../components/StatusPill";
 
-const EVENT_NAMES = ["status", "step", "done", "failed"];
+const EVENT_NAMES = ["status", "step", "tool", "done", "failed"];
 
 function formatTime(ts: number) {
   return new Date(ts * 1000).toLocaleTimeString();
+}
+
+function toolEventText(payload: Record<string, unknown>): string {
+  if (payload.status === "ok") {
+    return `${payload.findings} findings (${payload.seconds}s)`;
+  }
+  return `error: ${String(payload.error ?? "").slice(0, 120)} (${payload.seconds}s)`;
 }
 
 export function AnalysisDetailPage() {
@@ -45,12 +54,14 @@ export function AnalysisDetailPage() {
   }
 
   const data = analysis.data;
+  const repo = data.repository;
+  const title = repo ? `${repo.owner}/${repo.name}` : `Analysis #${data.id}`;
 
   return (
     <div className="space-y-8">
       <section className="rounded-lg border border-zinc-800 bg-zinc-900 p-5">
         <div className="flex items-center justify-between">
-          <h2 className="text-lg font-semibold">Analysis #{data.id}</h2>
+          <h2 className="text-lg font-semibold">{title}</h2>
           <StatusPill status={data.status} />
         </div>
         <dl className="mt-4 grid grid-cols-2 gap-x-6 gap-y-2 text-sm md:grid-cols-4">
@@ -78,6 +89,8 @@ export function AnalysisDetailPage() {
         )}
       </section>
 
+      {data.status === "done" && <ScorePanel score={data.score_json} />}
+
       <section>
         <h3 className="mb-3 font-semibold">Progress</h3>
         {events.length === 0 && isActive && (
@@ -90,12 +103,16 @@ export function AnalysisDetailPage() {
           {events.map((event, index) => (
             <li key={index} className="flex gap-3">
               <span className="text-zinc-600">{formatTime(event.ts)}</span>
-              <span className="text-zinc-300">{event.type}</span>
+              <span className="w-24 shrink-0 text-zinc-300">
+                {event.type === "tool" ? `tool:${event.payload.tool}` : event.type}
+              </span>
               <span>
-                {(event.payload.message as string) ??
-                  (event.payload.status as string) ??
-                  (event.payload.error as string) ??
-                  ""}
+                {event.type === "tool"
+                  ? toolEventText(event.payload)
+                  : ((event.payload.message as string) ??
+                    (event.payload.status as string) ??
+                    (event.payload.error as string) ??
+                    "")}
               </span>
             </li>
           ))}
@@ -103,41 +120,11 @@ export function AnalysisDetailPage() {
       </section>
 
       {data.status === "done" && (
-        <section>
-          <h3 className="mb-3 font-semibold">Findings</h3>
-          {findings.isLoading && <p className="text-sm text-zinc-400">Loading findings…</p>}
-          <ul className="space-y-2">
-            {findings.data?.map((finding) => (
-              <li
-                key={finding.id}
-                className="rounded-lg border border-zinc-800 bg-zinc-900 px-4 py-3"
-              >
-                <div className="flex items-center justify-between">
-                  <p className="text-sm font-medium">{finding.title}</p>
-                  <span className="text-xs text-zinc-500">
-                    {finding.agent} · {finding.verifier} · confidence{" "}
-                    {finding.confidence.toFixed(2)}
-                  </span>
-                </div>
-                <p className="mt-1 text-sm text-zinc-400">{finding.description}</p>
-                {finding.evidence_json?.languages != null && (
-                  <div className="mt-2 flex flex-wrap gap-2">
-                    {Object.entries(
-                      finding.evidence_json.languages as Record<string, number>,
-                    ).map(([language, count]) => (
-                      <span
-                        key={language}
-                        className="rounded-full bg-zinc-800 px-2 py-0.5 text-xs text-zinc-300"
-                      >
-                        {language} {count}
-                      </span>
-                    ))}
-                  </div>
-                )}
-              </li>
-            ))}
-          </ul>
-        </section>
+        <FindingsTable
+          findings={findings.data ?? []}
+          repository={repo}
+          commitSha={data.commit_sha}
+        />
       )}
     </div>
   );

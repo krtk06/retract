@@ -17,6 +17,21 @@ export interface Repository {
 
 export type AnalysisStatus = "pending" | "running" | "done" | "failed";
 
+export interface ScorePillar {
+  score: number;
+  findings: number;
+  verified: number;
+  hypotheses: number;
+}
+
+export interface Score {
+  version: number;
+  overall: number;
+  loc: number | null;
+  kloc: number;
+  pillars: Record<string, ScorePillar>;
+}
+
 export interface Analysis {
   id: number;
   repository_id: number;
@@ -27,6 +42,9 @@ export interface Analysis {
   error: string | null;
   created_at: string;
   finding_count: number;
+  loc: number | null;
+  score_json: Score | null;
+  repository: Repository | null;
 }
 
 export interface Finding {

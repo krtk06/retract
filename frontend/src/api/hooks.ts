@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
-import { api, ApiError } from "./client";
+import { api, ApiError, request } from "./client";
+import type { Score } from "./types";
 
 export function useMe() {
   return useQuery({
@@ -31,6 +32,14 @@ export function useAnalyzeRepo() {
   return useMutation({
     mutationFn: api.analyzeRepo,
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["repos"] }),
+  });
+}
+
+export function useScore(id: number) {
+  return useQuery({
+    queryKey: ["score", id],
+    queryFn: () => request<Score>(`/api/analyses/${id}/score`),
+    enabled: id > 0,
   });
 }
 
