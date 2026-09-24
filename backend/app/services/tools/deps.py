@@ -125,7 +125,8 @@ def _vulnerable(deps: list[Dep], ctx: ToolContext) -> list[FindingDraft]:
     drafts: list[FindingDraft] = []
     checked = [d for d in deps if d.version]
     for dep, result in zip(checked, results, strict=False):
-        vuln_ids = result.get("vuln_ids", [])
+        vulns = result.get("vulns") or []
+        vuln_ids = [v.get("id", "?") for v in vulns if isinstance(v, dict)]
         if not vuln_ids:
             continue
         drafts.append(

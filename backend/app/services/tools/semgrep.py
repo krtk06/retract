@@ -53,6 +53,7 @@ def run_semgrep(ctx: ToolContext) -> list[FindingDraft]:
         "scan",
         "--json",
         "--quiet",
+        "--no-git-ignore",
         "--config",
         settings.semgrep_config,
         "--exclude",

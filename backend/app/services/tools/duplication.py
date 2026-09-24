@@ -1,4 +1,8 @@
-"""Duplication runner — token-hash sliding window (jscpd-style, pure Python)."""
+"""Duplication runner — token-hash sliding window (jscpd-style, pure Python).
+
+Normalizes identifiers and literals (type-2 clone detection) so that blocks
+differing only in variable names still match.
+"""
 
 import hashlib
 import re
@@ -11,15 +15,71 @@ from app.services.tools.findings import FindingDraft
 WINDOW = 8
 MIN_WINDOW_LEN = 30
 MAX_FINDINGS = 50
-MIN_LOC_FOR_DUP = 200  # repos this small rarely have meaningful duplication
 
-_LINE_NOISE = re.compile(r"\s+|#.*$")
+_COMMENT = re.compile(r"#.*$|//.*$")
+_IDENT = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
+_NUMBER = re.compile(r"\b\d+(?:\.\d+)?\b")
+_STRING = re.compile(r'"[^"]*"|\'[^\']*\'')
+_KEYWORDS = {
+    "def",
+    "class",
+    "return",
+    "if",
+    "elif",
+    "else",
+    "for",
+    "while",
+    "import",
+    "from",
+    "as",
+    "with",
+    "try",
+    "except",
+    "finally",
+    "raise",
+    "pass",
+    "break",
+    "continue",
+    "in",
+    "not",
+    "and",
+    "or",
+    "is",
+    "lambda",
+    "yield",
+    "global",
+    "function",
+    "const",
+    "let",
+    "var",
+    "true",
+    "false",
+    "null",
+    "none",
+    "void",
+    "self",
+    "cls",
+    "int",
+    "str",
+    "float",
+    "bool",
+    "list",
+    "dict",
+    "set",
+}
 
 
 def _normalize_lines(source: str) -> list[str]:
     lines = []
     for raw in source.splitlines():
-        cleaned = _LINE_NOISE.sub("", raw).strip()
+        cleaned = _COMMENT.sub("", raw)
+        cleaned = _STRING.sub('"S"', cleaned)
+        cleaned = _IDENT.sub(
+            lambda match: match.group(0) if match.group(0).lower() in _KEYWORDS else "~",
+            cleaned,
+        )
+        cleaned = _NUMBER.sub("#", cleaned)
+        cleaned = re.sub(r"\s+", "", cleaned)
         lines.append(cleaned if len(cleaned) >= 5 else "")
     return lines
 
@@ -35,9 +95,6 @@ def _window_hashes(lines: list[str], start: int) -> str | None:
 
 
 def run_duplication(ctx: ToolContext) -> list[FindingDraft]:
-    if ctx.loc < MIN_LOC_FOR_DUP:
-        return []
-
     hash_locations: dict[str, list[tuple[str, int]]] = defaultdict(list)
     for entry in ctx.code_files:
         path = ctx.repo_root / entry.path

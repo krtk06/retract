@@ -115,7 +115,7 @@ def _walk_python(root: Node, source: bytes, rel: str, out: IndexResult) -> None:
                 if child.type == "dotted_name" or child.type == "aliased_import":
                     out.edges.append(
                         EdgeRec(
-                            f"{rel}::module",
+                            f"{rel}::{module}",
                             _text(child, source).split(" as ")[0],
                             EdgeKind.IMPORTS,
                         )
@@ -130,11 +130,11 @@ def _walk_python(root: Node, source: bytes, rel: str, out: IndexResult) -> None:
                     if c.type == "dotted_name" or c.type == "aliased_import"
                 ]
                 # "from x import a, b" -> edges to x, x.a, x.b
-                out.edges.append(EdgeRec(f"{rel}::module", prefix, EdgeKind.IMPORTS))
+                out.edges.append(EdgeRec(f"{rel}::{module}", prefix, EdgeKind.IMPORTS))
                 for imported in names:
                     out.edges.append(
                         EdgeRec(
-                            f"{rel}::module",
+                            f"{rel}::{module}",
                             f"{prefix}.{imported.split(' as ')[0]}",
                             EdgeKind.IMPORTS,
                         )
@@ -146,7 +146,7 @@ def _walk_python(root: Node, source: bytes, rel: str, out: IndexResult) -> None:
     visit(root, [])
 
     # Calls: any call node -> record callee name as written.
-    module_key = f"{rel}::module"
+    module_key = f"{rel}::{module}"
     for call in _iter_type(root, "call"):
         func = call.child_by_field_name("function")
         if func is None:
@@ -170,7 +170,7 @@ def _walk_javascript(root: Node, source: bytes, rel: str, out: IndexResult) -> N
     out.symbols.append(
         SymbolRec(rel, module, SymbolKind.MODULE, root.start_point[0] + 1, root.end_point[0] + 1)
     )
-    module_key = f"{rel}::module"
+    module_key = f"{rel}::{module}"
 
     # Imports
     for node in _iter_types(root, {"import_statement"}):
@@ -303,26 +303,21 @@ def persist_index(session: Session, analysis_id: int, repo_root: Path, files: li
 
     id_by_key = {key: symbol_rows[key].id for key in symbol_rows}
     module_id_by_name: dict[str, int] = {}
+    module_id_by_file: dict[tuple[str, str], int] = {}
     for rec in result.symbols:
         if rec.kind == SymbolKind.MODULE:
             symbol_id = id_by_key[symbol_key(rec)]
             module_id_by_name.setdefault(rec.name, symbol_id)
+            module_id_by_file.setdefault((rec.file_path, rec.name), symbol_id)
 
     for edge in result.edges:
-        src_id = id_by_key.get(
-            (
-                edge.src.split("::")[0],
-                edge.src.split("::")[1] or "module",
-                SymbolKind.MODULE.value,
-                1,
-            )
-        )
-        # module symbols have line_start recorded properly; fall back to lookup
+        src_file, _, src_module = edge.src.partition("::")
+        src_id = module_id_by_file.get((src_file, src_module))
         if src_id is None:
             continue
         dst_symbol_id = None
         if edge.kind == EdgeKind.IMPORTS:
-            resolved = resolve_import(edge.dst_name, edge.src.split("::")[0], module_names)
+            resolved = resolve_import(edge.dst_name, src_file, module_names)
             if resolved is not None:
                 dst_symbol_id = module_id_by_name.get(resolved)
         key = (src_id, edge.dst_name, edge.kind.value)
