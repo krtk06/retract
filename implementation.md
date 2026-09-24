@@ -44,25 +44,25 @@ Decisions made during planning (each grounded in research):
 
 ---
 
-## Phase 1 — Foundation `[ ]`
+## Phase 1 — Foundation `[x]`
 
 **Goal:** runnable skeleton: auth, repo registration, async job pipeline, DB schema.
 
 ### Tasks
-1. `[ ]` Init monorepo: `backend/` (FastAPI), `frontend/` (Vite+TS), `infra/docker-compose.yml`, `docs/RESEARCH.md`.
-2. `[ ]` Docker Compose services: `api`, `worker` (Celery), `postgres` (pgvector image), `redis`, `frontend` (dev server).
-3. `[ ]` Postgres schema (Alembic migration 0001):
+1. `[x]` Init monorepo: `backend/` (FastAPI), `frontend/` (Vite+TS), `infra/docker-compose.yml`, `docs/RESEARCH.md`.
+2. `[x]` Docker Compose services: `api`, `worker` (Celery), `postgres` (pgvector image), `redis`, `frontend` (dev server).
+3. `[x]` Postgres schema (Alembic migration 0001):
    - `users(id, github_id, login, created_at)`
    - `repositories(id, owner, name, url, default_branch, added_by → users)`
    - `analyses(id, repository_id, commit_sha, status[pending|running|done|failed], started_at, finished_at, error)`
    - `findings(id, analysis_id, agent, category, severity, title, description, file_path, line_start, line_end, evidence_json, verifier, confidence REAL, status[verified|hypothesis|dismissed], created_at)`
    - `approvals(id, finding_id, user_id, decision[approve|dismiss], note, created_at)`
    - `calibration_stats(id, agent, category, shown INT, accepted INT, dismissed INT, updated_at)`
-4. `[ ]` GitHub OAuth login (device-free web flow), JWT session for API.
-5. `[ ]` `POST /repos` (register by URL), `POST /repos/{id}/analyze` → creates `analyses` row, enqueues Celery task that (for now) shallow-clones the repo, detects languages, writes file inventory to `evidence_json` of a synthetic "ingestion" finding, marks analysis `done`.
-6. `[ ]` `GET /analyses/{id}` + `GET /analyses/{id}/events` (SSE progress stream).
-7. `[ ]` Frontend: login page, repo-submit form, analysis detail page polling/streaming status. Minimal styling (Tailwind), no dashboard yet.
-8. `[ ]` CI: GitHub Actions — backend lint (ruff), typecheck (mypy), pytest; frontend lint (eslint), typecheck (tsc), vitest.
+4. `[x]` GitHub OAuth login (device-free web flow), JWT session for API.
+5. `[x]` `POST /repos` (register by URL), `POST /repos/{id}/analyze` → creates `analyses` row, enqueues Celery task that (for now) shallow-clones the repo, detects languages, writes file inventory to `evidence_json` of a synthetic "ingestion" finding, marks analysis `done`.
+6. `[x]` `GET /analyses/{id}` + `GET /analyses/{id}/events` (SSE progress stream).
+7. `[x]` Frontend: login page, repo-submit form, analysis detail page polling/streaming status. Minimal styling (Tailwind), no dashboard yet.
+8. `[x]` CI: GitHub Actions — backend lint (ruff), typecheck (mypy), pytest; frontend lint (eslint), typecheck (tsc), vitest.
 
 **Acceptance criteria**
 - `docker compose up` boots all services; `GET /health` returns 200.
