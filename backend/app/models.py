@@ -1,0 +1,145 @@
+"""SQLAlchemy models — schema mirrors implementation.md Phase 1 task 3."""
+
+import enum
+from datetime import UTC, datetime
+
+from sqlalchemy import JSON, Enum, Float, ForeignKey, Integer, Text, UniqueConstraint
+from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.orm import Mapped, mapped_column, relationship
+
+from app.db import Base
+
+# Portable JSON: JSONB on PostgreSQL, generic JSON elsewhere (tests use SQLite).
+JSONVariant = JSON().with_variant(JSONB(), "postgresql")
+
+
+def utcnow() -> datetime:
+    return datetime.now(UTC)
+
+
+class AnalysisStatus(enum.StrEnum):
+    PENDING = "pending"
+    RUNNING = "running"
+    DONE = "done"
+    FAILED = "failed"
+
+
+class FindingStatus(enum.StrEnum):
+    VERIFIED = "verified"
+    HYPOTHESIS = "hypothesis"
+    DISMISSED = "dismissed"
+
+
+class Severity(enum.StrEnum):
+    INFO = "info"
+    LOW = "low"
+    MEDIUM = "medium"
+    HIGH = "high"
+    CRITICAL = "critical"
+
+
+class ApprovalDecision(enum.StrEnum):
+    APPROVE = "approve"
+    DISMISS = "dismiss"
+
+
+class User(Base):
+    __tablename__ = "users"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    github_id: Mapped[int | None] = mapped_column(unique=True, nullable=True)
+    login: Mapped[str] = mapped_column(unique=True)
+    created_at: Mapped[datetime] = mapped_column(default=utcnow)
+
+    repositories: Mapped[list["Repository"]] = relationship(back_populates="added_by_user")
+
+
+class Repository(Base):
+    __tablename__ = "repositories"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    owner: Mapped[str]
+    name: Mapped[str]
+    url: Mapped[str] = mapped_column(unique=True)
+    default_branch: Mapped[str] = mapped_column(default="main")
+    added_by: Mapped[int] = mapped_column(ForeignKey("users.id"))
+    created_at: Mapped[datetime] = mapped_column(default=utcnow)
+
+    added_by_user: Mapped[User] = relationship(back_populates="repositories")
+    analyses: Mapped[list["Analysis"]] = relationship(back_populates="repository")
+
+
+class Analysis(Base):
+    __tablename__ = "analyses"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    repository_id: Mapped[int] = mapped_column(ForeignKey("repositories.id"), index=True)
+    commit_sha: Mapped[str | None] = mapped_column(nullable=True)
+    status: Mapped[AnalysisStatus] = mapped_column(
+        Enum(AnalysisStatus, native_enum=False, validate_strings=True),
+        default=AnalysisStatus.PENDING,
+    )
+    started_at: Mapped[datetime | None] = mapped_column(nullable=True)
+    finished_at: Mapped[datetime | None] = mapped_column(nullable=True)
+    error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    cost_json: Mapped[dict | None] = mapped_column(JSONVariant, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(default=utcnow)
+
+    repository: Mapped[Repository] = relationship(back_populates="analyses")
+    findings: Mapped[list["Finding"]] = relationship(back_populates="analysis")
+
+
+class Finding(Base):
+    __tablename__ = "findings"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    analysis_id: Mapped[int] = mapped_column(ForeignKey("analyses.id"), index=True)
+    agent: Mapped[str] = mapped_column(index=True)
+    category: Mapped[str] = mapped_column(index=True)
+    severity: Mapped[Severity] = mapped_column(
+        Enum(Severity, native_enum=False, validate_strings=True), default=Severity.INFO
+    )
+    title: Mapped[str]
+    description: Mapped[str] = mapped_column(Text, default="")
+    file_path: Mapped[str | None] = mapped_column(nullable=True)
+    line_start: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    line_end: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    evidence_json: Mapped[dict | None] = mapped_column(JSONVariant, nullable=True)
+    verifier: Mapped[str] = mapped_column(default="")
+    confidence: Mapped[float] = mapped_column(Float, default=0.0)
+    status: Mapped[FindingStatus] = mapped_column(
+        Enum(FindingStatus, native_enum=False, validate_strings=True),
+        default=FindingStatus.HYPOTHESIS,
+    )
+    created_at: Mapped[datetime] = mapped_column(default=utcnow)
+
+    analysis: Mapped[Analysis] = relationship(back_populates="findings")
+    approvals: Mapped[list["Approval"]] = relationship(back_populates="finding")
+
+
+class Approval(Base):
+    __tablename__ = "approvals"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    finding_id: Mapped[int] = mapped_column(ForeignKey("findings.id"), index=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
+    decision: Mapped[ApprovalDecision] = mapped_column(
+        Enum(ApprovalDecision, native_enum=False, validate_strings=True)
+    )
+    note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(default=utcnow)
+
+    finding: Mapped[Finding] = relationship(back_populates="approvals")
+
+
+class CalibrationStat(Base):
+    __tablename__ = "calibration_stats"
+    __table_args__ = (UniqueConstraint("agent", "category", name="uq_calibration_agent_category"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    agent: Mapped[str]
+    category: Mapped[str]
+    shown: Mapped[int] = mapped_column(Integer, default=0)
+    accepted: Mapped[int] = mapped_column(Integer, default=0)
+    dismissed: Mapped[int] = mapped_column(Integer, default=0)
+    updated_at: Mapped[datetime] = mapped_column(default=utcnow, onupdate=utcnow)
