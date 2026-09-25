@@ -20,8 +20,7 @@ export function Layout({ user, children }: { user: User; children: ReactNode }) 
         <div className="mx-auto flex max-w-5xl items-center justify-between px-6 py-4">
           <Link to="/" className="text-lg font-semibold tracking-tight">
             AI Engineering Intelligence
-          </Link>
-          <div className="flex items-center gap-4 text-sm text-zinc-400">
+          </Link>          <div className="flex items-center gap-4 text-sm text-zinc-400">
             <span>{user.login}</span>
             <button
               onClick={handleLogout}

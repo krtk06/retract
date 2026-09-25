@@ -187,16 +187,16 @@ Decisions made during planning (each grounded in research):
 
 ---
 
-## Phase 6 — Dashboard Polish & Score UX `[ ]`
+## Phase 6 — Dashboard Polish & Score UX `[x]`
 
 **Goal:** portfolio-grade dashboard matching the concept mock.
 
 ### Tasks
-1. `[ ]` Health Score hero: six animated bars (Code Quality / Security / Testing / Documentation / Dependencies / Architecture), overall score, delta vs. previous analysis of same repo.
-2. `[ ]` Findings explorer: group by pillar/severity/agent; code snippet preview with highlighted lines; citation links to GitHub blob URL at analyzed SHA.
-3. `[ ]` Trust panel: per-agent confidence, acceptance rates, verification coverage (% findings verified).
-4. `[ ]` Analysis history + compare view (two analyses side-by-side).
-5. `[ ]` Empty/error/loading states everywhere; dark theme; responsive to 1280px.
+1. `[x]` Health Score hero: six animated bars (Code Quality / Security / Testing / Documentation / Dependencies / Architecture), overall score, delta vs. previous analysis of same repo.
+2. `[x]` Findings explorer: group by pillar/severity/agent; code snippet preview with highlighted lines; citation links to GitHub blob URL at analyzed SHA.
+3. `[x]` Trust panel: per-agent confidence, acceptance rates, verification coverage (% findings verified).
+4. `[x]` Analysis history + compare view (two analyses side-by-side).
+5. `[x]` Empty/error/loading states everywhere; dark theme; responsive to 1280px.
 
 **Acceptance criteria**
 - All concept-mock elements present; Lighthouse a11y ≥ 90; no console errors.

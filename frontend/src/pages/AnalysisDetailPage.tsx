@@ -82,7 +82,7 @@ export function AnalysisDetailPage() {
     <div className="space-y-8">
       <section className="rounded-lg border border-zinc-800 bg-zinc-900 p-5">
         <div className="flex items-center justify-between">
-          <h2 className="text-lg font-semibold">{title}</h2>
+          <h1 className="text-lg font-semibold">{title}</h1>
           <div className="flex items-center gap-2">
             {data.status === "done" && !data.published && data.pending_approvals > 0 && (
               <span className="rounded-full bg-amber-950 px-2.5 py-0.5 text-xs text-amber-300">
