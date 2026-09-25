@@ -11,8 +11,7 @@
  * retrieval is served by the symbol graph instead.
  */
 
-const BASE_URL = (process.env.AI_INTEL_API_URL ?? "http://localhost:8110").replace(/\/$/, "");
-const AGENT_TOKEN = process.env.AI_INTEL_AGENT_TOKEN ?? "";
+const DEFAULT_API_URL = "http://localhost:8110";
 
 export class ApiError extends Error {
   constructor(
@@ -33,8 +32,20 @@ export type RequestOptions = {
   actingAs?: string;
 };
 
+/**
+ * Read lazily on every call: evals boot a fixture API on an ephemeral port and
+ * publish it through the environment after this module is loaded.
+ */
+function baseUrl(): string {
+  return (process.env.AI_INTEL_API_URL ?? DEFAULT_API_URL).replace(/\/$/, "");
+}
+
+function agentToken(): string {
+  return process.env.AI_INTEL_AGENT_TOKEN ?? "";
+}
+
 function buildUrl(path: string, query: RequestOptions["query"]): string {
-  const url = new URL(`${BASE_URL}${path}`);
+  const url = new URL(`${baseUrl()}${path}`);
   for (const [key, value] of Object.entries(query ?? {})) {
     if (value !== undefined) url.searchParams.set(key, String(value));
   }
@@ -57,14 +68,15 @@ export async function apiPost<T>(
 }
 
 async function request<T>(path: string, options: RequestOptions): Promise<T> {
-  if (!AGENT_TOKEN) {
+  const token = agentToken();
+  if (!token) {
     throw new ApiError(
       0,
       path,
       "AI_INTEL_AGENT_TOKEN is not set; the agent cannot call the API",
     );
   }
-  const headers: Record<string, string> = { "X-Agent-Token": AGENT_TOKEN };
+  const headers: Record<string, string> = { "X-Agent-Token": token };
   if (options.actingAs) headers["X-Agent-User"] = options.actingAs;
   if (options.body !== undefined) headers["Content-Type"] = "application/json";
 
