@@ -158,23 +158,23 @@ Decisions made during planning (each grounded in research):
 
 ---
 
-## Phase 5 — Trust Layer (Verification + Confidence + Human Approval) `[ ]`
+## Phase 5 — Trust Layer (Verification + Confidence + Human Approval) `[x]`
 
 **Goal:** the differentiator. *(Decisions D2, D5, D8.)*
 
 ### Tasks
-1. `[ ]` **Verifier service** (`analysis_engine/verify.py`): for each LLM finding, re-check with tools:
+1. `[x]` **Verifier service** (`analysis_engine/verify.py`): for each LLM finding, re-check with tools:
    - Security claims → targeted Semgrep/CodeQL-lite query on cited lines + graph path check (does the claimed flow exist?).
    - Coupling/architecture claims → graph query verification.
    - Test/doc claims → recompute metric on cited symbol.
    - Pass → `status='verified'`; fail → stays `hypothesis` with `evidence_json.verification_error` recorded.
-2. `[ ]` **Confidence calibration**:
+2. `[x]` **Confidence calibration**:
    - Self-consistency: sample n=3 verdicts for high-severity LLM findings; agreement fraction folds into `confidence`.
    - Cross-tool agreement bonus; single-source LLM-only → capped at 0.6.
    - Store per-category stats in `calibration_stats`.
-3. `[ ]` **Human approval queue**: findings with `severity >= high` AND `status='hypothesis'` require approve/dismiss before analysis is "published"; UI queue with diff/code snippet, confidence display, low-confidence token/claim highlighting, and per-category historical acceptance rate (FAccT'24 patterns).
-4. `[ ]` **Feedback loop**: dismissals update `calibration_stats`; future confidence scores for that agent/category adjusted (simple Beta-Bernoulli shrinkage — keep it stupidly simple).
-5. `[ ]` **Honest scoring v2 (D8)**: verified findings count full weight; hypotheses count ×0.5; dismissed count 0. Score endpoint returns breakdown per pillar with `verified_count` / `hypothesis_count`.
+3. `[x]` **Human approval queue**: findings with `severity >= high` AND `status='hypothesis'` require approve/dismiss before analysis is "published"; UI queue with diff/code snippet, confidence display, low-confidence token/claim highlighting, and per-category historical acceptance rate (FAccT'24 patterns).
+4. `[x]` **Feedback loop**: dismissals update `calibration_stats`; future confidence scores for that agent/category adjusted (simple Beta-Bernoulli shrinkage — keep it stupidly simple).
+5. `[x]` **Honest scoring v2 (D8)**: verified findings count full weight; hypotheses count ×0.5; dismissed count 0. Score endpoint returns breakdown per pillar with `verified_count` / `hypothesis_count`.
 
 **Acceptance criteria**
 - Plant one true and one false LLM finding (mock LLM): verifier marks exactly the true one `verified`.
