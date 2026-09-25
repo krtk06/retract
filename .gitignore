@@ -31,3 +31,6 @@ data/
 
 # Docs review artifacts are committed, but not raw dumps
 docs/reviews/*.har
+
+# Local dev toolchain (redis build, machine-specific env)
+.local/

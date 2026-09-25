@@ -66,6 +66,9 @@ class IndexResult:
 
 def _module_name(file_path: Path) -> str:
     parts = list(file_path.with_suffix("").parts)
+    # __init__.py represents its package, not a submodule.
+    if parts and parts[-1] == "__init__":
+        parts = parts[:-1]
     return ".".join(p for p in parts if p)
 
 
@@ -125,9 +128,10 @@ def _walk_python(root: Node, source: bytes, rel: str, out: IndexResult) -> None:
                 # "from x import a, b" -> edges to x, x.a, x.b
                 out.edges.append(EdgeRec(rel, module, 1, prefix, EdgeKind.IMPORTS))
                 for imported in names:
-                    out.edges.append(
-                        EdgeRec(rel, module, 1, f"{prefix}.{imported}", EdgeKind.IMPORTS)
+                    joined = (
+                        f"{prefix}{imported}" if prefix.endswith(".") else f"{prefix}.{imported}"
                     )
+                    out.edges.append(EdgeRec(rel, module, 1, joined, EdgeKind.IMPORTS))
         elif node.type == "call":
             func = node.child_by_field_name("function")
             if func is not None and func.type in ("identifier", "attribute"):
@@ -233,26 +237,50 @@ def index_file(root: Path, rel_path: str) -> IndexResult | None:
 def resolve_import(dst: str, src_module: str, module_names: set[str]) -> str | None:
     """Best-effort resolution of an import target to a module in this repo.
 
-    Handles: absolute imports matching a module path or its parent package,
-    and same-directory relative imports (a.b importing c -> a.c).
+    Handles absolute imports, relative imports (``from .models import x``,
+    ``from ..compat import y``, ``from . import z``), and package ``__init__``
+    semantics. Returns the repository module name or None.
     """
-    candidates = []
     if dst in module_names:
         return dst
-    # from a.b import c  → maybe a.b.c is a module, or c is a symbol
-    # import a.b.c       → a.b.c or a.b
-    parts = dst.split(".")
-    for i in range(len(parts), 0, -1):
-        candidates.append(".".join(parts[:i]))
-    # relative: sibling package
-    if "." in src_module:
-        pkg = src_module.rsplit(".", 1)[0]
-        candidates.append(f"{pkg}.{dst}")
+
+    dot_count = len(dst) - len(dst.lstrip("."))
+    remainder = dst.lstrip(".")
+    src_parts = [part for part in src_module.split(".") if part]
+    candidates: list[str] = []
+
+    if dot_count:
+        # Relative import: level 1 = parent package of the source module.
+        base = src_parts[: len(src_parts) - dot_count] if dot_count <= len(src_parts) else []
+        rem_parts = remainder.split(".") if remainder else []
+        if not rem_parts:
+            candidates.append(".".join(base))
+        for i in range(len(rem_parts), 0, -1):
+            candidates.append(".".join([*base, *rem_parts[:i]]))
+    else:
+        parts = dst.split(".")
         for i in range(len(parts), 0, -1):
-            candidates.append(f"{pkg}.{'.'.join(parts[:i])}")
+            candidates.append(".".join(parts[:i]))
+        # same-package fallback for absolute-looking same-file imports
+        if "." in src_module:
+            package = src_module.rsplit(".", 1)[0]
+            candidates.append(f"{package}.{dst}")
+            for i in range(len(parts), 0, -1):
+                candidates.append(f"{package}.{'.'.join(parts[:i])}")
+
     for candidate in candidates:
-        if candidate in module_names:
+        if candidate and candidate in module_names:
             return candidate
+    # Suffix fallback for src-layout repos: "requests.models" -> "src.requests.models".
+    # Prefer the shortest matching module name to reduce ambiguity.
+    for candidate in candidates:
+        if not candidate:
+            continue
+        matches = [
+            name for name in module_names if name == candidate or name.endswith("." + candidate)
+        ]
+        if matches:
+            return min(matches, key=len)
     return None
 
 

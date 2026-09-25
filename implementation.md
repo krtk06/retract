@@ -109,19 +109,19 @@ Decisions made during planning (each grounded in research):
 
 ---
 
-## Phase 3 — Knowledge Graph + RAG Service `[ ]`
+## Phase 3 — Knowledge Graph + RAG Service `[x]`
 
 **Goal:** queryable repo structure + semantic index that agents (Phase 4) will use. *(Decision D3.)*
 
 ### Tasks
-1. `[ ]` **Graph store**: build repo graph from Phase 2 tables (modules → symbols → imports/calls). Store as adjacency in Postgres (`edges` already exist; add `graph_snapshots(analysis_id, built_at)` marker). Expose query helpers: `callers(symbol)`, `callees(symbol)`, `imports(module)`, `dependents(module)`, `path(a,b)`.
-2. `[ ]` **Embedding index**: chunk by function/class (tree-sitter boundaries — never arbitrary line splits); embed with configurable embedding model; store in pgvector column on `chunks(id, analysis_id, symbol_id, text, embedding vector)`.
-3. `[ ]` **Retrieval service** (`analysis_engine/retrieval.py`):
+1. `[x]` **Graph store**: build repo graph from Phase 2 tables (modules → symbols → imports/calls). Store as adjacency in Postgres (`edges` already exist; add `graph_snapshots(analysis_id, built_at)` marker). Expose query helpers: `callers(symbol)`, `callees(symbol)`, `imports(module)`, `dependents(module)`, `path(a,b)`.
+2. `[x]` **Embedding index**: chunk by function/class (tree-sitter boundaries — never arbitrary line splits); embed with configurable embedding model; store in pgvector column on `chunks(id, analysis_id, symbol_id, text, embedding vector)`.
+3. `[x]` **Retrieval service** (`analysis_engine/retrieval.py`):
    - `semantic_search(query, k)` → top chunks.
    - `graph_neighborhood(symbol, depth)` → related symbols + source excerpts.
    - **Selective retrieval (RepoFormer-style):** a cheap heuristic gate (symbol in graph? then graph-first, no embeddings; natural-language question? then embeddings) — avoid always-retrieve.
-4. `[ ]` Internal API endpoints `/analyses/{id}/graph/...` and `/analyses/{id}/search?q=` (used by UI "Explore" tab and later by agents).
-5. `[ ]` Frontend: Explore tab — dependency graph view (simple force layout or adjacency list MVP) + semantic search box.
+4. `[x]` Internal API endpoints `/analyses/{id}/graph/...` and `/analyses/{id}/search?q=` (used by UI "Explore" tab and later by agents).
+5. `[x]` Frontend: Explore tab — dependency graph view (simple force layout or adjacency list MVP) + semantic search box.
 
 **Acceptance criteria**
 - For the seedy repo + one real repo: `callers()` returns correct results verified against actual imports; semantic search for "authentication" returns the auth module in top-3.

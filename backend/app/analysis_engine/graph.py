@@ -163,7 +163,22 @@ def imports(db: Session, analysis_id: int, module_name: str) -> list[dict]:
             Edge.kind == EdgeKind.IMPORTS,
         )
     ).all()
-    pairs = {(edge.dst_name, edge.dst_symbol_id is not None) for edge in rows}
+    resolved_ids = {edge.dst_symbol_id for edge in rows if edge.dst_symbol_id}
+    names = (
+        {
+            symbol.id: symbol.name
+            for symbol in db.scalars(select(Symbol).where(Symbol.id.in_(resolved_ids))).all()
+        }
+        if resolved_ids
+        else {}
+    )
+    pairs = {
+        (
+            names.get(edge.dst_symbol_id, edge.dst_name) if edge.dst_symbol_id else edge.dst_name,
+            edge.dst_symbol_id is not None,
+        )
+        for edge in rows
+    }
     return [{"module": name, "resolved": resolved} for name, resolved in sorted(pairs)]
 
 
@@ -210,13 +225,30 @@ def _adjacency(
     symbols = {
         s.id: s for s in db.scalars(select(Symbol).where(Symbol.analysis_id == analysis_id)).all()
     }
+    # Best-effort call-target resolution by simple name (prefer same file).
+    name_index: dict[str, list[int]] = {}
+    for symbol in symbols.values():
+        name_index.setdefault(symbol.name, []).append(symbol.id)
+        simple = symbol.name.rsplit(".", 1)[-1]
+        if simple != symbol.name:
+            name_index.setdefault(simple, []).append(symbol.id)
+
     adj: dict[int, list[tuple[int, str]]] = {}
     for edge in edges:
-        if edge.dst_symbol_id is None or edge.src_symbol_id not in symbols:
+        src_id = edge.src_symbol_id
+        if src_id not in symbols:
             continue
-        if edge.dst_symbol_id not in symbols:
+        dst_id = edge.dst_symbol_id
+        if dst_id is None and edge.kind == EdgeKind.CALLS:
+            candidates = name_index.get(edge.dst_name, [])
+            if candidates:
+                same_file = [
+                    c for c in candidates if symbols[c].file_path == symbols[src_id].file_path
+                ]
+                dst_id = (same_file or candidates)[0]
+        if dst_id is None or dst_id not in symbols:
             continue
-        adj.setdefault(edge.src_symbol_id, []).append((edge.dst_symbol_id, edge.kind.value))
+        adj.setdefault(src_id, []).append((dst_id, edge.kind.value))
     return adj, symbols
 
 

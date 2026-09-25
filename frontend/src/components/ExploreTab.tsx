@@ -91,7 +91,17 @@ function SearchPanel({ analysisId }: { analysisId: number }) {
   );
 }
 
-function LinkList({ title, links, onSelect }: { title: string; links: GraphLink[]; onSelect: (name: string) => void }) {
+function LinkList({
+  title,
+  links,
+  field,
+  onSelect,
+}: {
+  title: string;
+  links: GraphLink[];
+  field: "source" | "target";
+  onSelect: (name: string) => void;
+}) {
   if (links.length === 0) return null;
   return (
     <div>
@@ -100,12 +110,15 @@ function LinkList({ title, links, onSelect }: { title: string; links: GraphLink[
         {links.map((link, index) => (
           <li key={index} className="flex items-center gap-2 text-sm">
             <button
-              onClick={() => onSelect(link.target)}
-              className="font-mono text-sky-400 hover:underline"
+              onClick={() => onSelect(link[field])}
+              className="min-w-0 truncate text-left font-mono text-sky-400 hover:underline"
+              title={link[field]}
             >
-              {link.target}
+              {link[field]}
             </button>
-            <span className="text-[10px] uppercase text-zinc-600">{link.kind}</span>
+            <span className="ml-auto shrink-0 text-[10px] uppercase text-zinc-600">
+              {link.kind}
+            </span>
           </li>
         ))}
       </ul>
@@ -148,9 +161,9 @@ function NeighborhoodPanel({
               </span>
             )}
           </p>
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-            <LinkList title="Depends on" links={outgoing} onSelect={onSelect} />
-            <LinkList title="Used by" links={incoming} onSelect={onSelect} />
+          <div className="grid grid-cols-1 gap-4">
+            <LinkList title="Depends on" links={outgoing} field="target" onSelect={onSelect} />
+            <LinkList title="Used by" links={incoming} field="source" onSelect={onSelect} />
           </div>
           {neighborhood.data.links.length === 0 && (
             <p className="text-xs text-zinc-500">No resolved graph links for this symbol.</p>
