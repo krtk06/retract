@@ -133,20 +133,20 @@ Decisions made during planning (each grounded in research):
 
 ---
 
-## Phase 4 — LLM Agent Layer `[ ]`
+## Phase 4 — LLM Agent Layer `[x]`
 
 **Goal:** the four agents from the concept, powered by LLM + tools + graph. *(Decisions D1, D4, D6, D7.)*
 
 ### Tasks
-1. `[ ]` **LLM adapter** (`backend/app/llm/`): OpenAI-compatible client; structured outputs (JSON schema); logprobs captured when available; retry/backoff; per-analysis token + cost ledger (`analyses.cost_json`).
-2. `[ ]` **Agent framework**: each agent = Celery task with: (a) deterministic inputs from tools/graph, (b) LLM prompt with citations required, (c) output validated against the verdict schema (D2) — reject/repair malformed outputs (one repair retry, else drop).
-3. `[ ]` **Code Agent**: takes static findings + complexity hotspots; LLM triages false positives and explains smells; must cite `file:line` and reference graph facts.
-4. `[ ]` **Security Agent**: JITVUL-style — analyzes *changed/high-risk functions* (chunked per-function, D6) with caller/callee context from graph; dependency CVEs enriched with "is the vulnerable function actually called?" via graph path check.
-5. `[ ]` **Test Agent** (D7): consumes coverage data → per-module branch gaps; LLM produces a *test plan* (what to test, edge cases) — not auto-generated test code presented as trustworthy.
-6. `[ ]` **Docs Agent**: README section coverage, docstring gaps for public API symbols (graph `kind=exported`), API surface vs. docs mismatch.
-7. `[ ]` **Architecture Agent**: layering/cycle detection from graph (deterministic) + LLM narrative summary; flags god-modules (fan-in/fan-out outliers).
-8. `[ ]` Orchestrator: run agents in parallel (Celery group), stream per-agent progress over SSE; analysis `done` only when all agents finish.
-9. `[ ]` All LLM-produced findings stored with `status='hypothesis'`, `verifier='llm:<model>'`, raw `confidence` from self-consistency (see Phase 5; placeholder = logprob-derived for now).
+1. `[x]` **LLM adapter** (`backend/app/llm/`): OpenAI-compatible client; structured outputs (JSON schema); logprobs captured when available; retry/backoff; per-analysis token + cost ledger (`analyses.cost_json`).
+2. `[x]` **Agent framework**: each agent = Celery task with: (a) deterministic inputs from tools/graph, (b) LLM prompt with citations required, (c) output validated against the verdict schema (D2) — reject/repair malformed outputs (one repair retry, else drop).
+3. `[x]` **Code Agent**: takes static findings + complexity hotspots; LLM triages false positives and explains smells; must cite `file:line` and reference graph facts.
+4. `[x]` **Security Agent**: JITVUL-style — analyzes *changed/high-risk functions* (chunked per-function, D6) with caller/callee context from graph; dependency CVEs enriched with "is the vulnerable function actually called?" via graph path check.
+5. `[x]` **Test Agent** (D7): consumes coverage data → per-module branch gaps; LLM produces a *test plan* (what to test, edge cases) — not auto-generated test code presented as trustworthy.
+6. `[x]` **Docs Agent**: README section coverage, docstring gaps for public API symbols (graph `kind=exported`), API surface vs. docs mismatch.
+7. `[x]` **Architecture Agent**: layering/cycle detection from graph (deterministic) + LLM narrative summary; flags god-modules (fan-in/fan-out outliers).
+8. `[x]` Orchestrator: run agents in parallel (Celery group), stream per-agent progress over SSE; analysis `done` only when all agents finish.
+9. `[x]` All LLM-produced findings stored with `status='hypothesis'`, `verifier='llm:<model>'`, raw `confidence` from self-consistency (see Phase 5; placeholder = logprob-derived for now).
 
 **Acceptance criteria**
 - Seedy repo: Security Agent flags the SQL injection at the correct function with caller context; Code Agent correctly dismisses ≥1 planted false-positive Semgrep finding; Test Agent lists the untested modules matching coverage data.
