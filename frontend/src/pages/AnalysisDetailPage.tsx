@@ -3,6 +3,7 @@ import { useParams } from "react-router-dom";
 
 import { useAnalysis, useFindings } from "../api/hooks";
 import type { AnalysisEvent } from "../api/types";
+import { ExploreTab } from "../components/ExploreTab";
 import { FindingsTable } from "../components/FindingsTable";
 import { ScorePanel } from "../components/ScorePanel";
 import { StatusPill } from "../components/StatusPill";
@@ -28,6 +29,7 @@ export function AnalysisDetailPage() {
     analysis.data?.status === "pending" || analysis.data?.status === "running";
   const findings = useFindings(analysisId, analysis.data?.status === "done");
   const [events, setEvents] = useState<AnalysisEvent[]>([]);
+  const [tab, setTab] = useState<"overview" | "explore">("overview");
 
   useEffect(() => {
     setEvents([]);
@@ -87,45 +89,68 @@ export function AnalysisDetailPage() {
             {data.error}
           </p>
         )}
+        {data.status === "done" && (
+          <div className="mt-4 flex gap-1 border-b border-zinc-800">
+            {(["overview", "explore"] as const).map((name) => (
+              <button
+                key={name}
+                onClick={() => setTab(name)}
+                className={`-mb-px border-b-2 px-3 py-1.5 text-sm capitalize ${
+                  tab === name
+                    ? "border-emerald-500 text-zinc-100"
+                    : "border-transparent text-zinc-500 hover:text-zinc-300"
+                }`}
+              >
+                {name}
+              </button>
+            ))}
+          </div>
+        )}
       </section>
 
-      {data.status === "done" && <ScorePanel score={data.score_json} />}
+      {tab === "overview" && (
+        <>
+          {data.status === "done" && <ScorePanel score={data.score_json} />}
 
-      <section>
-        <h3 className="mb-3 font-semibold">Progress</h3>
-        {events.length === 0 && isActive && (
-          <p className="text-sm text-zinc-500">Waiting for events…</p>
-        )}
-        {events.length === 0 && !isActive && (
-          <p className="text-sm text-zinc-500">No events recorded.</p>
-        )}
-        <ul className="space-y-1 font-mono text-xs text-zinc-400">
-          {events.map((event, index) => (
-            <li key={index} className="flex gap-3">
-              <span className="text-zinc-600">{formatTime(event.ts)}</span>
-              <span className="w-24 shrink-0 text-zinc-300">
-                {event.type === "tool" ? `tool:${event.payload.tool}` : event.type}
-              </span>
-              <span>
-                {event.type === "tool"
-                  ? toolEventText(event.payload)
-                  : ((event.payload.message as string) ??
-                    (event.payload.status as string) ??
-                    (event.payload.error as string) ??
-                    "")}
-              </span>
-            </li>
-          ))}
-        </ul>
-      </section>
+          <section>
+            <h3 className="mb-3 font-semibold">Progress</h3>
+            {events.length === 0 && isActive && (
+              <p className="text-sm text-zinc-500">Waiting for events…</p>
+            )}
+            {events.length === 0 && !isActive && (
+              <p className="text-sm text-zinc-500">No events recorded.</p>
+            )}
+            <ul className="space-y-1 font-mono text-xs text-zinc-400">
+              {events.map((event, index) => (
+                <li key={index} className="flex gap-3">
+                  <span className="text-zinc-600">{formatTime(event.ts)}</span>
+                  <span className="w-24 shrink-0 text-zinc-300">
+                    {event.type === "tool" ? `tool:${event.payload.tool}` : event.type}
+                  </span>
+                  <span>
+                    {event.type === "tool"
+                      ? toolEventText(event.payload)
+                      : ((event.payload.message as string) ??
+                        (event.payload.status as string) ??
+                        (event.payload.error as string) ??
+                        "")}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </section>
 
-      {data.status === "done" && (
-        <FindingsTable
-          findings={findings.data ?? []}
-          repository={repo}
-          commitSha={data.commit_sha}
-        />
+          {data.status === "done" && (
+            <FindingsTable
+              findings={findings.data ?? []}
+              repository={repo}
+              commitSha={data.commit_sha}
+            />
+          )}
+        </>
       )}
+
+      {tab === "explore" && data.status === "done" && <ExploreTab analysisId={analysisId} />}
     </div>
   );
 }

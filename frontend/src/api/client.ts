@@ -1,4 +1,13 @@
-import type { Analysis, Finding, Repository, User } from "./types";
+import type {
+  Analysis,
+  Finding,
+  GraphNeighborhood,
+  GraphSummary,
+  Repository,
+  SearchResponse,
+  SymbolRef,
+  User,
+} from "./types";
 
 export class ApiError extends Error {
   status: number;
@@ -40,4 +49,15 @@ export const api = {
     request<Analysis>(`/api/repos/${repoId}/analyze`, { method: "POST" }),
   getAnalysis: (id: number) => request<Analysis>(`/api/analyses/${id}`),
   getFindings: (id: number) => request<Finding[]>(`/api/analyses/${id}/findings`),
+  graphSummary: (id: number) => request<GraphSummary>(`/api/analyses/${id}/graph/summary`),
+  graphSymbols: (id: number, q: string) =>
+    request<SymbolRef[]>(
+      `/api/analyses/${id}/graph/symbols?limit=300${q ? `&q=${encodeURIComponent(q)}` : ""}`,
+    ),
+  graphNeighborhood: (id: number, symbol: string) =>
+    request<GraphNeighborhood>(
+      `/api/analyses/${id}/graph/neighborhood?symbol=${encodeURIComponent(symbol)}`,
+    ),
+  search: (id: number, q: string) =>
+    request<SearchResponse>(`/api/analyses/${id}/search?q=${encodeURIComponent(q)}`),
 };

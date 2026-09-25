@@ -70,3 +70,55 @@ export interface AnalysisEvent {
   payload: Record<string, unknown>;
   ts: number;
 }
+
+export interface SymbolRef {
+  id: number;
+  name: string;
+  kind: string;
+  file_path: string;
+  line_start: number;
+}
+
+export interface GraphSummary {
+  symbols: Record<string, number>;
+  edges: Record<string, number>;
+  top_importing_modules: { module: string; imports: number }[];
+}
+
+export interface GraphNode {
+  id: number;
+  name: string;
+  kind: string;
+  file_path: string;
+  line_start: number;
+  line_end: number;
+}
+
+export interface GraphLink {
+  source: string;
+  target: string;
+  kind: string;
+}
+
+export interface GraphNeighborhood {
+  root: GraphNode | null;
+  nodes: GraphNode[];
+  links: GraphLink[];
+}
+
+export interface SearchResult {
+  chunk_id: number | null;
+  symbol_name: string;
+  kind: string;
+  file_path: string;
+  line_start: number;
+  line_end: number;
+  score: number | null;
+  snippet: string;
+}
+
+export interface SearchResponse {
+  mode: "graph" | "semantic";
+  query: string;
+  results: SearchResult[];
+}

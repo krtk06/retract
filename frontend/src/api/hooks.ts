@@ -61,3 +61,35 @@ export function useFindings(id: number, enabled: boolean) {
     enabled,
   });
 }
+
+export function useGraphSummary(id: number, enabled: boolean) {
+  return useQuery({
+    queryKey: ["graph-summary", id],
+    queryFn: () => api.graphSummary(id),
+    enabled,
+  });
+}
+
+export function useGraphSymbols(id: number, q: string, enabled: boolean) {
+  return useQuery({
+    queryKey: ["graph-symbols", id, q],
+    queryFn: () => api.graphSymbols(id, q),
+    enabled,
+  });
+}
+
+export function useNeighborhood(id: number, symbol: string | null) {
+  return useQuery({
+    queryKey: ["neighborhood", id, symbol],
+    queryFn: () => api.graphNeighborhood(id, symbol as string),
+    enabled: symbol !== null,
+  });
+}
+
+export function useSearch(id: number, q: string) {
+  return useQuery({
+    queryKey: ["search", id, q],
+    queryFn: () => api.search(id, q),
+    enabled: q.length > 0,
+  });
+}
