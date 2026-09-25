@@ -126,23 +126,6 @@ class GraphNeighborhoodOut(BaseModel):
     links: list[GraphLinkOut]
 
 
-class SearchResult(BaseModel):
-    chunk_id: int | None
-    symbol_name: str
-    kind: str
-    file_path: str
-    line_start: int
-    line_end: int
-    score: float | None
-    snippet: str
-
-
-class SearchResponse(BaseModel):
-    mode: str
-    query: str
-    results: list[SearchResult]
-
-
 class ApprovalRequest(BaseModel):
     finding_id: int
     decision: str  # "approve" | "dismiss"

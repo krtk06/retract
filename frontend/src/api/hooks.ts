@@ -86,13 +86,6 @@ export function useNeighborhood(id: number, symbol: string | null) {
   });
 }
 
-export function useSearch(id: number, q: string) {
-  return useQuery({
-    queryKey: ["search", id, q],
-    queryFn: () => api.search(id, q),
-    enabled: q.length > 0,
-  });
-}
 
 export function useApprovalQueue(id: number, enabled: boolean) {
   return useQuery({

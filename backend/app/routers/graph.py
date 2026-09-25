@@ -1,16 +1,15 @@
-"""Knowledge graph and retrieval endpoints (Phase 3)."""
+"""Knowledge graph endpoints (symbol structure, not vector retrieval)."""
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
-from app.analysis_engine import graph, retrieval
+from app.analysis_engine import graph
 from app.db import get_db
 from app.deps import get_current_user
 from app.models import Analysis, User
 from app.schemas import (
     GraphNeighborhoodOut,
     GraphSummaryOut,
-    SearchResponse,
     SymbolOut,
 )
 
@@ -120,15 +119,3 @@ def graph_path(
         SymbolOut.model_validate(item, from_attributes=True)
         for item in graph.path(db, analysis_id, from_symbol, to_symbol)
     ]
-
-
-@router.get("/{analysis_id}/search", response_model=SearchResponse)
-def search(
-    analysis_id: int,
-    q: str = Query(min_length=1),
-    k: int = Query(default=8, le=25),
-    db: Session = Depends(get_db),
-    _: User = Depends(get_current_user),
-) -> SearchResponse:
-    _ensure_analysis(db, analysis_id)
-    return SearchResponse.model_validate(retrieval.selective_search(db, analysis_id, q, k))

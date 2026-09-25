@@ -37,29 +37,6 @@ class Settings(BaseSettings):
     gitleaks_path: str = ""
     semgrep_config: str = "p/default"
 
-    # Embeddings (RAG index). Provider: fastembed | openai | hashing.
-    embedding_provider: str = "fastembed"
-    embedding_model: str = "BAAI/bge-small-en-v1.5"
-    openai_api_key: str = ""
-    openai_embedding_model: str = "text-embedding-3-small"
-    max_chunks_per_analysis: int = 3000
-
-    # LLM agents. Provider: openai (any OpenAI-compatible endpoint) | mock.
-    # "mock" is a deterministic offline harness — never real analysis.
-    llm_provider: str = "openai"
-    llm_base_url: str = "https://api.openai.com/v1"
-    llm_api_key: str = ""
-    llm_model: str = "gpt-4o-mini"
-    llm_timeout_seconds: float = 120.0
-    llm_max_retries: int = 2
-    llm_temperature: float = 0.0
-    llm_request_logprobs: bool = True
-    agent_max_output_tokens: int = 4000
-    # Input caps keep token usage bounded on large repos.
-    agent_max_static_findings: int = 40
-    agent_max_symbols: int = 60
-    agent_max_context_chars: int = 12_000
-
     cors_origins: str = "http://localhost:5173"
 
     @property

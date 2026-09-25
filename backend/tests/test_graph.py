@@ -1,5 +1,6 @@
-"""Graph + retrieval tests on an isolated fixture repo (no external tools)."""
+"""Graph tests on an isolated fixture repo (symbol structure only, no RAG)."""
 
+import uuid
 from collections.abc import Generator
 from pathlib import Path
 
@@ -7,10 +8,9 @@ import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 
-from app.analysis_engine import chunker, graph, retrieval
-from app.analysis_engine.embeddings import get_embedding_provider
+from app.analysis_engine import graph
 from app.db import get_session_factory
-from app.models import Analysis, Chunk, Repository, User
+from app.models import Analysis, Repository, User
 from app.services import indexer
 from app.services.ingestion import build_inventory
 
@@ -48,7 +48,7 @@ def fixture_repo(tmp_path_factory: pytest.TempPathFactory) -> Path:
 
 @pytest.fixture(scope="module")
 def analyzed(fixture_repo: Path) -> Generator[int, None, None]:
-    """Create repo/analysis rows, index symbols, build + embed chunks."""
+    """Create repo/analysis rows and index symbols. No chunking, no embeddings."""
     session: Session = get_session_factory()()
     try:
         user = session.query(User).first()
@@ -57,11 +57,8 @@ def analyzed(fixture_repo: Path) -> Generator[int, None, None]:
             session.add(user)
             session.commit()
         repo = Repository(
-            owner="fixture",
-            name="graphrepo",
-            url="local://fixture/graphrepo",
-            default_branch="main",
-            added_by=user.id,
+            owner="fixture", name="graphrepo", url=f"local://fixture/graph-{uuid.uuid4().hex[:8]}",
+            default_branch="main", added_by=user.id,
         )
         session.add(repo)
         session.commit()
@@ -71,14 +68,6 @@ def analyzed(fixture_repo: Path) -> Generator[int, None, None]:
 
         files, _total, _trunc = build_inventory(fixture_repo)
         indexer.persist_index(session, analysis.id, fixture_repo, [f.path for f in files])
-        drafts = chunker.build_chunks(session, analysis.id, fixture_repo)
-        chunker.persist_chunks(session, analysis.id, drafts)
-        provider = get_embedding_provider()
-        chunks = session.query(Chunk).filter(Chunk.analysis_id == analysis.id).all()
-        vectors = provider.embed([c.text for c in chunks])
-        for chunk, vector in zip(chunks, vectors, strict=False):
-            chunk.embedding = vector
-        session.commit()
         yield analysis.id
     finally:
         session.close()
@@ -146,33 +135,6 @@ def test_neighborhood(analyzed: int) -> None:
         session.close()
 
 
-def test_semantic_search_finds_auth(analyzed: int) -> None:
-    session = get_session_factory()()
-    try:
-        results = retrieval.semantic_search(
-            session, analyzed, "authentication credentials password validate", k=5
-        )
-        names = [r["symbol_name"] for r in results]
-        assert "authenticate" in names
-        assert results[0]["score"] is not None
-    finally:
-        session.close()
-
-
-def test_selective_retrieval_gate(analyzed: int) -> None:
-    session = get_session_factory()()
-    try:
-        identifier = retrieval.selective_search(session, analyzed, "authenticate")
-        assert identifier["mode"] == "graph"
-        assert any(r["symbol_name"] == "authenticate" for r in identifier["results"])
-
-        natural = retrieval.selective_search(session, analyzed, "how do we validate passwords")
-        assert natural["mode"] == "semantic"
-        assert natural["results"]
-    finally:
-        session.close()
-
-
 def test_graph_api_endpoints(auth_client: TestClient, analyzed: int) -> None:
     summary = auth_client.get(f"/api/analyses/{analyzed}/graph/summary")
     assert summary.status_code == 200
@@ -192,10 +154,6 @@ def test_graph_api_endpoints(auth_client: TestClient, analyzed: int) -> None:
     )
     assert neighborhood.status_code == 200
     assert neighborhood.json()["root"]["name"] == "pkg.auth"
-
-    searched = auth_client.get(f"/api/analyses/{analyzed}/search", params={"q": "authenticate"})
-    assert searched.status_code == 200
-    assert searched.json()["mode"] == "graph"
 
     missing = auth_client.get("/api/analyses/99999/graph/summary")
     assert missing.status_code == 404

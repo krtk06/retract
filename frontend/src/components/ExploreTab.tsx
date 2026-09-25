@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 
-import { useGraphSummary, useGraphSymbols, useNeighborhood, useSearch } from "../api/hooks";
+import { useGraphSummary, useGraphSymbols, useNeighborhood } from "../api/hooks";
 import type { GraphLink, SymbolRef } from "../api/types";
 
 function KindBadge({ kind }: { kind: string }) {
@@ -14,80 +14,6 @@ function KindBadge({ kind }: { kind: string }) {
     <span className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${colors[kind] ?? "bg-zinc-800 text-zinc-300"}`}>
       {kind}
     </span>
-  );
-}
-
-function SearchPanel({ analysisId }: { analysisId: number }) {
-  const [input, setInput] = useState("");
-  const [query, setQuery] = useState("");
-  const search = useSearch(analysisId, query);
-
-  return (
-    <section className="rounded-lg border border-zinc-800 bg-zinc-900 p-4">
-      <h4 className="text-sm font-semibold">Ask about this codebase</h4>
-      <p className="mt-1 text-xs text-zinc-500">
-        Identifier-like queries use the graph; natural language uses semantic search.
-      </p>
-      <form
-        className="mt-3 flex gap-2"
-        onSubmit={(event) => {
-          event.preventDefault();
-          setQuery(input.trim());
-        }}
-      >
-        <input
-          value={input}
-          onChange={(event) => setInput(event.target.value)}
-          placeholder="e.g. authentication or how are errors handled"
-          className="flex-1 rounded-md border border-zinc-700 bg-zinc-950 px-3 py-1.5 text-sm outline-none placeholder:text-zinc-600 focus:border-zinc-500"
-          aria-label="Search codebase"
-        />
-        <button
-          type="submit"
-          className="rounded-md bg-emerald-600 px-3 py-1.5 text-sm font-medium hover:bg-emerald-500"
-        >
-          Search
-        </button>
-      </form>
-
-      {query && search.isFetching && <p className="mt-3 text-xs text-zinc-500">Searching…</p>}
-      {query && search.data && (
-        <div className="mt-3 space-y-2">
-          <p className="text-xs text-zinc-500">
-            Mode:{" "}
-            <span className="font-medium text-zinc-300">{search.data.mode}</span> ·{" "}
-            {search.data.results.length} results
-          </p>
-          {search.data.results.length === 0 && (
-            <p className="text-sm text-zinc-500">No matches.</p>
-          )}
-          <ul className="space-y-2">
-            {search.data.results.map((result, index) => (
-              <li key={`${result.symbol_name}-${index}`} className="rounded-md border border-zinc-800 bg-zinc-950 px-3 py-2">
-                <div className="flex items-center gap-2">
-                  <KindBadge kind={result.kind} />
-                  <span className="text-sm font-medium">{result.symbol_name}</span>
-                  {result.score != null && (
-                    <span className="ml-auto text-xs text-zinc-500">
-                      score {result.score.toFixed(3)}
-                    </span>
-                  )}
-                </div>
-                <p className="mt-1 font-mono text-xs text-zinc-500">
-                  {result.file_path}
-                  {result.line_start ? `:${result.line_start}` : ""}
-                </p>
-                {result.snippet && (
-                  <pre className="mt-1 max-h-24 overflow-hidden whitespace-pre-wrap text-xs text-zinc-400">
-                    {result.snippet.split("\n").slice(0, 4).join("\n")}
-                  </pre>
-                )}
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
-    </section>
   );
 }
 
@@ -253,8 +179,6 @@ export function ExploreTab({ analysisId }: { analysisId: number }) {
           </div>
         )}
       </section>
-
-      <SearchPanel analysisId={analysisId} />
 
       <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
         <SymbolBrowser analysisId={analysisId} onSelect={setSelected} selected={selected} />

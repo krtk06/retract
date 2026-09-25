@@ -9,7 +9,6 @@ import type {
   GraphNeighborhood,
   GraphSummary,
   Repository,
-  SearchResponse,
   SnippetResponse,
   SymbolRef,
   TrustSummary,
@@ -65,10 +64,7 @@ export const api = {
     request<GraphNeighborhood>(
       `/api/analyses/${id}/graph/neighborhood?symbol=${encodeURIComponent(symbol)}`,
     ),
-  search: (id: number, q: string) =>
-    request<SearchResponse>(`/api/analyses/${id}/search?q=${encodeURIComponent(q)}`),
-  history: (id: number) => request<AnalysisHistoryItem[]>(`/api/analyses/${id}/history`),
-  trustSummary: (id: number) => request<TrustSummary>(`/api/analyses/${id}/trust-summary`),
+  history: (id: number) => request<AnalysisHistoryItem[]>(`/api/analyses/${id}/history`),  trustSummary: (id: number) => request<TrustSummary>(`/api/analyses/${id}/trust-summary`),
   compare: (left: number, right: number) =>
     request<CompareResult>(`/api/analyses/compare?left=${left}&right=${right}`),
   snippet: (id: number, path: string, lineStart: number) =>

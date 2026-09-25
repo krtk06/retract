@@ -218,19 +218,4 @@ export interface GraphNeighborhood {
   links: GraphLink[];
 }
 
-export interface SearchResult {
-  chunk_id: number | null;
-  symbol_name: string;
-  kind: string;
-  file_path: string;
-  line_start: number;
-  line_end: number;
-  score: number | null;
-  snippet: string;
-}
 
-export interface SearchResponse {
-  mode: "graph" | "semantic";
-  query: string;
-  results: SearchResult[];
-}
