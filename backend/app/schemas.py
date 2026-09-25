@@ -83,6 +83,8 @@ class ScoreOut(BaseModel):
     loc: int | None
     kloc: float
     pillars: dict[str, dict[str, Any]]
+    previous_overall: int | None = None
+    delta: int | None = None
 
 
 class SymbolOut(BaseModel):
@@ -173,6 +175,70 @@ class CalibrationStatOut(BaseModel):
     accepted: int
     dismissed: int
     acceptance_rate: float | None = None
+
+
+class AnalysisHistoryOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    repository_id: int
+    commit_sha: str | None
+    status: str
+    created_at: datetime
+    finished_at: datetime | None
+    loc: int | None = None
+    published: bool = False
+    finding_count: int = 0
+    overall: int | None = None
+
+
+class AgentTrustOut(BaseModel):
+    agent: str
+    findings: int
+    verified: int
+    hypotheses: int
+    dismissed: int
+    avg_confidence: float | None = None
+
+
+class TrustTotalsOut(BaseModel):
+    findings: int
+    verified: int
+    hypotheses: int
+    dismissed: int
+
+
+class TrustSummaryOut(BaseModel):
+    analysis_id: int
+    totals: TrustTotalsOut
+    verification_coverage: float | None = None
+    avg_confidence: float | None = None
+    agents: list[AgentTrustOut]
+    acceptance_rates: list[CalibrationStatOut]
+
+
+class CompareSideOut(BaseModel):
+    id: int
+    commit_sha: str | None
+    created_at: str | None
+    overall: int | None
+    loc: int | None
+
+
+class PillarCompareOut(BaseModel):
+    pillar: str
+    left_score: int
+    right_score: int
+    delta: int
+    left_findings: int
+    right_findings: int
+
+
+class CompareOut(BaseModel):
+    left: CompareSideOut
+    right: CompareSideOut
+    overall_delta: int | None
+    pillars: list[PillarCompareOut]
 
 
 class HealthOut(BaseModel):

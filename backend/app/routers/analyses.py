@@ -8,12 +8,20 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 from sse_starlette.sse import EventSourceResponse
 
+from app.analysis_engine import trust
 from app.analysis_engine.scoring import compute_score
 from app.db import get_db
 from app.deps import get_current_user
 from app.events import get_bus
 from app.models import Analysis, Finding, User
-from app.schemas import AnalysisOut, FindingOut, ScoreOut
+from app.schemas import (
+    AnalysisHistoryOut,
+    AnalysisOut,
+    CompareOut,
+    FindingOut,
+    ScoreOut,
+    TrustSummaryOut,
+)
 
 router = APIRouter(prefix="/analyses", tags=["analyses"])
 
@@ -23,6 +31,25 @@ def _get_analysis(db: Session, analysis_id: int) -> Analysis:
     if analysis is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Analysis not found")
     return analysis
+
+
+# Declared before /{analysis_id} so the literal path is not shadowed by the int param.
+@router.get("/compare", response_model=CompareOut)
+def compare_analyses(
+    left: int = Query(ge=1),
+    right: int = Query(ge=1),
+    db: Session = Depends(get_db),
+    _: User = Depends(get_current_user),
+) -> CompareOut:
+    """Side-by-side comparison of two analyses (score + per-pillar deltas)."""
+    left_row = _get_analysis(db, left)
+    right_row = _get_analysis(db, right)
+    if left_row.repository_id != right_row.repository_id:
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="analyses belong to different repositories",
+        )
+    return CompareOut.model_validate(trust.build_comparison(left_row, right_row, db))
 
 
 @router.get("/{analysis_id}", response_model=AnalysisOut)
@@ -50,7 +77,17 @@ def get_score(
 ) -> ScoreOut:
     analysis = _get_analysis(db, analysis_id)
     if analysis.score_json:
-        return ScoreOut.model_validate(analysis.score_json)
+        score = dict(analysis.score_json)
+        score.setdefault("previous_overall", None)
+        score.setdefault("delta", None)
+        previous = trust.previous_analysis(db, analysis)
+        if previous is not None and previous.score_json:
+            current = score.get("overall")
+            earlier = previous.score_json.get("overall")
+            score["previous_overall"] = earlier
+            if isinstance(current, int) and isinstance(earlier, int):
+                score["delta"] = current - earlier
+        return ScoreOut.model_validate(score)
     score = compute_score(db, analysis_id)
     analysis.score_json = score
     db.commit()
@@ -102,3 +139,43 @@ def stream_events(
             yield {"event": event["type"], "data": json.dumps(event)}
 
     return EventSourceResponse(events())
+
+
+@router.get("/{analysis_id}/history", response_model=list[AnalysisHistoryOut])
+def analysis_history(
+    analysis_id: int,
+    db: Session = Depends(get_db),
+    _: User = Depends(get_current_user),
+) -> list[AnalysisHistoryOut]:
+    """All analyses for the same repository, newest first (for delta + compare)."""
+    analysis = _get_analysis(db, analysis_id)
+    rows = db.scalars(
+        select(Analysis)
+        .where(Analysis.repository_id == analysis.repository_id)
+        .order_by(Analysis.created_at.desc(), Analysis.id.desc())
+    ).all()
+    return [_history_out(db, row) for row in rows]
+
+
+@router.get("/{analysis_id}/trust-summary", response_model=TrustSummaryOut)
+def trust_summary(
+    analysis_id: int,
+    db: Session = Depends(get_db),
+    _: User = Depends(get_current_user),
+) -> TrustSummaryOut:
+    """Verification coverage and per-agent confidence for the trust panel."""
+    from app.analysis_engine import trust
+
+    _get_analysis(db, analysis_id)
+    return TrustSummaryOut.model_validate(trust.build_trust_summary(db, analysis_id))
+
+
+def _history_out(db: Session, analysis: Analysis) -> AnalysisHistoryOut:
+    out = AnalysisHistoryOut.model_validate(analysis)
+    out.finding_count = (
+        db.scalar(select(func.count(Finding.id)).where(Finding.analysis_id == analysis.id)) or 0
+    )
+    score = analysis.score_json or {}
+    out.overall = score.get("overall")
+    out.published = bool(analysis.published)
+    return out
