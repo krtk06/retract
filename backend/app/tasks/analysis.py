@@ -12,6 +12,7 @@ from app.models import Analysis, AnalysisStatus, Severity
 from app.services import indexer, ingestion
 from app.services.tools import TOOL_RUNNERS
 from app.services.tools.findings import FindingDraft, persist_findings
+from app.tasks.agents import run_agent
 from app.tasks.celery_app import celery_app
 from app.tasks.embeddings import embed_analysis
 from app.tasks.tools import run_tool
@@ -92,11 +93,12 @@ def run_analysis(analysis_id: int) -> dict:
             analysis_id, "step", {"step": "index", "message": f"Indexed {symbol_count} symbols"}
         )
 
-        # Fan out tool runners + embedding index build in parallel; finalize scores.
+        # Stage 1: deterministic tools + embedding index in parallel.
+        # Stage 2 (dispatch_agents): LLM agents, then finalize scores.
         tool_jobs = [run_tool.s(name, analysis_id, str(dest)) for name in TOOL_RUNNERS]
         tool_jobs.append(embed_analysis.s(analysis_id, str(dest)))
         header = group(tool_jobs)
-        chord(header)(finalize_analysis.s(analysis_id))
+        chord(header)(dispatch_agents.s(analysis_id, str(dest)))
         return {"ok": True, "dispatched": [*TOOL_RUNNERS, "embeddings"]}
     except Exception as exc:  # noqa: BLE001 — record and report, don't crash the worker
         logger.exception("analysis %s failed", analysis_id)
@@ -113,6 +115,26 @@ def run_analysis(analysis_id: int) -> dict:
         return {"ok": False, "error": str(exc)}
     finally:
         session.close()
+
+
+@celery_app.task(name="app.tasks.analysis.dispatch_agents")
+def dispatch_agents(_results: list, analysis_id: int, repo_root: str) -> dict:
+    """Stage 2: run LLM agents in parallel, then finalize the score."""
+    from app.agents import AGENT_CLASSES
+
+    bus = get_bus()
+    try:
+        bus.publish(
+            analysis_id,
+            "step",
+            {"step": "agents", "message": f"Dispatching {len(AGENT_CLASSES)} agents"},
+        )
+    except Exception:  # noqa: BLE001
+        logger.exception("failed to publish agent dispatch event")
+
+    agent_jobs = [run_agent.s(name, analysis_id, repo_root) for name in AGENT_CLASSES]
+    chord(group(agent_jobs))(finalize_analysis.s(analysis_id))
+    return {"ok": True, "agents": list(AGENT_CLASSES)}
 
 
 @celery_app.task(name="app.tasks.analysis.finalize_analysis")

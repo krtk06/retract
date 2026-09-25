@@ -36,3 +36,11 @@ expectations:
   - category: import-cycle
     file: app/module_a.py
     note: module_a <-> module_b circular import
+  - category: vulnerability
+    file: app/cache_key.py
+    line: 11
+    note: >
+      planted FALSE POSITIVE — semgrep flags the sha1 digest as an insecure hash,
+      but the code documents that it is a non-security cache-key fingerprint. The
+      Code Agent is expected to dismiss this finding (triage verdict false-positive).
+    expect_dismissed: true
