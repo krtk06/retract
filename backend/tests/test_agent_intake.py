@@ -5,9 +5,12 @@ import uuid
 import pytest
 from fastapi.testclient import TestClient
 
+from app.config import get_settings
 from app.db import get_session_factory
 from app.models import Analysis, Finding, Repository, User
 from app.security import decode_eve_token
+
+settings = get_settings()
 
 
 @pytest.fixture
@@ -147,3 +150,43 @@ def test_eve_token_is_scoped_and_ephemeral(auth_client: TestClient) -> None:
 
 def test_eve_token_requires_auth(client: TestClient) -> None:
     assert client.post("/api/auth/eve-token").status_code == 401
+
+
+def test_agent_service_token_authenticates_tools(auth_client: TestClient) -> None:
+    response = auth_client.get(
+        "/api/repos",
+        headers={"X-Agent-Token": settings.agent_token, "X-Agent-User": "tester"},
+    )
+    assert response.status_code == 200
+
+
+def test_agent_service_token_fails_closed_on_bad_secret(auth_client: TestClient) -> None:
+    response = auth_client.get("/api/repos", headers={"X-Agent-Token": "wrong"})
+    assert response.status_code == 401
+
+
+def test_agent_service_token_requires_configuration(
+    auth_client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(settings, "agent_token", "")
+    response = auth_client.get("/api/repos", headers={"X-Agent-Token": "anything"})
+    assert response.status_code == 401
+
+
+def test_agent_service_token_resolves_unknown_user_as_service(
+    auth_client: TestClient,
+) -> None:
+    response = auth_client.get(
+        "/api/repos",
+        headers={"X-Agent-Token": settings.agent_token, "X-Agent-User": "ghost"},
+    )
+    assert response.status_code == 200
+
+
+def test_agent_service_token_accepts_numeric_principal(auth_client: TestClient) -> None:
+    user_id = auth_client.get("/api/auth/me").json()["id"]
+    response = auth_client.get(
+        "/api/repos",
+        headers={"X-Agent-Token": settings.agent_token, "X-Agent-User": str(user_id)},
+    )
+    assert response.status_code == 200

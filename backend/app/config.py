@@ -20,6 +20,10 @@ class Settings(BaseSettings):
     auth_cookie_name: str = "ai_intel_token"
     auth_cookie_secure: bool = False
 
+    # Shared secret the eve agent presents on service calls (X-Agent-Token).
+    # Blank disables agent service auth entirely; production must set it.
+    agent_token: str = ""
+
     github_client_id: str = ""
     github_client_secret: str = ""
     github_oauth_redirect_uri: str = "http://localhost:8000/api/auth/github/callback"
