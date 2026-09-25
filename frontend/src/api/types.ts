@@ -99,11 +99,6 @@ export interface AgentCostRun {
   error?: string | null;
 }
 
-export interface CostLedger {
-  agents?: AgentCostRun[];
-  tokens_in?: number;
-  tokens_out?: number;
-}
 
 export interface Analysis {
   id: number;
@@ -117,7 +112,6 @@ export interface Analysis {
   finding_count: number;
   loc: number | null;
   score_json: Score | null;
-  cost_json: CostLedger | null;
   published: boolean;
   pending_approvals: number;
   repository: Repository | null;

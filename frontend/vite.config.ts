@@ -11,6 +11,14 @@ export default defineConfig({
         target: process.env.VITE_API_PROXY || "http://localhost:8000",
         changeOrigin: true,
       },
+      // The eve agent's HTTP routes: sessions, streams, and approval replies.
+      // Streamed responses need ws disabled so Vite proxies the SSE upgrade-free
+      // fetch stream instead of buffering it.
+      "/eve": {
+        target: process.env.VITE_EVE_PROXY || "http://localhost:3000",
+        changeOrigin: true,
+        ws: false,
+      },
     },
   },
   test: {

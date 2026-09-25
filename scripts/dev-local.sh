@@ -6,12 +6,19 @@
 #   AI_INTEL_DATABASE_URL=postgresql+psycopg://user@/ai_intel?host=/var/run/postgresql&port=5433
 #   AI_INTEL_REDIS_URL=redis://localhost:6390/0
 #   AI_INTEL_DEV_LOGIN=1
+#   AI_INTEL_AGENT_TOKEN=<shared secret the eve agent presents to the API>
+#
+# Starts: redis, api (:8110), celery worker, eve agent (:3000), vite (:5175).
+# The eve agent needs Node >= 24 and shares AI_INTEL_JWT_SECRET with the API so
+# the browser's exchanged eve token verifies on its routes.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
 
 API_PORT="${API_PORT:-8110}"
+EVE_PORT="${EVE_PORT:-3000}"
+FRONTEND_PORT="${FRONTEND_PORT:-5175}"
 REDIS_PORT="${REDIS_PORT:-6390}"
 LOG_DIR="${LOG_DIR:-/tmp}"
 REDIS_BIN="${REDIS_BIN:-$ROOT/.local/bin/redis-server}"
@@ -21,6 +28,27 @@ if [[ -f "$ROOT/.local/env.sh" ]]; then
   # shellcheck disable=SC1091
   source "$ROOT/.local/env.sh"
 fi
+
+# eve requires Node 24; use the caller's PATH when it already satisfies that.
+node_major() {
+  node --version 2>/dev/null | sed 's/^v\([0-9]*\).*/\1/'
+}
+
+load_node24() {
+  if [[ -s "$HOME/.nvm/nvm.sh" ]]; then
+    export NVM_DIR="${NVM_DIR:-$HOME/.nvm}"
+    # shellcheck disable=SC1091
+    source "$NVM_DIR/nvm.sh"
+  fi
+  if command -v nvm >/dev/null 2>&1; then
+    nvm use 24 >/dev/null
+  fi
+  if [[ "$(node_major)" -lt 24 ]]; then
+    echo "Node >= 24 required for the eve agent (found $(node --version 2>/dev/null || echo none))"
+    echo "Install it with: source ~/.nvm/nvm.sh && nvm install 24"
+    exit 1
+  fi
+}
 
 start_redis() {
   if ! "$REDIS_BIN" --version >/dev/null 2>&1; then
@@ -45,15 +73,46 @@ start_app() {
   echo "api: http://127.0.0.1:$API_PORT/api/health"
 }
 
+start_agent() {
+  if [[ "${SKIP_AGENT:-0}" == "1" ]]; then
+    echo "agent: skipped (SKIP_AGENT=1)"
+    return
+  fi
+  load_node24
+  pkill -9 -f "eve dev" 2>/dev/null || true
+  sleep 1
+  (cd agent && PORT="$EVE_PORT" setsid nohup npx eve dev --no-ui \
+    > "$LOG_DIR/eve.log" 2>&1 < /dev/null &)
+  sleep 6
+  echo "agent: http://127.0.0.1:$EVE_PORT/eve (log: $LOG_DIR/eve.log)"
+}
+
+start_frontend() {
+  if [[ "${SKIP_FRONTEND:-0}" == "1" ]]; then
+    echo "frontend: skipped (SKIP_FRONTEND=1)"
+    return
+  fi
+  pkill -9 -f "vite --port" 2>/dev/null || true
+  sleep 1
+  (cd frontend && PORT="$FRONTEND_PORT" VITE_API_PROXY="http://127.0.0.1:$API_PORT" \
+    VITE_EVE_PROXY="http://127.0.0.1:$EVE_PORT" \
+    setsid nohup npm run dev -- --port "$FRONTEND_PORT" \
+    > "$LOG_DIR/vite.log" 2>&1 < /dev/null &)
+  sleep 4
+  echo "frontend: http://127.0.0.1:$FRONTEND_PORT"
+}
+
 stop_all() {
   pkill -9 -f "uvicorn app.main:app" 2>/dev/null || true
   pkill -9 -f "celery -A app.tasks.celery_app" 2>/dev/null || true
-  echo "api + worker stopped (redis left running)"
+  pkill -9 -f "eve dev" 2>/dev/null || true
+  pkill -9 -f "vite --port" 2>/dev/null || true
+  echo "api, worker, agent, and frontend stopped (redis left running)"
 }
 
 case "${1:-start}" in
-  start) start_redis; start_app ;;
+  start) start_redis; start_app; start_agent; start_frontend ;;
   stop) stop_all ;;
-  restart) stop_all; sleep 1; start_redis; start_app ;;
+  restart) stop_all; sleep 1; start_redis; start_app; start_agent; start_frontend ;;
   *) echo "usage: $0 [start|stop|restart]"; exit 2 ;;
 esac

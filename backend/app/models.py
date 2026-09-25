@@ -94,7 +94,6 @@ class Analysis(Base):
     started_at: Mapped[datetime | None] = mapped_column(nullable=True)
     finished_at: Mapped[datetime | None] = mapped_column(nullable=True)
     error: Mapped[str | None] = mapped_column(Text, nullable=True)
-    cost_json: Mapped[dict | None] = mapped_column(JSONVariant, nullable=True)
     loc: Mapped[int | None] = mapped_column(Integer, nullable=True)
     score_json: Mapped[dict | None] = mapped_column(JSONVariant, nullable=True)
     published: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)

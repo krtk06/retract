@@ -1,9 +1,8 @@
-import { useEffect, useState } from "react";
+import { Suspense, lazy, useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 
 import { useAnalysis, useFindings } from "../api/hooks";
 import type { AnalysisEvent } from "../api/types";
-import { AgentCostPanel } from "../components/AgentCostPanel";
 import { ApprovalQueue } from "../components/ApprovalQueue";
 import { ExploreTab } from "../components/ExploreTab";
 import { FindingsTable } from "../components/FindingsTable";
@@ -11,6 +10,12 @@ import { HistoryCompare } from "../components/HistoryCompare";
 import { ScoreHero } from "../components/ScoreHero";
 import { StatusPill } from "../components/StatusPill";
 import { TrustPanel } from "../components/TrustPanel";
+
+// The eve client is ~450 kB of the bundle, so the agent surface loads only when
+// the tab is opened.
+const AgentChat = lazy(() =>
+  import("../components/AgentChat").then((module) => ({ default: module.AgentChat })),
+);
 
 const EVENT_NAMES = ["status", "step", "tool", "agent", "done", "failed"];
 
@@ -48,7 +53,7 @@ export function AnalysisDetailPage() {
     analysis.data?.status === "pending" || analysis.data?.status === "running";
   const findings = useFindings(analysisId, analysis.data?.status === "done");
   const [events, setEvents] = useState<AnalysisEvent[]>([]);
-  const [tab, setTab] = useState<"overview" | "explore">("overview");
+  const [tab, setTab] = useState<"overview" | "explore" | "agent">("overview");
 
   useEffect(() => {
     setEvents([]);
@@ -117,7 +122,7 @@ export function AnalysisDetailPage() {
         )}
         {data.status === "done" && (
           <div className="mt-4 flex gap-1 border-b border-zinc-800">
-            {(["overview", "explore"] as const).map((name) => (
+            {(["overview", "explore", "agent"] as const).map((name) => (
               <button
                 key={name}
                 onClick={() => setTab(name)}
@@ -139,8 +144,6 @@ export function AnalysisDetailPage() {
           {data.status === "done" && <ScoreHero score={data.score_json} />}
 
           {data.status === "done" && <ApprovalQueue analysisId={analysisId} />}
-
-          {data.status === "done" && <AgentCostPanel ledger={data.cost_json} />}
 
           <section>
             <h3 className="mb-3 font-semibold">Progress</h3>
@@ -192,6 +195,14 @@ export function AnalysisDetailPage() {
       )}
 
       {tab === "explore" && data.status === "done" && <ExploreTab analysisId={analysisId} />}
+
+      {tab === "agent" && data.status === "done" && (
+        <Suspense
+          fallback={<p className="text-sm text-zinc-500">Loading the agent…</p>}
+        >
+          <AgentChat analysisId={analysisId} />
+        </Suspense>
+      )}
     </div>
   );
 }
