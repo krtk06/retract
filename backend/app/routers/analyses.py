@@ -170,6 +170,47 @@ def trust_summary(
     return TrustSummaryOut.model_validate(trust.build_trust_summary(db, analysis_id))
 
 
+@router.get("/{analysis_id}/snippet")
+def code_snippet(
+    analysis_id: int,
+    path: str = Query(min_length=1),
+    line_start: int = Query(ge=1, default=1),
+    context: int = Query(ge=0, le=20, default=4),
+    db: Session = Depends(get_db),
+    _: User = Depends(get_current_user),
+) -> dict:
+    """Return a code snippet around a cited line from the analyzed snapshot.
+
+    Reads from the immutable analysis snapshot on disk, and refuses any path
+    that escapes the repository root.
+    """
+    from app.config import get_settings
+
+    analysis = _get_analysis(db, analysis_id)
+    settings = get_settings()
+    repo_root = (
+        settings.data_dir / "repos" / str(analysis.repository_id) / str(analysis_id)
+    ).resolve()
+    target = (repo_root / path).resolve()
+    if not str(target).startswith(str(repo_root) + "/"):
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="path escapes repository root")
+    if not target.is_file():
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="file not found in snapshot")
+    try:
+        lines = target.read_text(errors="replace").splitlines()
+    except OSError as exc:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="could not read file") from exc
+    start = max(0, line_start - 1 - context)
+    end = min(len(lines), line_start + context)
+    return {
+        "path": path,
+        "line_start": line_start,
+        "from_line": start + 1,
+        "to_line": end,
+        "lines": lines[start:end],
+    }
+
+
 def _history_out(db: Session, analysis: Analysis) -> AnalysisHistoryOut:
     out = AnalysisHistoryOut.model_validate(analysis)
     out.finding_count = (

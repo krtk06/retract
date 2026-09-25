@@ -32,6 +32,58 @@ export interface Score {
   loc: number | null;
   kloc: number;
   pillars: Record<string, ScorePillar>;
+  previous_overall?: number | null;
+  delta?: number | null;
+}
+
+export interface AnalysisHistoryItem {
+  id: number;
+  repository_id: number;
+  commit_sha: string | null;
+  status: AnalysisStatus;
+  created_at: string;
+  finished_at: string | null;
+  loc: number | null;
+  published: boolean;
+  finding_count: number;
+  overall: number | null;
+}
+
+export interface AgentTrust {
+  agent: string;
+  findings: number;
+  verified: number;
+  hypotheses: number;
+  dismissed: number;
+  avg_confidence: number | null;
+}
+
+export interface TrustSummary {
+  analysis_id: number;
+  totals: {
+    findings: number;
+    verified: number;
+    hypotheses: number;
+    dismissed: number;
+  };
+  verification_coverage: number | null;
+  avg_confidence: number | null;
+  agents: AgentTrust[];
+  acceptance_rates: CalibrationStat[];
+}
+
+export interface CompareResult {
+  left: { id: number; commit_sha: string | null; created_at: string | null; overall: number | null; loc: number | null };
+  right: { id: number; commit_sha: string | null; created_at: string | null; overall: number | null; loc: number | null };
+  overall_delta: number | null;
+  pillars: {
+    pillar: string;
+    left_score: number;
+    right_score: number;
+    delta: number;
+    left_findings: number;
+    right_findings: number;
+  }[];
 }
 
 export interface AgentCostRun {
@@ -88,6 +140,14 @@ export interface ApprovalResult {
   note: string | null;
   pending_count: number;
   published: boolean;
+}
+
+export interface SnippetResponse {
+  path: string;
+  line_start: number;
+  from_line: number;
+  to_line: number;
+  lines: string[];
 }
 
 export interface CalibrationStat {

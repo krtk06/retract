@@ -7,8 +7,10 @@ import { AgentCostPanel } from "../components/AgentCostPanel";
 import { ApprovalQueue } from "../components/ApprovalQueue";
 import { ExploreTab } from "../components/ExploreTab";
 import { FindingsTable } from "../components/FindingsTable";
-import { ScorePanel } from "../components/ScorePanel";
+import { HistoryCompare } from "../components/HistoryCompare";
+import { ScoreHero } from "../components/ScoreHero";
 import { StatusPill } from "../components/StatusPill";
+import { TrustPanel } from "../components/TrustPanel";
 
 const EVENT_NAMES = ["status", "step", "tool", "agent", "done", "failed"];
 
@@ -134,7 +136,7 @@ export function AnalysisDetailPage() {
 
       {tab === "overview" && (
         <>
-          {data.status === "done" && <ScorePanel score={data.score_json} />}
+          {data.status === "done" && <ScoreHero score={data.score_json} />}
 
           {data.status === "done" && <ApprovalQueue analysisId={analysisId} />}
 
@@ -179,8 +181,13 @@ export function AnalysisDetailPage() {
               findings={findings.data ?? []}
               repository={repo}
               commitSha={data.commit_sha}
+              analysisId={analysisId}
             />
           )}
+
+          {data.status === "done" && <TrustPanel analysisId={analysisId} />}
+
+          {data.status === "done" && <HistoryCompare analysisId={analysisId} />}
         </>
       )}
 

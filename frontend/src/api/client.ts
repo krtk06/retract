@@ -1,14 +1,18 @@
 import type {
   Analysis,
+  AnalysisHistoryItem,
   ApprovalQueue,
   ApprovalResult,
   CalibrationStat,
+  CompareResult,
   Finding,
   GraphNeighborhood,
   GraphSummary,
   Repository,
   SearchResponse,
+  SnippetResponse,
   SymbolRef,
+  TrustSummary,
   User,
 } from "./types";
 
@@ -63,6 +67,14 @@ export const api = {
     ),
   search: (id: number, q: string) =>
     request<SearchResponse>(`/api/analyses/${id}/search?q=${encodeURIComponent(q)}`),
+  history: (id: number) => request<AnalysisHistoryItem[]>(`/api/analyses/${id}/history`),
+  trustSummary: (id: number) => request<TrustSummary>(`/api/analyses/${id}/trust-summary`),
+  compare: (left: number, right: number) =>
+    request<CompareResult>(`/api/analyses/compare?left=${left}&right=${right}`),
+  snippet: (id: number, path: string, lineStart: number) =>
+    request<SnippetResponse>(
+      `/api/analyses/${id}/snippet?path=${encodeURIComponent(path)}&line_start=${lineStart}&context=6`,
+    ),
   approvalQueue: (id: number) => request<ApprovalQueue>(`/api/analyses/${id}/approvals/queue`),
   decide: (id: number, findingId: number, decision: "approve" | "dismiss", note?: string) =>
     request<ApprovalResult>(`/api/analyses/${id}/approvals`, {

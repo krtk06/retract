@@ -132,3 +132,35 @@ export function useCalibrationStats(enabled: boolean) {
     enabled,
   });
 }
+
+export function useHistory(id: number, enabled: boolean) {
+  return useQuery({
+    queryKey: ["history", id],
+    queryFn: () => api.history(id),
+    enabled,
+  });
+}
+
+export function useTrustSummary(id: number, enabled: boolean) {
+  return useQuery({
+    queryKey: ["trust-summary", id],
+    queryFn: () => api.trustSummary(id),
+    enabled,
+  });
+}
+
+export function useCompare(left: number | null, right: number | null) {
+  return useQuery({
+    queryKey: ["compare", left, right],
+    queryFn: () => api.compare(left as number, right as number),
+    enabled: left != null && right != null && left !== right,
+  });
+}
+
+export function useSnippet(id: number, path: string | null, lineStart: number | null) {
+  return useQuery({
+    queryKey: ["snippet", id, path, lineStart],
+    queryFn: () => api.snippet(id, path as string, lineStart as number),
+    enabled: path != null && lineStart != null,
+  });
+}
