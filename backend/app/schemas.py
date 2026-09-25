@@ -45,6 +45,7 @@ class AnalysisOut(BaseModel):
     finding_count: int = 0
     loc: int | None = None
     score_json: dict[str, Any] | None = None
+    cost_json: dict[str, Any] | None = None
     repository: RepoOut | None = None
 
 

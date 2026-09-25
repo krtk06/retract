@@ -3,12 +3,13 @@ import { useParams } from "react-router-dom";
 
 import { useAnalysis, useFindings } from "../api/hooks";
 import type { AnalysisEvent } from "../api/types";
+import { AgentCostPanel } from "../components/AgentCostPanel";
 import { ExploreTab } from "../components/ExploreTab";
 import { FindingsTable } from "../components/FindingsTable";
 import { ScorePanel } from "../components/ScorePanel";
 import { StatusPill } from "../components/StatusPill";
 
-const EVENT_NAMES = ["status", "step", "tool", "done", "failed"];
+const EVENT_NAMES = ["status", "step", "tool", "agent", "done", "failed"];
 
 function formatTime(ts: number) {
   return new Date(ts * 1000).toLocaleTimeString();
@@ -18,7 +19,22 @@ function toolEventText(payload: Record<string, unknown>): string {
   if (payload.status === "ok") {
     return `${payload.findings} findings (${payload.seconds}s)`;
   }
+  if (payload.status === "skipped") {
+    return `skipped: ${String(payload.error ?? "").slice(0, 120)}`;
+  }
   return `error: ${String(payload.error ?? "").slice(0, 120)} (${payload.seconds}s)`;
+}
+
+function agentEventText(payload: Record<string, unknown>): string {
+  if (payload.status === "ok") {
+    const dismissed = Number(payload.dismissed ?? 0);
+    const tokens = `${payload.tokens_in ?? 0}in/${payload.tokens_out ?? 0}out`;
+    return `${payload.findings} findings${dismissed ? `, ${dismissed} dismissed` : ""} · ${tokens} tokens · ${payload.seconds}s`;
+  }
+  if (payload.status === "skipped") {
+    return `skipped: ${String(payload.error ?? "").slice(0, 140)}`;
+  }
+  return `error: ${String(payload.error ?? "").slice(0, 140)}`;
 }
 
 export function AnalysisDetailPage() {
@@ -112,6 +128,8 @@ export function AnalysisDetailPage() {
         <>
           {data.status === "done" && <ScorePanel score={data.score_json} />}
 
+          {data.status === "done" && <AgentCostPanel ledger={data.cost_json} />}
+
           <section>
             <h3 className="mb-3 font-semibold">Progress</h3>
             {events.length === 0 && isActive && (
@@ -125,15 +143,21 @@ export function AnalysisDetailPage() {
                 <li key={index} className="flex gap-3">
                   <span className="text-zinc-600">{formatTime(event.ts)}</span>
                   <span className="w-24 shrink-0 text-zinc-300">
-                    {event.type === "tool" ? `tool:${event.payload.tool}` : event.type}
+                    {event.type === "tool"
+                      ? `tool:${event.payload.tool}`
+                      : event.type === "agent"
+                        ? `agent:${event.payload.agent}`
+                        : event.type}
                   </span>
                   <span>
                     {event.type === "tool"
                       ? toolEventText(event.payload)
-                      : ((event.payload.message as string) ??
-                        (event.payload.status as string) ??
-                        (event.payload.error as string) ??
-                        "")}
+                      : event.type === "agent"
+                        ? agentEventText(event.payload)
+                        : ((event.payload.message as string) ??
+                          (event.payload.status as string) ??
+                          (event.payload.error as string) ??
+                          "")}
                   </span>
                 </li>
               ))}

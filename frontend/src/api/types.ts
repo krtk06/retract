@@ -32,6 +32,25 @@ export interface Score {
   pillars: Record<string, ScorePillar>;
 }
 
+export interface AgentCostRun {
+  agent: string;
+  provider?: string;
+  model?: string;
+  tokens_in?: number;
+  tokens_out?: number;
+  findings?: number;
+  dropped?: number;
+  repaired?: number;
+  dismissed?: number;
+  error?: string | null;
+}
+
+export interface CostLedger {
+  agents?: AgentCostRun[];
+  tokens_in?: number;
+  tokens_out?: number;
+}
+
 export interface Analysis {
   id: number;
   repository_id: number;
@@ -44,6 +63,7 @@ export interface Analysis {
   finding_count: number;
   loc: number | null;
   score_json: Score | null;
+  cost_json: CostLedger | null;
   repository: Repository | null;
 }
 

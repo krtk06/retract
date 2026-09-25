@@ -46,7 +46,9 @@ def run_agent(agent_name: str, analysis_id: int, repo_root: str) -> dict:
 
         inserted = persist_findings(session, analysis_id, result.findings)
         dismissed = apply_triage(session, analysis_id, result.triage)
-        _record_cost(session, analysis_id, result.cost)
+        cost = dict(result.cost)
+        cost["dismissed"] = dismissed
+        _record_cost(session, analysis_id, cost)
 
         elapsed = round(time.monotonic() - started, 2)
         status = "error" if result.error else "ok"
