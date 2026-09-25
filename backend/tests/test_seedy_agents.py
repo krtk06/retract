@@ -80,8 +80,9 @@ def test_security_agent_flags_sql_injection_with_caller_context(seedy_analysis: 
     assert db_findings, "SQL injection was not attributed to app/db.py"
     finding = db_findings[0]
     assert finding.line_start == 10
-    assert finding.status == FindingStatus.HYPOTHESIS
-    assert finding.verifier.startswith("llm:")
+    # The trust layer verifies the LLM claim against the source pattern.
+    assert finding.status == FindingStatus.VERIFIED
+    assert "verified:source-pattern" in finding.verifier
     assert "Callers:" in finding.description or "No internal callers" in finding.description
 
 
@@ -99,7 +100,10 @@ def test_code_agent_adds_hypothesis_insight(seedy_analysis: int) -> None:
     findings = _findings(seedy_analysis)
     code_findings = [f for f in findings if f.agent == "code"]
     assert code_findings, "Code Agent produced no findings"
-    assert all(f.status == FindingStatus.HYPOTHESIS for f in code_findings)
+    # Agent findings start as hypotheses; the trust layer may promote them.
+    allowed = (FindingStatus.HYPOTHESIS, FindingStatus.VERIFIED)
+    assert all(f.status in allowed for f in code_findings)
+    assert all("llm:" in f.verifier for f in code_findings)
 
 
 def test_test_agent_lists_untested_modules(seedy_analysis: int) -> None:

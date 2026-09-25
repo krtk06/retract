@@ -139,7 +139,9 @@ def dispatch_agents(_results: list, analysis_id: int, repo_root: str) -> dict:
 
 @celery_app.task(name="app.tasks.analysis.finalize_analysis")
 def finalize_analysis(_results: list, analysis_id: int) -> dict:
-    """Compute the health score and mark the analysis done."""
+    """Verify LLM findings, calibrate confidence, then compute the honest score."""
+    from app.analysis_engine import approvals, verify
+    from app.analysis_engine import calibration as calibration_mod
     from app.analysis_engine.scoring import compute_score
 
     bus = get_bus()
@@ -148,17 +150,59 @@ def finalize_analysis(_results: list, analysis_id: int) -> dict:
         analysis = session.get(Analysis, analysis_id)
         if analysis is None:
             return {"ok": False, "error": "analysis not found"}
+        repo = analysis.repository
+
+        # Trust layer: verify hypotheses with deterministic checks (D2),
+        # then calibrate confidence (D5).
+        settings = get_settings()
+        repo_root = settings.data_dir / "repos" / str(repo.id) / str(analysis_id)
+        try:
+            verification = verify.verify_analysis(session, analysis_id, repo_root)
+            bus.publish(
+                analysis_id,
+                "step",
+                {
+                    "step": "verify",
+                    "message": (
+                        f"Verified {verification.promoted}/{verification.checked} "
+                        f"hypotheses ({verification.failed} unverified)"
+                    ),
+                },
+            )
+        except Exception:  # noqa: BLE001 — verification failure must not block scoring
+            logger.exception("verification failed for analysis %s", analysis_id)
+
+        try:
+            updated = calibration_mod.recalibrate_analysis(session, analysis_id)
+            bus.publish(
+                analysis_id,
+                "step",
+                {"step": "calibrate", "message": f"Calibrated {updated} findings"},
+            )
+        except Exception:  # noqa: BLE001
+            logger.exception("calibration failed for analysis %s", analysis_id)
+
         score = compute_score(session, analysis_id)
         analysis.score_json = score
         analysis.status = AnalysisStatus.DONE
         analysis.finished_at = datetime.now(UTC)
+
+        # Publish gate: high-severity hypotheses require human approval (D5).
+        pending = approvals.pending_findings(session, analysis_id)
+        analysis.published = not pending
         session.commit()
+
         bus.publish(
             analysis_id,
             "done",
-            {"status": AnalysisStatus.DONE.value, "overall": score["overall"]},
+            {
+                "status": AnalysisStatus.DONE.value,
+                "overall": score["overall"],
+                "published": analysis.published,
+                "pending_approvals": len(pending),
+            },
         )
-        return {"ok": True, "overall": score["overall"]}
+        return {"ok": True, "overall": score["overall"], "pending_approvals": len(pending)}
     except Exception as exc:  # noqa: BLE001
         logger.exception("finalize failed for analysis %s", analysis_id)
         analysis = session.get(Analysis, analysis_id)

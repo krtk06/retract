@@ -36,6 +36,9 @@ def get_analysis(
     out.finding_count = (
         db.scalar(select(func.count(Finding.id)).where(Finding.analysis_id == analysis_id)) or 0
     )
+    from app.analysis_engine import approvals
+
+    out.pending_approvals = len(approvals.pending_findings(db, analysis_id))
     return out
 
 

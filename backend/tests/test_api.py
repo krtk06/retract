@@ -88,7 +88,8 @@ def test_analysis_flow_end_to_end(auth_client: TestClient, monkeypatch) -> None:
     items = findings.json()
     ingestion_finding = next(f for f in items if f["agent"] == "ingestion")
     assert ingestion_finding["status"] == "verified"
-    assert ingestion_finding["confidence"] == 1.0
+    # Confidence is calibrated by the trust layer (Phase 5), not the raw 1.0.
+    assert 0.5 <= ingestion_finding["confidence"] <= 1.0
     assert ingestion_finding["evidence_json"]["languages"] == {"Python": 1, "TypeScript": 1}
     # The empty fake repo has no tests and no README.
     categories = {f["category"] for f in items}

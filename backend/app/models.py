@@ -4,7 +4,7 @@ import enum
 from datetime import UTC, datetime
 
 from pgvector.sqlalchemy import Vector
-from sqlalchemy import JSON, Enum, Float, ForeignKey, Integer, Text, UniqueConstraint
+from sqlalchemy import JSON, Boolean, Enum, Float, ForeignKey, Integer, Text, UniqueConstraint
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -102,6 +102,7 @@ class Analysis(Base):
     cost_json: Mapped[dict | None] = mapped_column(JSONVariant, nullable=True)
     loc: Mapped[int | None] = mapped_column(Integer, nullable=True)
     score_json: Mapped[dict | None] = mapped_column(JSONVariant, nullable=True)
+    published: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     created_at: Mapped[datetime] = mapped_column(default=utcnow)
 
     repository: Mapped[Repository] = relationship(back_populates="analyses")

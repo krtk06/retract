@@ -46,6 +46,8 @@ class AnalysisOut(BaseModel):
     loc: int | None = None
     score_json: dict[str, Any] | None = None
     cost_json: dict[str, Any] | None = None
+    published: bool = False
+    pending_approvals: int = 0
     repository: RepoOut | None = None
 
 
@@ -137,6 +139,40 @@ class SearchResponse(BaseModel):
     mode: str
     query: str
     results: list[SearchResult]
+
+
+class ApprovalRequest(BaseModel):
+    finding_id: int
+    decision: str  # "approve" | "dismiss"
+    note: str | None = None
+
+
+class ApprovalOut(BaseModel):
+    finding_id: int
+    decision: str
+    finding_status: str
+    confidence: float
+    note: str | None = None
+    pending_count: int = 0
+    published: bool = False
+
+
+class QueueOut(BaseModel):
+    analysis_id: int
+    published: bool
+    pending_count: int
+    approved_count: int
+    dismissed_count: int
+    pending: list[FindingOut]
+
+
+class CalibrationStatOut(BaseModel):
+    agent: str
+    category: str
+    shown: int
+    accepted: int
+    dismissed: int
+    acceptance_rate: float | None = None
 
 
 class HealthOut(BaseModel):
