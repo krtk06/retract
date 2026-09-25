@@ -37,6 +37,13 @@ class Settings(BaseSettings):
     gitleaks_path: str = ""
     semgrep_config: str = "p/default"
 
+    # Embeddings (RAG index). Provider: fastembed | openai | hashing.
+    embedding_provider: str = "fastembed"
+    embedding_model: str = "BAAI/bge-small-en-v1.5"
+    openai_api_key: str = ""
+    openai_embedding_model: str = "text-embedding-3-small"
+    max_chunks_per_analysis: int = 3000
+
     cors_origins: str = "http://localhost:5173"
 
     @property

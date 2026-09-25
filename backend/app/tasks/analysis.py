@@ -13,6 +13,7 @@ from app.services import indexer, ingestion
 from app.services.tools import TOOL_RUNNERS
 from app.services.tools.findings import FindingDraft, persist_findings
 from app.tasks.celery_app import celery_app
+from app.tasks.embeddings import embed_analysis
 from app.tasks.tools import run_tool
 
 logger = logging.getLogger(__name__)
@@ -91,11 +92,12 @@ def run_analysis(analysis_id: int) -> dict:
             analysis_id, "step", {"step": "index", "message": f"Indexed {symbol_count} symbols"}
         )
 
-        # Fan out tool runners in parallel; finalize computes the score.
-        tool_names = list(TOOL_RUNNERS)
-        header = group(run_tool.s(name, analysis_id, str(dest)) for name in tool_names)
+        # Fan out tool runners + embedding index build in parallel; finalize scores.
+        tool_jobs = [run_tool.s(name, analysis_id, str(dest)) for name in TOOL_RUNNERS]
+        tool_jobs.append(embed_analysis.s(analysis_id, str(dest)))
+        header = group(tool_jobs)
         chord(header)(finalize_analysis.s(analysis_id))
-        return {"ok": True, "dispatched": tool_names}
+        return {"ok": True, "dispatched": [*TOOL_RUNNERS, "embeddings"]}
     except Exception as exc:  # noqa: BLE001 — record and report, don't crash the worker
         logger.exception("analysis %s failed", analysis_id)
         try:

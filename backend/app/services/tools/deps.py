@@ -19,7 +19,6 @@ MAX_DEPS_CHECKED = 60
 HTTP_TIMEOUT = 20.0
 
 
-
 @dataclass
 class Dep:
     name: str

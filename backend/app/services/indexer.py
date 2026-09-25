@@ -7,7 +7,6 @@ symbols (needed for cycle detection in Phase 2).
 """
 
 import logging
-from collections.abc import Iterator
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -52,7 +51,9 @@ class SymbolRec:
 
 @dataclass
 class EdgeRec:
-    src: str  # qualified source symbol key: "file_path:name:kind:line"
+    src_file: str
+    src_name: str
+    src_line: int
     dst_name: str
     kind: EdgeKind
 
@@ -77,45 +78,37 @@ def _walk_python(root: Node, source: bytes, rel: str, out: IndexResult) -> None:
     out.symbols.append(
         SymbolRec(rel, module, SymbolKind.MODULE, root.start_point[0] + 1, root.end_point[0] + 1)
     )
+    module_scope = (module, 1)
 
-    def visit(node: Node, class_stack: list[str]) -> None:
+    def visit(node: Node, class_stack: list[str], scope: tuple[str, int]) -> None:
+        next_scope = scope
+        next_class_stack = class_stack
         if node.type == "class_definition":
             name_node = node.child_by_field_name("name")
             if name_node is not None:
                 name = _text(name_node, source)
+                line = node.start_point[0] + 1
                 out.symbols.append(
-                    SymbolRec(
-                        rel,
-                        name,
-                        SymbolKind.CLASS,
-                        node.start_point[0] + 1,
-                        node.end_point[0] + 1,
-                    )
+                    SymbolRec(rel, name, SymbolKind.CLASS, line, node.end_point[0] + 1)
                 )
-                body = node.child_by_field_name("body")
-                if body is not None:
-                    visit(body, [*class_stack, name])
-                return
+                next_scope = (name, line)
+                next_class_stack = [*class_stack, name]
         elif node.type == "function_definition":
             name_node = node.child_by_field_name("name")
             if name_node is not None:
                 name = _text(name_node, source)
                 kind = SymbolKind.METHOD if class_stack else SymbolKind.FUNCTION
-                out.symbols.append(
-                    SymbolRec(
-                        rel,
-                        name,
-                        kind,
-                        node.start_point[0] + 1,
-                        node.end_point[0] + 1,
-                    )
-                )
+                line = node.start_point[0] + 1
+                out.symbols.append(SymbolRec(rel, name, kind, line, node.end_point[0] + 1))
+                next_scope = (name, line)
         elif node.type == "import_statement":
             for child in node.children:
-                if child.type == "dotted_name" or child.type == "aliased_import":
+                if child.type in ("dotted_name", "aliased_import"):
                     out.edges.append(
                         EdgeRec(
-                            f"{rel}::{module}",
+                            rel,
+                            module,
+                            1,
                             _text(child, source).split(" as ")[0],
                             EdgeKind.IMPORTS,
                         )
@@ -125,44 +118,30 @@ def _walk_python(root: Node, source: bytes, rel: str, out: IndexResult) -> None:
             if module_node is not None:
                 prefix = _text(module_node, source)
                 names = [
-                    _text(c, source)
+                    _text(c, source).split(" as ")[0]
                     for c in node.children
-                    if c.type == "dotted_name" or c.type == "aliased_import"
+                    if c.type in ("dotted_name", "aliased_import")
                 ]
                 # "from x import a, b" -> edges to x, x.a, x.b
-                out.edges.append(EdgeRec(f"{rel}::{module}", prefix, EdgeKind.IMPORTS))
+                out.edges.append(EdgeRec(rel, module, 1, prefix, EdgeKind.IMPORTS))
                 for imported in names:
                     out.edges.append(
-                        EdgeRec(
-                            f"{rel}::{module}",
-                            f"{prefix}.{imported.split(' as ')[0]}",
-                            EdgeKind.IMPORTS,
-                        )
+                        EdgeRec(rel, module, 1, f"{prefix}.{imported}", EdgeKind.IMPORTS)
                     )
+        elif node.type == "call":
+            func = node.child_by_field_name("function")
+            if func is not None and func.type in ("identifier", "attribute"):
+                callee = _text(func, source)
+                if func.type == "attribute":
+                    attribute = func.child_by_field_name("attribute")
+                    if attribute is not None:
+                        callee = _text(attribute, source)
+                out.edges.append(EdgeRec(rel, next_scope[0], next_scope[1], callee, EdgeKind.CALLS))
 
         for child in node.children:
-            visit(child, class_stack)
+            visit(child, next_class_stack, next_scope)
 
-    visit(root, [])
-
-    # Calls: any call node -> record callee name as written.
-    module_key = f"{rel}::{module}"
-    for call in _iter_type(root, "call"):
-        func = call.child_by_field_name("function")
-        if func is None:
-            continue
-        if func.type in ("identifier", "attribute"):
-            callee = _text(func, source)
-            if func.type == "attribute":
-                callee = _text(func.child_by_field_name("attribute") or func, source)
-            out.edges.append(EdgeRec(module_key, callee, EdgeKind.CALLS))
-
-
-def _iter_type(node: Node, node_type: str) -> Iterator[Node]:
-    if node.type == node_type:
-        yield node
-    for child in node.children:
-        yield from _iter_type(child, node_type)
+    visit(root, [], module_scope)
 
 
 def _walk_javascript(root: Node, source: bytes, rel: str, out: IndexResult) -> None:
@@ -170,49 +149,59 @@ def _walk_javascript(root: Node, source: bytes, rel: str, out: IndexResult) -> N
     out.symbols.append(
         SymbolRec(rel, module, SymbolKind.MODULE, root.start_point[0] + 1, root.end_point[0] + 1)
     )
-    module_key = f"{rel}::{module}"
+    module_scope = (module, 1)
 
-    # Imports
-    for node in _iter_types(root, {"import_statement"}):
-        src_node = node.child_by_field_name("source")
-        if src_node is not None:
-            out.edges.append(
-                EdgeRec(module_key, _text(src_node, source).strip("'\""), EdgeKind.IMPORTS)
-            )
-
-    # Functions / classes / arrow-assigned consts
-    for node in _iter_types(root, {"function_declaration", "class_declaration"}):
-        name_node = node.child_by_field_name("name")
-        if name_node is not None:
-            kind = SymbolKind.CLASS if node.type == "class_declaration" else SymbolKind.FUNCTION
-            out.symbols.append(
-                SymbolRec(
-                    rel,
-                    _text(name_node, source),
-                    kind,
-                    node.start_point[0] + 1,
-                    node.end_point[0] + 1,
+    def visit(node: Node, scope: tuple[str, int]) -> None:
+        next_scope = scope
+        if node.type == "class_declaration":
+            name_node = node.child_by_field_name("name")
+            if name_node is not None:
+                name = _text(name_node, source)
+                line = node.start_point[0] + 1
+                out.symbols.append(
+                    SymbolRec(rel, name, SymbolKind.CLASS, line, node.end_point[0] + 1)
                 )
-            )
+                next_scope = (name, line)
+        elif node.type == "function_declaration":
+            name_node = node.child_by_field_name("name")
+            if name_node is not None:
+                name = _text(name_node, source)
+                line = node.start_point[0] + 1
+                out.symbols.append(
+                    SymbolRec(rel, name, SymbolKind.FUNCTION, line, node.end_point[0] + 1)
+                )
+                next_scope = (name, line)
+        elif node.type == "import_statement":
+            src_node = node.child_by_field_name("source")
+            if src_node is not None:
+                out.edges.append(
+                    EdgeRec(rel, module, 1, _text(src_node, source).strip("'\""), EdgeKind.IMPORTS)
+                )
+        elif node.type == "call_expression":
+            func = node.child_by_field_name("function")
+            if func is not None:
+                if func.type == "identifier":
+                    callee = _text(func, source)
+                    out.edges.append(
+                        EdgeRec(rel, next_scope[0], next_scope[1], callee, EdgeKind.CALLS)
+                    )
+                elif func.type == "member_expression":
+                    attr = func.child_by_field_name("property")
+                    if attr is not None:
+                        out.edges.append(
+                            EdgeRec(
+                                rel,
+                                next_scope[0],
+                                next_scope[1],
+                                _text(attr, source),
+                                EdgeKind.CALLS,
+                            )
+                        )
 
-    # Calls
-    for call in _iter_type(root, "call_expression"):
-        func = call.child_by_field_name("function")
-        if func is None:
-            continue
-        if func.type == "identifier":
-            out.edges.append(EdgeRec(module_key, _text(func, source), EdgeKind.CALLS))
-        elif func.type == "member_expression":
-            attr = func.child_by_field_name("property")
-            if attr is not None:
-                out.edges.append(EdgeRec(module_key, _text(attr, source), EdgeKind.CALLS))
+        for child in node.children:
+            visit(child, next_scope)
 
-
-def _iter_types(node: Node, types: set[str]) -> Iterator[Node]:
-    if node.type in types:
-        yield node
-    for child in node.children:
-        yield from _iter_types(child, types)
+    visit(root, module_scope)
 
 
 def index_file(root: Path, rel_path: str) -> IndexResult | None:
@@ -303,21 +292,22 @@ def persist_index(session: Session, analysis_id: int, repo_root: Path, files: li
 
     id_by_key = {key: symbol_rows[key].id for key in symbol_rows}
     module_id_by_name: dict[str, int] = {}
-    module_id_by_file: dict[tuple[str, str], int] = {}
+    # symbol id by (file, name, line_start) for edge source attribution
+    id_by_position: dict[tuple[str, str, int], int] = {
+        (rec.file_path, rec.name, rec.line_start): id_by_key[symbol_key(rec)]
+        for rec in result.symbols
+    }
     for rec in result.symbols:
         if rec.kind == SymbolKind.MODULE:
-            symbol_id = id_by_key[symbol_key(rec)]
-            module_id_by_name.setdefault(rec.name, symbol_id)
-            module_id_by_file.setdefault((rec.file_path, rec.name), symbol_id)
+            module_id_by_name.setdefault(rec.name, id_by_key[symbol_key(rec)])
 
     for edge in result.edges:
-        src_file, _, src_module = edge.src.partition("::")
-        src_id = module_id_by_file.get((src_file, src_module))
+        src_id = id_by_position.get((edge.src_file, edge.src_name, edge.src_line))
         if src_id is None:
             continue
         dst_symbol_id = None
         if edge.kind == EdgeKind.IMPORTS:
-            resolved = resolve_import(edge.dst_name, src_file, module_names)
+            resolved = resolve_import(edge.dst_name, edge.src_name, module_names)
             if resolved is not None:
                 dst_symbol_id = module_id_by_name.get(resolved)
         key = (src_id, edge.dst_name, edge.kind.value)

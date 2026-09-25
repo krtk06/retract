@@ -10,7 +10,7 @@ celery_app = Celery(
     "ai_intel",
     broker=settings.redis_url,
     backend=settings.redis_url,
-    include=["app.tasks.analysis"],
+    include=["app.tasks.analysis", "app.tasks.tools", "app.tasks.embeddings"],
 )
 
 celery_app.conf.update(

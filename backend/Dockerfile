@@ -18,6 +18,6 @@ COPY app ./app
 COPY alembic ./alembic
 COPY alembic.ini ./
 
-RUN pip install .
+RUN pip install ".[embeddings]"
 
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]

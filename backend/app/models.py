@@ -3,6 +3,7 @@
 import enum
 from datetime import UTC, datetime
 
+from pgvector.sqlalchemy import Vector
 from sqlalchemy import JSON, Enum, Float, ForeignKey, Integer, Text, UniqueConstraint
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -11,6 +12,10 @@ from app.db import Base
 
 # Portable JSON: JSONB on PostgreSQL, generic JSON elsewhere (tests use SQLite).
 JSONVariant = JSON().with_variant(JSONB(), "postgresql")
+
+EMBEDDING_DIM = 384
+# pgvector on PostgreSQL, JSON list of floats on SQLite (tests).
+EmbeddingType = Vector(EMBEDDING_DIM).with_variant(JSON(), "sqlite")
 
 
 def utcnow() -> datetime:
@@ -200,3 +205,29 @@ class Edge(Base):
     src_symbol: Mapped[Symbol] = relationship(
         back_populates="outgoing_edges", foreign_keys=[src_symbol_id]
     )
+
+
+class Chunk(Base):
+    __tablename__ = "chunks"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    analysis_id: Mapped[int] = mapped_column(ForeignKey("analyses.id"), index=True)
+    symbol_id: Mapped[int | None] = mapped_column(ForeignKey("symbols.id"), nullable=True)
+    file_path: Mapped[str] = mapped_column(index=True)
+    symbol_name: Mapped[str]
+    kind: Mapped[str]
+    line_start: Mapped[int]
+    line_end: Mapped[int]
+    text: Mapped[str] = mapped_column(Text)
+    embedding: Mapped[list[float] | None] = mapped_column(EmbeddingType, nullable=True)
+
+
+class GraphSnapshot(Base):
+    __tablename__ = "graph_snapshots"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    analysis_id: Mapped[int] = mapped_column(ForeignKey("analyses.id"), unique=True, index=True)
+    symbol_count: Mapped[int] = mapped_column(Integer, default=0)
+    edge_count: Mapped[int] = mapped_column(Integer, default=0)
+    chunk_count: Mapped[int] = mapped_column(Integer, default=0)
+    built_at: Mapped[datetime] = mapped_column(default=utcnow)
