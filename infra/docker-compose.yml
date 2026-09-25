@@ -64,12 +64,37 @@ services:
       redis:
         condition: service_healthy
 
+  agent:
+    build:
+      context: ../agent
+    env_file:
+      - path: ../.env
+        required: false
+    environment:
+      # Tools call the API with the shared service secret; the channel verifies
+      # the browser's exchanged token with the same JWT secret the API signs.
+      AI_INTEL_API_URL: http://api:8000
+      AI_INTEL_AGENT_TOKEN: ${AI_INTEL_AGENT_TOKEN:?set AI_INTEL_AGENT_TOKEN}
+      AI_INTEL_JWT_SECRET: ${AI_INTEL_JWT_SECRET:?set AI_INTEL_JWT_SECRET}
+      AI_INTEL_LLM_PROVIDER: ${AI_INTEL_LLM_PROVIDER:-mock}
+      AI_INTEL_MODEL: ${AI_INTEL_MODEL:-}
+      PORT: "3000"
+    command: npm run start
+    depends_on:
+      - api
+    ports:
+      - "3000:3000"
+
   frontend:
     build: ../frontend
+    environment:
+      VITE_API_PROXY: http://api:8000
+      VITE_EVE_PROXY: http://agent:3000
     ports:
       - "5173:5173"
     depends_on:
       - api
+      - agent
 
 volumes:
   postgres_data:

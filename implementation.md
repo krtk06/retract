@@ -23,24 +23,26 @@ Decisions made during planning (each grounded in research):
 |---|----------|--------------------|
 | D1 | **Deterministic-first, LLM-second.** Run real tools (tree-sitter, Semgrep, gitleaks, OSV, coverage, radon) before/alongside LLM reasoning. | arXiv:2508.04448 — LLMs beat SAST on F1 but are noisy and mislocate issues; hybrid is recommended. |
 | D2 | **Every finding carries a verdict schema:** `{claim, evidence, file:line citation, verifier, confidence, status: verified|hypothesis}`. Tool-confirmed → `verified`; LLM-only → `hypothesis` (requires human review). | arXiv:2509.26546 (verified code reasoning), VerifiAgent (EMNLP 2025). |
-| D3 | **Repo knowledge graph + embedding index** instead of naive flat RAG. Agents query the graph (imports/calls/contains); retrieval is selective (skip when not needed). | RANGER (arXiv:2509.25257), CodeX Graph (NAACL 2025), RepoFormer. |
+| D3 | **Repo symbol graph instead of flat RAG.** Agents query structure (imports/calls/callees/dependents/paths/neighbourhood) and quote exact symbols. *(Revised during build: the embedding index was removed — see D11.)* | RANGER (arXiv:2509.25257), CodeX Graph (NAACL 2025), RepoFormer. |
 | D4 | **Never ask the LLM to infer code structure** (call graphs, AST, dataflow). Parse with real tools and feed results in. | arXiv:2505.12118 — code LLMs are poor at static-analysis tasks. |
 | D5 | **Calibrated confidence + human approval queue.** Confidence from self-consistency + cross-tool agreement; security/architecture findings need explicit approve/dismiss; dismissals feed calibration. | arXiv:2402.07632, FAccT'24 trust-in-codegen study. |
 | D6 | **Chunked per-function vulnerability analysis**, never whole-file scanning. | arXiv:2512.22306 — LLM recall collapses (<0.30) on dense multi-vuln files. |
 | D7 | **Test agent reports coverage gaps and test plans**; it does not blindly generate-and-trust tests. | TestGenEval (ICLR 2025) — best model reaches only ~35% coverage; CoverUp/Panta show coverage-guided loops work. |
 | D8 | **Honest scoring:** hypothesis-only findings weigh less in the health score than verified findings. | Trust calibration literature; avoids "vibes-based" scores. |
 | D9 | **Benchmark harness** (JITVUL-style commit pairs, seeded sample repos) to report precision/recall in the README. | JITVUL (ACL 2025). Portfolio credibility. |
+| D10 | **The agent runtime is [eve](https://eve.dev)**, not hand-rolled Python. Typed tools, HITL approval gates, subagents, durable sessions, and a hermetic eval runner come from the framework. | Avoids reimplementing agent plumbing; the eval harness is the unit-test story for agent behaviour. |
+| D11 | **No embeddings anywhere.** The symbol graph plus `read_source` answers the questions RAG was retrieved for, at a fraction of the moving parts: no pgvector, no chunker, no drift between an embedding index and the analysed commit. | Removing it deleted ~1.5k lines and a whole migration; the agent cites `file:line` it actually read. |
 
 ### Tech stack (confirmed)
 
 - **Frontend:** React + Vite + TypeScript, TanStack Query, Recharts, Tailwind CSS.
 - **Backend:** FastAPI (Python 3.12), Pydantic v2, SQLAlchemy 2.x, Alembic.
 - **Queue:** Celery + Redis (broker + cache + rate limits).
-- **DB:** PostgreSQL 16 **with pgvector** (decision: pgvector over Qdrant — one less service, embeddings live next to findings).
+- **DB:** PostgreSQL 16 (no vector extension — see D11; the symbol graph lives in plain tables).
 - **Analysis tools:** tree-sitter, Semgrep, gitleaks, OSV-Scanner, radon, coverage.py, jscpd-style similarity hashing.
-- **LLM:** OpenAI-compatible adapter (pluggable base URL/model; logprobs used for confidence signal).
+- **Agent runtime:** eve (Node >= 24). Model via the AI Gateway or any AI SDK provider; `mockModel` fixture for evals and offline review.
 - **Infra:** Docker Compose, GitHub Actions CI.
-- **Repo layout:** monorepo — `backend/`, `frontend/`, `infra/`, `benchmark/`, `docs/`.
+- **Repo layout:** monorepo — `agent/`, `backend/`, `frontend/`, `infra/`, `benchmark/`, `docs/`.
 
 ---
 
@@ -111,6 +113,12 @@ Decisions made during planning (each grounded in research):
 
 ## Phase 3 — Knowledge Graph + RAG Service `[x]`
 
+> **Superseded in part.** The graph store (task 1) and the neighbourhood query
+> (3.2) survived and are what the eve agent uses today. The embedding index (2),
+> semantic/selective retrieval (3.1, 3.3), and the `/search` endpoint (4) were
+> built and then **removed** in the eve migration below (D11). Kept here as the
+> record of what was tried and why it is not needed.
+
 **Goal:** queryable repo structure + semantic index that agents (Phase 4) will use. *(Decision D3.)*
 
 ### Tasks
@@ -130,6 +138,48 @@ Decisions made during planning (each grounded in research):
 **Browser review (agent-browser)**
 - Use Explore tab on a real repo; verify graph view matches actual import structure; verify search relevance by eye.
 - Screenshot `docs/reviews/phase3.png`. Fix issues before Phase 4.
+
+---
+
+## Migration — eve replaces RAG and the Python agent runtime `[x]`
+
+**Goal:** replace the embedding index and the hand-rolled Python agent layer with
+the eve agent runtime and a graph-only retrieval story. *(Decisions D3, D10, D11.)*
+
+### What changed
+1. `[x]` **RAG removed.** Deleted `analysis_engine/{embeddings,chunker,retrieval}.py`,
+   `tasks/embeddings.py`, the `Chunk` model, `/analyses/{id}/search`, and the
+   Explore semantic-search box. Consolidated migrations `0003`/`0004`; PostgreSQL
+   no longer needs the `vector` extension.
+2. `[x]` **Python agent runtime removed.** Deleted `app/agents/`, `app/llm/`,
+   `tasks/agents.py`, and the `dispatch_agents` Celery stage. The orchestrator is
+   now ingest → index → 8 deterministic tools → verify → score.
+3. `[x]` **Backend contract for the agent** (the parts a serverless agent layer
+   needs that the deleted code owned):
+   - `app/analysis_engine/agent_findings.py` — server-side D2 verdict schema: the
+     authority that validates, normalizes, and stores agent claims as
+     `hypothesis` (moved out of the deleted `app/agents/base.py`).
+   - `POST /api/analyses/{id}/findings` — intake; persists claims, then re-runs
+     verification, calibration, scoring, and the publication gate.
+   - `POST /api/auth/eve-token` — exchanges the httpOnly browser cookie for a
+     short-lived bearer token (`iss=ai-intel`, `aud=eve-agent`).
+   - Service auth: `X-Agent-Token` (shared secret) + `X-Agent-User`, because the
+     agent runs server-side and cannot present the cookie. Fails closed.
+4. `[x]` **eve agent in `agent/`**: `instructions.md` (no-RAG policy + verdict
+   schema), 17 typed tools over graph/findings/score/trust, five review subagents
+   (`code`, `security`, `tests`, `docs`, `architecture`), `approval: always()` on
+   `run_analysis` and `decide_finding`, just-bash sandbox (no Docker needed).
+5. `[x]` **Evals** (`agent/evals/`): fixture model + in-process fixture API, so
+   the suite is hermetic (no credentials, DB, or containers). Covers tool
+   discipline, the citation rule, multi-turn behaviour, and every HITL gate.
+6. `[x]` **Frontend**: agent chat tab with tool-call chips and inline approval
+   prompts; eve client lazy-loaded so the initial bundle is unchanged.
+7. `[x]` **Infra**: `agent` service in compose, agent job in CI (typecheck/build/eval),
+   `scripts/dev-local.sh` starts redis + api + worker + agent + frontend.
+
+**Acceptance criteria**
+- Backend suite green (RAG and agent tests removed, intake tests added); agent
+  evals green; browser review of the chat, an approval, and a cancellation.
 
 ---
 
@@ -207,22 +257,41 @@ Decisions made during planning (each grounded in research):
 
 ---
 
-## Phase 7 — Evaluation Harness & Deployment `[ ]`
+## Phase 7 — Evaluation Harness & Deployment `[~]`
 
-**Goal:** credibility + shipping. *(Decision D9.)*
+**Goal:** credibility + shipping. *(Decisions D9, D10.)*
+
+**Evaluation now has two layers.** The agent's behaviour is covered by `agent/evals/`
+(fixture model + fixture API, hermetic, runs in CI in ~5s — see the migration
+section). What remains is measuring the *analysis* itself against known truth.
 
 ### Tasks
-1. `[ ]` `benchmark/` harness:
-   - `seedy-*` sample repos with ground-truth YAML (expected findings).
-   - Metrics: precision/recall/F1 per pillar; verifier agreement rate; report generated to `benchmark/REPORT.md` and surfaced in README.
-   - Optional: JITVUL-style pairwise commits subset (public CVEs) as an offline eval script.
-2. `[ ]` GitHub Actions: full CI (lint/type/test/build) + nightly benchmark smoke on seedy repos.
-3. `[ ]` Production compose: multi-stage Dockerfiles, non-root users, healthchecks, `docker-compose.prod.yml`; deployment docs for Azure (Container Apps + Azure DB for PostgreSQL) and AWS (ECS + RDS).
-4. `[ ]` `docs/RESEARCH.md`: map every D-decision to its paper citation (from section 0).
-5. `[ ]` README: architecture diagram, score screenshot, benchmark numbers, quickstart.
+1. `[x]` Agent behaviour evals: `agent/evals/` — tool discipline, citation rule,
+   multi-turn, and every HITL gate. Wired into CI (`npm run eval`).
+2. `[x]` CI: backend (ruff/mypy/pytest), frontend (lint/typecheck/test/build), and
+   the new agent job (typecheck/build/eval), all on Node 24 where relevant.
+3. `[x]` Compose: `agent` service added; agent and frontend wired to the API and
+   each other; `agent/Dockerfile` builds with `eve build` and runs `eve start`.
+4. `[x]` `scripts/dev-local.sh` starts the whole stack (redis, api, worker, agent,
+   frontend) with no Docker, plus `.local/env.sh.example` documenting the knobs.
+5. `[ ]` Analysis-quality benchmark (`benchmark/`):
+   - seedy repos already exist with ground-truth YAML; wire a runner that scores
+     precision/recall/F1 per pillar plus verifier agreement rate.
+   - Report to `benchmark/REPORT.md`, surfaced in the README.
+   - Optional: JITVUL-style pairwise commits subset as an offline script.
+6. `[ ]` Production hardening: non-root images, healthchecks for every service,
+   `docker-compose.prod.yml`, deployment notes for a container host.
+7. `[ ]` `docs/RESEARCH.md`: map every D-decision to its paper citation.
+8. `[x]` README: architecture diagram, quickstart, configuration matrix, checks.
+   *(Benchmark numbers land with task 5.)*
 
 **Acceptance criteria**
-- CI green; benchmark report reproducible with one command; fresh-clone `docker compose up` works.
+- CI green (done). Remaining: benchmark report reproducible with one command, and
+  a fresh-clone `docker compose up` that serves all three services.
+
+**Browser review (agent-browser)**
+- Done for the migration: chat tab, an approval, and a cancellation, plus a live
+  agent → API → findings round trip. Repeat once more after the benchmark lands.
 
 **Browser review (agent-browser)**
 - Review the deployed/dev app once more end-to-end against README quickstart exactly as a new user would.

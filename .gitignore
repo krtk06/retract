@@ -33,4 +33,5 @@ data/
 docs/reviews/*.har
 
 # Local dev toolchain (redis build, machine-specific env)
-.local/
+.local/*
+!.local/env.sh.example
