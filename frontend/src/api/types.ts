@@ -22,6 +22,8 @@ export interface ScorePillar {
   findings: number;
   verified: number;
   hypotheses: number;
+  dismissed?: number;
+  weighted_penalty?: number;
 }
 
 export interface Score {
@@ -64,7 +66,37 @@ export interface Analysis {
   loc: number | null;
   score_json: Score | null;
   cost_json: CostLedger | null;
+  published: boolean;
+  pending_approvals: number;
   repository: Repository | null;
+}
+
+export interface ApprovalQueue {
+  analysis_id: number;
+  published: boolean;
+  pending_count: number;
+  approved_count: number;
+  dismissed_count: number;
+  pending: Finding[];
+}
+
+export interface ApprovalResult {
+  finding_id: number;
+  decision: string;
+  finding_status: string;
+  confidence: number;
+  note: string | null;
+  pending_count: number;
+  published: boolean;
+}
+
+export interface CalibrationStat {
+  agent: string;
+  category: string;
+  shown: number;
+  accepted: number;
+  dismissed: number;
+  acceptance_rate: number | null;
 }
 
 export interface Finding {

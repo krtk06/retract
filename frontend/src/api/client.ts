@@ -1,5 +1,8 @@
 import type {
   Analysis,
+  ApprovalQueue,
+  ApprovalResult,
+  CalibrationStat,
   Finding,
   GraphNeighborhood,
   GraphSummary,
@@ -60,4 +63,11 @@ export const api = {
     ),
   search: (id: number, q: string) =>
     request<SearchResponse>(`/api/analyses/${id}/search?q=${encodeURIComponent(q)}`),
+  approvalQueue: (id: number) => request<ApprovalQueue>(`/api/analyses/${id}/approvals/queue`),
+  decide: (id: number, findingId: number, decision: "approve" | "dismiss", note?: string) =>
+    request<ApprovalResult>(`/api/analyses/${id}/approvals`, {
+      method: "POST",
+      body: JSON.stringify({ finding_id: findingId, decision, note }),
+    }),
+  calibrationStats: () => request<CalibrationStat[]>("/api/calibration/stats"),
 };

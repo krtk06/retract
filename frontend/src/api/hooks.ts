@@ -93,3 +93,42 @@ export function useSearch(id: number, q: string) {
     enabled: q.length > 0,
   });
 }
+
+export function useApprovalQueue(id: number, enabled: boolean) {
+  return useQuery({
+    queryKey: ["approvals", id],
+    queryFn: () => api.approvalQueue(id),
+    enabled,
+  });
+}
+
+export function useDecide() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      analysisId,
+      findingId,
+      decision,
+      note,
+    }: {
+      analysisId: number;
+      findingId: number;
+      decision: "approve" | "dismiss";
+      note?: string;
+    }) => api.decide(analysisId, findingId, decision, note),
+    onSuccess: (_result, variables) => {
+      queryClient.invalidateQueries({ queryKey: ["approvals", variables.analysisId] });
+      queryClient.invalidateQueries({ queryKey: ["analysis", variables.analysisId] });
+      queryClient.invalidateQueries({ queryKey: ["findings", variables.analysisId] });
+      queryClient.invalidateQueries({ queryKey: ["calibration"] });
+    },
+  });
+}
+
+export function useCalibrationStats(enabled: boolean) {
+  return useQuery({
+    queryKey: ["calibration"],
+    queryFn: api.calibrationStats,
+    enabled,
+  });
+}

@@ -4,6 +4,7 @@ import { useParams } from "react-router-dom";
 import { useAnalysis, useFindings } from "../api/hooks";
 import type { AnalysisEvent } from "../api/types";
 import { AgentCostPanel } from "../components/AgentCostPanel";
+import { ApprovalQueue } from "../components/ApprovalQueue";
 import { ExploreTab } from "../components/ExploreTab";
 import { FindingsTable } from "../components/FindingsTable";
 import { ScorePanel } from "../components/ScorePanel";
@@ -80,7 +81,14 @@ export function AnalysisDetailPage() {
       <section className="rounded-lg border border-zinc-800 bg-zinc-900 p-5">
         <div className="flex items-center justify-between">
           <h2 className="text-lg font-semibold">{title}</h2>
-          <StatusPill status={data.status} />
+          <div className="flex items-center gap-2">
+            {data.status === "done" && !data.published && data.pending_approvals > 0 && (
+              <span className="rounded-full bg-amber-950 px-2.5 py-0.5 text-xs text-amber-300">
+                {data.pending_approvals} pending review
+              </span>
+            )}
+            <StatusPill status={data.status} />
+          </div>
         </div>
         <dl className="mt-4 grid grid-cols-2 gap-x-6 gap-y-2 text-sm md:grid-cols-4">
           <div>
@@ -127,6 +135,8 @@ export function AnalysisDetailPage() {
       {tab === "overview" && (
         <>
           {data.status === "done" && <ScorePanel score={data.score_json} />}
+
+          {data.status === "done" && <ApprovalQueue analysisId={analysisId} />}
 
           {data.status === "done" && <AgentCostPanel ledger={data.cost_json} />}
 

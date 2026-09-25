@@ -64,8 +64,9 @@ export function ScorePanel({ score }: { score: Score | null }) {
               />
             </div>
             <span className="w-10 text-right text-sm font-medium">{data.score}</span>
-            <span className="w-24 text-right text-xs text-zinc-500">
+            <span className="w-32 text-right text-xs text-zinc-500" title="verified / hypothesis / dismissed">
               {data.verified}v / {data.hypotheses}h
+              {data.dismissed != null ? ` / ${data.dismissed}d` : ""}
             </span>
           </div>
         ))}
