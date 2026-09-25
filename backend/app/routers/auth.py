@@ -13,8 +13,8 @@ from app.config import get_settings
 from app.db import get_db
 from app.deps import get_current_user
 from app.models import User
-from app.schemas import UserOut
-from app.security import create_access_token
+from app.schemas import EveTokenOut, UserOut
+from app.security import EVE_TOKEN_TTL_SECONDS, create_access_token, create_eve_token
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -133,3 +133,9 @@ def logout() -> Response:
 @router.get("/me", response_model=UserOut)
 def me(user: User = Depends(get_current_user)) -> User:
     return user
+
+
+@router.post("/eve-token", response_model=EveTokenOut)
+def eve_token(user: User = Depends(get_current_user)) -> EveTokenOut:
+    """Exchange the authenticated session for a short-lived eve agent token."""
+    return EveTokenOut(token=create_eve_token(user.id), expires_in=EVE_TOKEN_TTL_SECONDS)

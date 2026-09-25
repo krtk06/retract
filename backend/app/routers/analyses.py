@@ -1,6 +1,7 @@
-"""Analysis detail, findings, and SSE progress stream."""
+"""Analysis detail, findings, agent intake, and SSE progress stream."""
 
 import json
+import logging
 from collections.abc import Generator
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -10,11 +11,14 @@ from sse_starlette.sse import EventSourceResponse
 
 from app.analysis_engine import trust
 from app.analysis_engine.scoring import compute_score
+from app.config import get_settings
 from app.db import get_db
 from app.deps import get_current_user
 from app.events import get_bus
 from app.models import Analysis, Finding, User
 from app.schemas import (
+    AgentFindingsIn,
+    AgentFindingsOut,
     AnalysisHistoryOut,
     AnalysisOut,
     CompareOut,
@@ -24,6 +28,7 @@ from app.schemas import (
 )
 
 router = APIRouter(prefix="/analyses", tags=["analyses"])
+logger = logging.getLogger(__name__)
 
 
 def _get_analysis(db: Session, analysis_id: int) -> Analysis:
@@ -115,6 +120,60 @@ def list_findings(
         stmt = stmt.where(Finding.status == finding_status)
     stmt = stmt.order_by(Finding.created_at, Finding.id).limit(limit).offset(offset)
     return [FindingOut.model_validate(f) for f in db.scalars(stmt).all()]
+
+
+@router.post("/{analysis_id}/findings", response_model=AgentFindingsOut)
+def record_findings(
+    analysis_id: int,
+    payload: AgentFindingsIn,
+    db: Session = Depends(get_db),
+    _: User = Depends(get_current_user),
+) -> AgentFindingsOut:
+    """Intake for the eve agent: persist D2 verdict claims, then re-run the trust layer.
+
+    Claims land as ``hypothesis`` and are verified, calibrated, and scored here so
+    the same deterministic gates apply whether a claim came from a tool or an agent.
+    """
+    from app.analysis_engine import agent_findings, approvals, verify
+    from app.analysis_engine import calibration as calibration_mod
+
+    analysis = _get_analysis(db, analysis_id)
+    result = agent_findings.record_findings(
+        db, analysis_id, payload.agent, [f.model_dump() for f in payload.findings]
+    )
+    dismissed = agent_findings.apply_triage(db, analysis_id, payload.triage)
+
+    promoted = checked = 0
+    settings = get_settings()
+    repo_root = settings.data_dir / "repos" / str(analysis.repository_id) / str(analysis_id)
+    try:
+        verification = verify.verify_analysis(db, analysis_id, repo_root)
+        promoted, checked = verification.promoted, verification.checked
+    except Exception:  # noqa: BLE001 — a checkout-less analysis must still accept claims
+        logger.exception("verification failed while recording agent findings")
+    try:
+        calibration_mod.recalibrate_analysis(db, analysis_id)
+    except Exception:  # noqa: BLE001
+        logger.exception("calibration failed while recording agent findings")
+
+    score = compute_score(db, analysis_id)
+    analysis.score_json = score
+    pending = approvals.pending_findings(db, analysis_id)
+    analysis.published = not pending
+    db.commit()
+
+    return AgentFindingsOut(
+        analysis_id=analysis_id,
+        agent=payload.agent,
+        inserted=result.inserted,
+        dropped=result.dropped,
+        dismissed=dismissed,
+        promoted=promoted,
+        checked=checked,
+        overall=score["overall"],
+        published=bool(analysis.published),
+        reasons=result.reasons,
+    )
 
 
 @router.get("/{analysis_id}/events")

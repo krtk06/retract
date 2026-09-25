@@ -3,7 +3,9 @@
 from datetime import datetime
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
+
+from app.models import Severity
 
 
 class UserOut(BaseModel):
@@ -49,6 +51,44 @@ class AnalysisOut(BaseModel):
     published: bool = False
     pending_approvals: int = 0
     repository: RepoOut | None = None
+
+
+class AgentFindingIn(BaseModel):
+    """One D2 verdict claim as submitted by the eve agent."""
+
+    claim: str = Field(min_length=3, max_length=300)
+    evidence: str = Field(min_length=3, max_length=2000)
+    file_path: str | None = None
+    line_start: int | None = Field(default=None, ge=1)
+    line_end: int | None = Field(default=None, ge=1)
+    severity: Severity
+    confidence: float = Field(default=0.5, ge=0.0, le=1.0)
+    category: str = Field(default="insight", max_length=64)
+
+
+class AgentFindingsIn(BaseModel):
+    agent: str = Field(min_length=1, max_length=64, pattern=r"^eve(:[a-z0-9-]+)?$")
+    findings: list[AgentFindingIn] = Field(default_factory=list, max_length=100)
+    triage: list[dict[str, Any]] = Field(default_factory=list, max_length=100)
+    summary: str = Field(default="", max_length=4000)
+
+
+class AgentFindingsOut(BaseModel):
+    analysis_id: int
+    agent: str
+    inserted: int
+    dropped: int
+    dismissed: int = 0
+    promoted: int = 0
+    checked: int = 0
+    overall: int | None = None
+    published: bool = False
+    reasons: list[str] = Field(default_factory=list)
+
+
+class EveTokenOut(BaseModel):
+    token: str
+    expires_in: int
 
 
 class FindingOut(BaseModel):

@@ -1,0 +1,29 @@
+{
+  "name": "ai-intel-agent",
+  "version": "0.1.0",
+  "type": "module",
+  "imports": {
+    "#*": "./agent/*",
+    "#evals/*": "./evals/*"
+  },
+  "scripts": {
+    "build": "eve build",
+    "dev": "eve dev",
+    "eval": "eve eval",
+    "info": "eve info",
+    "start": "eve start",
+    "typecheck": "tsc"
+  },
+  "dependencies": {
+    "ai": "^7.0.114",
+    "eve": "^0.66.3",
+    "zod": "^4.6.5"
+  },
+  "devDependencies": {
+    "@types/node": "24.x",
+    "typescript": "^5.9.3"
+  },
+  "engines": {
+    "node": ">=24"
+  }
+}

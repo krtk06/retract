@@ -57,8 +57,11 @@ def analyzed(fixture_repo: Path) -> Generator[int, None, None]:
             session.add(user)
             session.commit()
         repo = Repository(
-            owner="fixture", name="graphrepo", url=f"local://fixture/graph-{uuid.uuid4().hex[:8]}",
-            default_branch="main", added_by=user.id,
+            owner="fixture",
+            name="graphrepo",
+            url=f"local://fixture/graph-{uuid.uuid4().hex[:8]}",
+            default_branch="main",
+            added_by=user.id,
         )
         session.add(repo)
         session.commit()
