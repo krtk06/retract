@@ -12,7 +12,11 @@ import uuid
 import pytest
 from sqlalchemy.orm import Session
 
-from app.analysis_engine.scoring import HALF_SCORE_DENSITY, compute_score
+from app.analysis_engine.scoring import (
+    HALF_SCORE_DENSITY,
+    WORST_PILLAR_HEADROOM,
+    compute_score,
+)
 from app.db import get_session_factory
 from app.models import Analysis, FindingStatus, Repository, Severity, User
 from app.services.tools.findings import FindingDraft, persist_findings
@@ -191,8 +195,55 @@ def test_score_payload_documents_its_calibration(make_analysis) -> None:
     try:
         analysis_id = make_analysis(1000)
         score = compute_score(session, analysis_id)
-        assert score["version"] == 3
+        assert score["version"] == 4
         assert score["half_score_density"] == HALF_SCORE_DENSITY
+        assert score["worst_pillar_headroom"] == WORST_PILLAR_HEADROOM
         assert set(score["status_factors"]) == {"verified", "hypothesis", "dismissed"}
+    finally:
+        session.close()
+
+
+def test_overall_is_capped_by_the_worst_pillar(make_analysis) -> None:
+    """One catastrophic pillar must not be averaged away by five healthy ones."""
+    session = get_session_factory()()
+    try:
+        analysis_id = make_analysis(1000)
+        # Security is devastated (density 900/KLOC, well past the half-point);
+        # every other pillar is untouched at 100.
+        add(session, analysis_id, Severity.CRITICAL, count=30)
+        score = compute_score(session, analysis_id)
+        worst = min(p["score"] for p in score["pillars"].values())
+        assert score["pillars"]["security"]["score"] == worst
+        assert worst < 25
+        assert score["weighted_mean"] > 80, "the bare mean would have looked healthy"
+        assert score["overall"] <= worst + WORST_PILLAR_HEADROOM
+        assert score["overall"] < 40, "a repo this unsafe must not read as healthy"
+    finally:
+        session.close()
+
+
+def test_cap_does_not_bite_when_every_pillar_is_healthy(make_analysis) -> None:
+    session = get_session_factory()()
+    try:
+        analysis_id = make_analysis(10000)
+        add(session, analysis_id, Severity.MEDIUM, count=1)
+        score = compute_score(session, analysis_id)
+        assert min(p["score"] for p in score["pillars"].values()) >= 99
+        assert score["overall"] == score["weighted_mean"], "the cap must not apply here"
+    finally:
+        session.close()
+
+
+def test_cap_uses_the_lowest_scoring_pillar_not_the_lowest_weight(make_analysis) -> None:
+    """Architecture carries the smallest weight but must still be able to cap the score."""
+    session = get_session_factory()()
+    try:
+        analysis_id = make_analysis(1000)
+        add(session, analysis_id, Severity.CRITICAL, count=4, category="import-cycle")
+        score = compute_score(session, analysis_id)
+        assert score["pillars"]["architecture"]["score"] == min(
+            p["score"] for p in score["pillars"].values()
+        )
+        assert score["overall"] <= score["pillars"]["architecture"]["score"] + WORST_PILLAR_HEADROOM
     finally:
         session.close()

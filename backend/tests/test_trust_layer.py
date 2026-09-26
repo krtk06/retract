@@ -254,6 +254,6 @@ def test_honest_score_discounts_hypotheses_and_dismissals(analysis_id: int) -> N
         assert security["dismissed"] == 1
         assert security["weighted_penalty"] == pytest.approx(30.0)
         assert security["score"] == 89
-        assert score["version"] == 3
+        assert score["version"] == 4
     finally:
         session.close()

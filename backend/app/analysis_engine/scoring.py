@@ -12,7 +12,13 @@ stopped carrying information about how bad the code was. v3 scores
 ``100 / (1 + density / HALF_SCORE_DENSITY)``, which reaches 50 at the documented
 density, degrades smoothly past it, and never hard-clamps.
 
+v4: the overall is no longer a bare weighted mean. Five healthy pillars could
+average away one catastrophic one, so the overall is capped at
+``worst_pillar + WORST_PILLAR_HEADROOM``. Both calibration constants are exported
+and covered by tests in ``tests/test_scoring_curve.py``.
+
 Formula: per-pillar score = 100 / (1 + weighted_penalty / KLOC / HALF_SCORE_DENSITY)
+        overall       = min(Σ pillar×weight, min(pillar) + WORST_PILLAR_HEADROOM)
 """
 
 from sqlalchemy import select
@@ -65,6 +71,12 @@ PILLAR_WEIGHTS = {
 # every thousand lines. Only the benchmark has evidence to move it, so it is
 # named, exported, and asserted in tests rather than buried in a formula.
 HALF_SCORE_DENSITY = 250.0
+
+# How far above its worst pillar the overall may sit. A weighted mean alone lets
+# five healthy pillars average away one catastrophic one — a repository with
+# secrets and no tests still read as "mostly fine". The cap keeps the mean as the
+# headline while making sure the weakest dimension is visible in it.
+WORST_PILLAR_HEADROOM = 15
 
 # Guards division by zero for an unknown or empty LOC. Not a density assumption:
 # with the ratio curve a small denominator no longer saturates the score.
@@ -119,14 +131,20 @@ def compute_score(session: Session, analysis_id: int) -> dict:
             "weighted_penalty": round(pillar_penalty[pillar], 2),
         }
 
-    overall = sum(pillars[p]["score"] * PILLAR_WEIGHTS[p] for p in PILLARS)
+    weighted_mean = sum(pillars[p]["score"] * PILLAR_WEIGHTS[p] for p in PILLARS)
+    worst_pillar = min(pillars[p]["score"] for p in PILLARS)
+    # An unmeasured pillar scores 100, so it can never lower the cap.
+    overall = min(weighted_mean, worst_pillar + WORST_PILLAR_HEADROOM)
     return {
-        "version": 3,
+        "version": 4,
         "overall": _clamp(overall),
         "loc": loc,
         "kloc": round(kloc, 4),
         "pillars": pillars,
         "weights": PILLAR_WEIGHTS,
         "half_score_density": HALF_SCORE_DENSITY,
+        "worst_pillar_headroom": WORST_PILLAR_HEADROOM,
+        "worst_pillar": worst_pillar,
+        "weighted_mean": round(weighted_mean, 2),
         "status_factors": {k.value: v for k, v in STATUS_FACTOR.items()},
     }

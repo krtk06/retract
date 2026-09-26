@@ -113,7 +113,7 @@ def test_record_findings_rescores_and_gates_publication(
         analysis = session.get(Analysis, analysis_id)
         assert analysis is not None
         assert analysis.score_json is not None
-        assert analysis.score_json["version"] == 3
+        assert analysis.score_json["version"] == 4
     finally:
         session.close()
 

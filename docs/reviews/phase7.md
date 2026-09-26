@@ -98,14 +98,48 @@ stacked the layout and hid width problems).
 9. **`/repos` had no `<h1>`.** Pre-existing (Phase 6 fixed the analysis page only),
    caught by checking heading structure on every route rather than one.
 
-## Observations not fixed here (pre-existing, unrelated to the migration)
+## Follow-up: the score curve (`docs/reviews/phase7-score-v3.png`)
 
-- **The score floors at 0 on the seedy fixture.** All 18 analyses in the local DB
-  score 0/100: the repo is 83 LOC, so `scale` is 2.0, and a handful of verified
-  findings on a tiny codebase exceeds the penalty budget. The maths is doing what
-  it was designed to do (small codebases should not look healthy), but a 0 with no
-  explanation reads as "broken" rather than "small and bad". Worth revisiting
-  alongside the benchmark numbers in Phase 7.
+The review above flagged that every local analysis scored 0/100. Investigated and
+fixed — it was a real defect, not a small-repo quirk.
+
+**v2 was saturating.** `100 − density × 2.0`, clamped at 0, with a 0.1-KLOC floor.
+A single medium finding scored a repo 0 below ~230 LOC and 96 at 5 000 LOC, so the
+number carried no information about how bad the code was. `SCALE = 2.0` also
+contradicted its own comment ("one medium per KLOC costs ~2 points" implies 0.2).
+
+**v3** scores `100 / (1 + density / HALF_SCORE_DENSITY)` — one exported constant
+(250 weighted points per KLOC = the density that scores 50), no hard clamp.
+
+**v4** caps the overall at `worst_pillar + 15`, because a weighted mean let five
+healthy pillars average away a catastrophic one.
+
+Same 19 real findings from analysis 18, at four repo sizes:
+
+| LOC | v2 | v3 | v4 | worst pillar |
+| --- | --- | --- | --- | --- |
+| 83 (seedy) | 0 | 37 | **27** | security 12 |
+| 500 | 9 | 73 | 57 | security 42 |
+| 2 000 | 55 | 90 | 90 | security 75 |
+| 20 000 | 94 | 99 | 99 | security 97 |
+
+Covered by `backend/tests/test_scoring_curve.py` (11 cases: monotonicity, density
+ordering, the discounting rules, the half-score constant, and the cap).
+
+Two consequences handled rather than left dangling:
+- Deltas are suppressed across curve versions, so a v2 and a v4 score are never
+  subtracted from each other (`test_score_delta_is_suppressed_across_curve_versions`).
+- The detail page now reads `/score` rather than only the cached `score_json`, so
+  an analysis whose finalize step never cached a score still shows one.
+  `useScore` existed but was never called.
+
+**Known limit of the cap:** at 2 000 LOC, security 75 plus 15 headroom equals the
+weighted mean, so the cap does not bite and the overall stays 90. A repository
+with ~5 high-severity findings per KLOC therefore still reads as "mostly fine".
+Tightening `WORST_PILLAR_HEADROOM` is a one-constant change; left at 15 because
+that is the value agreed, and the benchmark (the remaining Phase 7 item) is what
+should provide evidence to move it.
+
 - **The pending review item is fixture data** ("Establish a test suite before
   adding features", from the deleted mock-agent run), not a live finding.
 
