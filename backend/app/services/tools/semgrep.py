@@ -43,6 +43,22 @@ def _skip_roots(root: Path) -> list[str]:
     return [str(root / d) for d in SKIP_DIRS]
 
 
+def categorize_check(check_id: str) -> str:
+    """Map a semgrep rule id to the finding category it should be filed under.
+
+    Order matters: semgrep's credential rules live under ``generic.secrets.*`` and
+    also satisfy the broader ``.security.`` check, so testing secrets first keeps a
+    hardcoded key out of the ``vulnerability`` bucket. A rule is only called a
+    vulnerability when it is a security/audit rule that is not about credentials.
+    """
+    lowered = check_id.lower()
+    if ".secrets." in lowered or lowered.startswith("generic.secrets"):
+        return "secret"
+    if ".security." in lowered or ".audit." in lowered:
+        return "vulnerability"
+    return "code-smell"
+
+
 def run_semgrep(ctx: ToolContext) -> list[FindingDraft]:
     semgrep = resolve_binary("semgrep_path", "semgrep")
     if semgrep is None:
@@ -72,11 +88,10 @@ def run_semgrep(ctx: ToolContext) -> list[FindingDraft]:
             continue
         start = (result.get("start") or {}).get("line")
         end = (result.get("end") or {}).get("line")
-        is_security = ".security." in check_id or ".audit." in check_id
         drafts.append(
             FindingDraft(
                 agent="static-analysis",
-                category="vulnerability" if is_security else "code-smell",
+                category=categorize_check(check_id),
                 severity=severity,
                 title=check_id.split(".")[-1].replace("-", " ").replace("_", " "),
                 description=str(extra.get("message", ""))[:2000],

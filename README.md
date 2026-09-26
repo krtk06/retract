@@ -103,9 +103,24 @@ hardcoded key with three rules is three findings for one problem. `Precision
 `Precision (raw)` does not. The report lists every duplicate so the noise is
 visible rather than averaged away.
 
-The current run also shows one real defect the benchmark surfaced: a secret detected
-in `app/settings.py:1` is filed under `category: vulnerability` instead of
-`secret`, which puts it in the wrong pillar and the wrong ground-truth bucket.
+### Defect this benchmark surfaced, and the fix
+
+The first run flagged a finding in `app/settings.py:1` under
+`category: vulnerability` — the AWS key was filed as a generic vulnerability
+rather than a `secret`, putting it in the wrong pillar and the wrong ground-truth
+bucket. Cause: `semgrep.py` mapped *every* rule containing `.security.` to
+`vulnerability`, and semgrep's credential rules live under `generic.secrets.*`,
+which also satisfies that test.
+
+`categorize_check()` now tests the secrets namespace first, covered by
+`tests/test_semgrep_categories.py` (10 cases). Re-scored against the same findings
+with the corrected category, deduplicated precision goes **91% → 100%** and the
+finding is correctly recognised as a repeat report of the same key.
+
+The committed report still shows 91% because analysis #18 predates the fix; the
+next run with semgrep installed will show 100%. Semgrep is not installed in this
+development environment, so the fix is verified by unit test and by re-scoring,
+not by a fresh end-to-end run.
 
 ## Configuration
 
