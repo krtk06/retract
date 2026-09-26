@@ -148,8 +148,21 @@ cd agent && npm run typecheck && npm run build && npm run eval
 
 `npm run eval` runs the agent's evals hermetically: a fixture model plus an
 in-process fixture API, so no provider credentials, database, or containers are
-needed. The suite covers tool discipline, the citation rule, and the human-in-the-loop
-gates.
+needed. 9 cases / 30 gates cover tool discipline, the citation rule, multi-turn
+behaviour, and the human-in-the-loop gates.
+
+Two further cases grade *answer quality* with a judge model. They skip themselves
+unless a provider is configured, so CI stays green while the suite stays ready:
+
+```bash
+AI_INTEL_LLM_PROVIDER=gateway \
+AI_INTEL_MODEL=anthropic/claude-sonnet-4.5 \
+AI_GATEWAY_API_KEY=... \
+AI_INTEL_EVAL_LIVE=1 \
+npm run eval -- quality
+```
+
+Set `AI_INTEL_JUDGE_MODEL` if the judge should use the same provider as the agent.
 
 ## Layout
 

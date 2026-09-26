@@ -274,16 +274,26 @@ section). What remains is measuring the *analysis* itself against known truth.
    each other; `agent/Dockerfile` builds with `eve build` and runs `eve start`.
 4. `[x]` `scripts/dev-local.sh` starts the whole stack (redis, api, worker, agent,
    frontend) with no Docker, plus `.local/env.sh.example` documenting the knobs.
-5. `[ ]` Analysis-quality benchmark (`benchmark/`):
-   - seedy repos already exist with ground-truth YAML; wire a runner that scores
-     precision/recall/F1 per pillar plus verifier agreement rate.
-   - Report to `benchmark/REPORT.md`, surfaced in the README.
-   - Optional: JITVUL-style pairwise commits subset as an offline script.
+5. `[x]` Analysis-quality benchmark (`benchmark/`):
+   - `backend/app/benchmark/` — scores an existing analysis against
+     `benchmark/ground-truth/*.yaml`: recall, precision, F1, verification coverage,
+     and planted-false-positive triage. No re-analysis, so no external tools needed.
+   - Reports **recall 100%** and **precision 91% deduplicated** on
+     `seedy-python-app`; the raw per-finding figure (62%) is also shown because 5 of
+     its 6 "misses" are repeat reports of one condition. Output:
+     `benchmark/REPORT.md`, surfaced in the README.
+   - The first run surfaced a real defect (semgrep credential rules filed as
+     `vulnerability`); fixed in `categorize_check()` and worth 91% → 100% on
+     re-score.
+   - `[ ]` Optional: JITVUL-style pairwise commits subset as an offline script.
 6. `[ ]` Production hardening: non-root images, healthchecks for every service,
    `docker-compose.prod.yml`, deployment notes for a container host.
-7. `[ ]` `docs/RESEARCH.md`: map every D-decision to its paper citation.
-8. `[x]` README: architecture diagram, quickstart, configuration matrix, checks.
-   *(Benchmark numbers land with task 5.)*
+7. `[x]` `docs/RESEARCH.md`: maps every D-decision (D1–D11) to its citation, and
+   records where the plan changed during the build (D3 → D11, and D10).
+8. `[x]` README: architecture diagram, quickstart, configuration matrix, checks,
+   and benchmark numbers.
+9. `[x]` Live answer-quality evals (`agent/evals/quality/`): two judge-scored cases
+   that skip without a provider credential, so adding a key later is one command.
 
 **Acceptance criteria**
 - CI green (done). Remaining: benchmark report reproducible with one command, and

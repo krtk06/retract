@@ -12,12 +12,23 @@ export type EvalContext = {
  * citation rule the same way the backend does, so an eval that passes here
  * exercises the real contract.
  */
+/**
+ * The agent's quality evals are graded by a judge model. Left unset, eve uses the
+ * shared evaluation default (the AI Gateway), which is right for CI-with-credentials
+ * and wrong for a run that pinned `AI_INTEL_MODEL` to a specific provider. Set
+ * `AI_INTEL_JUDGE_MODEL` to keep the two consistent.
+ */
+const judge = process.env.AI_INTEL_JUDGE_MODEL
+  ? ({ model: process.env.AI_INTEL_JUDGE_MODEL } as const)
+  : undefined;
+
 export default defineEvalConfig<EvalContext>({
   // One at a time: evals share a single fixture API process, so concurrent runs
   // interleave in its request log. Each eval asserts on its own delta, which is
-  // only meaningful when nothing else is writing. The suite is ~3s serialized.
+  // only meaningful when nothing else is writing. The suite is ~5s serialized.
   maxConcurrency: 1,
   timeoutMs: 60_000,
+  judge,
   async setup() {
     const api = await startFixtureApi();
     process.env.AI_INTEL_API_URL = api.url;
