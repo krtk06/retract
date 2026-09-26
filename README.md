@@ -75,6 +75,38 @@ cd frontend && npm run dev
 cd agent && npm run dev            # eve dev; or `npm run build && npm start`
 ```
 
+## Benchmark
+
+The pipeline is scored against fixture repositories with known planted conditions:
+
+```bash
+cd backend
+python -m app.benchmark --repo seedy-python-app            # writes benchmark/REPORT.md
+python -m app.benchmark --repo seedy-python-app --stdout   # print instead
+```
+
+Latest run on `benchmark/seedy-python-app` (analysis #18, 11 planted expectations):
+
+| Metric | Value |
+| --- | --- |
+| Recall | **100%** (10/10 detectable expectations found) |
+| Precision (deduplicated) | **91%** (10 matched, 1 unenumerated, 5 duplicate reports) |
+| Precision (raw, per finding) | 62% |
+| F1 | 0.77 |
+| Verification coverage | 92% (23 verified / 2 hypothesis) |
+| Planted false positives triaged | 1/1 dismissed |
+
+Two numbers are reported on purpose. A ground-truth file enumerates *conditions*,
+while a pipeline reports findings per *(tool × rule × occurrence)*, so flagging one
+hardcoded key with three rules is three findings for one problem. `Precision
+(deduplicated)` excludes repeat reports of an already-matched condition;
+`Precision (raw)` does not. The report lists every duplicate so the noise is
+visible rather than averaged away.
+
+The current run also shows one real defect the benchmark surfaced: a secret detected
+in `app/settings.py:1` is filed under `category: vulnerability` instead of
+`secret`, which puts it in the wrong pillar and the wrong ground-truth bucket.
+
 ## Configuration
 
 | Variable | Where | Purpose |
