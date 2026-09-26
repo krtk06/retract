@@ -71,3 +71,65 @@ jobs:
         # The mock fixture model and the in-process fixture API make this
         # hermetic: no provider credentials, no database, no containers.
         run: npm run eval
+
+  # The only place the container images are actually built and run. Everything
+  # else in this workflow tests source; this job tests the deployment artifacts:
+  # that the images build, that compose comes up healthy, and that the nginx
+  # bundle proxies to the API and the agent correctly.
+  #
+  # Both of these have already caught real defects that source-level tests could
+  # not: a healthcheck pointed at a route eve does not serve, and a frontend image
+  # running a dev server.
+  containers:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build images
+        run: docker compose -f infra/docker-compose.prod.yml build
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          AI_INTEL_AGENT_TOKEN: ci-agent-token
+          AI_INTEL_JWT_SECRET: ci-jwt-secret-at-least-32-bytes-long
+          AI_GATEWAY_API_KEY: ci-not-a-real-key
+      - name: Start stack
+        run: docker compose -f infra/docker-compose.prod.yml up -d
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          AI_INTEL_AGENT_TOKEN: ci-agent-token
+          AI_INTEL_JWT_SECRET: ci-jwt-secret-at-least-32-bytes-long
+          AI_GATEWAY_API_KEY: ci-not-a-real-key
+      - name: Wait for health
+        run: |
+          set -euo pipefail
+          for i in $(seq 1 60); do
+            if [ "$(docker inspect -f '{{.State.Health.Status}}' infra-frontend-1 2>/dev/null)" = "healthy" ]; then
+              echo "frontend healthy after ${i}0s"; exit 0
+            fi
+            sleep 10
+          done
+          echo "frontend never became healthy:"; docker compose -f infra/docker-compose.prod.yml ps
+          docker compose -f infra/docker-compose.prod.yml logs --tail=50
+          exit 1
+      - name: Probe through the frontend
+        # Proving the nginx layer: these paths are served by the bundle, proxied
+        # to the API and the agent respectively.
+        run: |
+          set -euo pipefail
+          curl --fail --silent --show-error http://localhost/api/health
+          echo
+          curl --fail --silent --show-error http://localhost/eve/v1/info > /dev/null
+          echo "nginx bundle proxied /api and /eve"
+      - name: Service auth fails closed
+        run: |
+          set -euo pipefail
+          code=$(curl --silent --output /dev/null --write-out '%{http_code}' \
+            -H 'X-Agent-Token: wrong' http://localhost/api/repos)
+          test "$code" = "401" || { echo "expected 401, got $code"; exit 1; }
+      - name: Dump logs on failure
+        if: failure()
+        run: docker compose -f infra/docker-compose.prod.yml logs --tail=100
+      - name: Tear down
+        if: always()
+        run: docker compose -f infra/docker-compose.prod.yml down -v

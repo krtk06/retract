@@ -20,4 +20,22 @@ COPY alembic.ini ./
 
 RUN pip install .
 
+# Run unprivileged. /srv/app stays root-owned and read-only to the service; the
+# only writable path is the checkout/data directory the analysis pipeline uses,
+# which is a mounted volume in compose.
+RUN addgroup -S intel && adduser -S -G intel -h /home/intel intel \
+    && mkdir -p /data \
+    && chown intel:intel /data
+
+USER intel
+
+ENV AI_INTEL_DATA_DIR=/data
+
+EXPOSE 8000
+
+# A plain GET, not `wget --spider`: spider sends HEAD and the health route only
+# answers GET, which would report a healthy container as unhealthy.
+HEALTHCHECK --interval=15s --timeout=3s --start-period=10s --retries=3 \
+  CMD python -c "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/api/health', timeout=2).status == 200 else 1)"
+
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]

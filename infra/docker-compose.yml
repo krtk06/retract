@@ -86,7 +86,9 @@ services:
       - "3000:3000"
 
   frontend:
-    build: ../frontend
+    build:
+      context: ../frontend
+      target: dev
     environment:
       VITE_API_PROXY: http://api:8000
       VITE_EVE_PROXY: http://agent:3000
@@ -95,6 +97,9 @@ services:
     depends_on:
       - api
       - agent
+
+  # Production topology (nginx bundle, healthchecks, internal-only API, durable
+  # agent state) lives in docker-compose.prod.yml.
 
 volumes:
   postgres_data:

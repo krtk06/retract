@@ -1,0 +1,125 @@
+# Production topology. Differs from docker-compose.yml in three ways that matter:
+#   * every service declares a healthcheck and dependents wait for it to be healthy;
+#   * only the frontend is published to the host, and on 80;
+#   * the API and agent are reachable only on the internal network, and both
+#     require credentials (see README "Configuration").
+#
+# Bring it up with:
+#   AI_INTEL_AGENT_TOKEN=... AI_INTEL_JWT_SECRET=... docker compose -f docker-compose.prod.yml up --build
+#
+# Those two secrets have no default on purpose: refusing to start without them is
+# better than starting an agent that can reach the API unauthenticated.
+
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:?set POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB:-ai_intel}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    # Not published: only the application needs it.
+    expose:
+      - "5432"
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--save", "60", "1", "--appendonly", "no"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+    expose:
+      - "6379"
+
+  api:
+    build: ../backend
+    restart: unless-stopped
+    environment:
+      AI_INTEL_ENVIRONMENT: production
+      AI_INTEL_DATABASE_URL: postgresql+psycopg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-ai_intel}
+      AI_INTEL_REDIS_URL: redis://redis:6379/0
+      AI_INTEL_DATA_DIR: /data
+      AI_INTEL_JWT_SECRET: ${AI_INTEL_JWT_SECRET:?set AI_INTEL_JWT_SECRET}
+      AI_INTEL_AGENT_TOKEN: ${AI_INTEL_AGENT_TOKEN:?set AI_INTEL_AGENT_TOKEN}
+      AI_INTEL_DEV_LOGIN: "0"
+      AI_INTEL_AUTH_COOKIE_SECURE: "1"
+      AI_INTEL_FRONTEND_URL: ${PUBLIC_URL:-http://localhost}
+      AI_INTEL_CORS_ORIGINS: ${PUBLIC_URL:-http://localhost}
+      AI_INTEL_GITHUB_CLIENT_ID: ${AI_INTEL_GITHUB_CLIENT_ID:-}
+      AI_INTEL_GITHUB_CLIENT_SECRET: ${AI_INTEL_GITHUB_CLIENT_SECRET:-}
+      AI_INTEL_GITHUB_OAUTH_REDIRECT_URI: ${PUBLIC_URL:-http://localhost}/api/auth/github/callback
+    command: >
+      sh -c "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000 --proxy-headers"
+    volumes:
+      - repo_data:/data
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    expose:
+      - "8000"
+
+  worker:
+    build: ../backend
+    restart: unless-stopped
+    environment:
+      AI_INTEL_ENVIRONMENT: production
+      AI_INTEL_DATABASE_URL: postgresql+psycopg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-ai_intel}
+      AI_INTEL_REDIS_URL: redis://redis:6379/0
+      AI_INTEL_DATA_DIR: /data
+    command: celery -A app.tasks.celery_app:celery_app worker --loglevel=info --concurrency=2
+    volumes:
+      - repo_data:/data
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  agent:
+    build: ../agent
+    restart: unless-stopped
+    environment:
+      AI_INTEL_API_URL: http://api:8000
+      AI_INTEL_AGENT_TOKEN: ${AI_INTEL_AGENT_TOKEN:?set AI_INTEL_AGENT_TOKEN}
+      AI_INTEL_JWT_SECRET: ${AI_INTEL_JWT_SECRET:?set AI_INTEL_JWT_SECRET}
+      AI_INTEL_LLM_PROVIDER: ${AI_INTEL_LLM_PROVIDER:-gateway}
+      AI_INTEL_MODEL: ${AI_INTEL_MODEL:-anthropic/claude-sonnet-4.5}
+      AI_GATEWAY_API_KEY: ${AI_GATEWAY_API_KEY:?set AI_GATEWAY_API_KEY}
+      PORT: "3000"
+    volumes:
+      # Durable workflow state. Without this volume every container restart
+      # discards in-flight agent sessions and quarantines their deliveries.
+      - agent_state:/srv/agent/.eve
+    depends_on:
+      api:
+        condition: service_healthy
+    expose:
+      - "3000"
+
+  frontend:
+    build: ../frontend
+    restart: unless-stopped
+    ports:
+      - "${HTTP_PORT:-80}:80"
+    depends_on:
+      api:
+        condition: service_healthy
+      agent:
+        condition: service_healthy
+
+volumes:
+  postgres_data:
+  repo_data:
+  agent_state:

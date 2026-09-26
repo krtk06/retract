@@ -44,9 +44,34 @@ cd infra
 docker compose up --build
 ```
 
-- Frontend: http://localhost:5173
+- Frontend: http://localhost:5173 (Vite dev server)
 - API: http://localhost:8000 (`/api/health`, OpenAPI at `/docs`)
 - Agent: http://localhost:3000 (`/eve`)
+
+### Production
+
+```bash
+cd infra
+POSTGRES_USER=... POSTGRES_PASSWORD=... \
+AI_INTEL_JWT_SECRET=... AI_INTEL_AGENT_TOKEN=... AI_GATEWAY_API_KEY=... \
+docker compose -f docker-compose.prod.yml up --build
+```
+
+Differences from the dev stack, all deliberate:
+
+| | dev | prod |
+| --- | --- | --- |
+| Frontend | Vite dev server, HMR | nginx serving the built bundle |
+| Published ports | 5173, 8000, 3000 | 80 only — the API and agent are internal |
+| Healthchecks | none | every service; dependents wait for `service_healthy` |
+| Users | default | non-root (`intel`, `eve`), code dirs read-only |
+| Agent state | ephemeral | `agent_state` volume, so sessions survive restarts |
+| Secrets | dev defaults | refused at startup if unset |
+| Migrations | on boot | on boot, before uvicorn |
+
+GitHub OAuth is required in production (`AI_INTEL_DEV_LOGIN=0` is forced), and the
+session cookie is marked `Secure`, so the frontend must be served over HTTPS —
+put a TLS-terminating proxy in front and set `PUBLIC_URL`.
 
 Set `AI_INTEL_DEV_LOGIN=1` for passwordless dev login, or configure a GitHub OAuth
 app (`AI_INTEL_GITHUB_CLIENT_ID` / `..._SECRET`).
