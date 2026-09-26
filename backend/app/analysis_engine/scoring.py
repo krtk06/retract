@@ -5,7 +5,14 @@ v2 (Decision D8): honest weighting by verification status.
   - hypothesis findings count at half weight;
   - dismissed findings count zero.
 
-Formula: per-pillar score = 100 − Σ effective_weight / KLOC × SCALE, clamped [0,100].
+v3: the same discounting, but the penalty is applied as a ratio instead of a
+linear subtraction. v2 computed ``100 − density × 2.0`` and clamped at 0, so any
+repository below roughly 230 LOC with a single medium finding scored 0: the number
+stopped carrying information about how bad the code was. v3 scores
+``100 / (1 + density / HALF_SCORE_DENSITY)``, which reaches 50 at the documented
+density, degrades smoothly past it, and never hard-clamps.
+
+Formula: per-pillar score = 100 / (1 + weighted_penalty / KLOC / HALF_SCORE_DENSITY)
 """
 
 from sqlalchemy import select
@@ -53,11 +60,25 @@ PILLAR_WEIGHTS = {
     "architecture": 0.15,
 }
 
-SCALE = 2.0  # penalty per KLOC multiplier; one medium per KLOC costs ~2 points
+# Weighted finding-points per KLOC at which a pillar scores 50. One calibration
+# constant for the whole curve: 250 means 12.5 high findings (or 25 medium) in
+# every thousand lines. Only the benchmark has evidence to move it, so it is
+# named, exported, and asserted in tests rather than buried in a formula.
+HALF_SCORE_DENSITY = 250.0
+
+# Guards division by zero for an unknown or empty LOC. Not a density assumption:
+# with the ratio curve a small denominator no longer saturates the score.
+MIN_KLOC = 0.001
 
 
 def _clamp(value: float, low: int = 0, high: int = 100) -> int:
     return max(low, min(high, round(value)))
+
+
+def _pillar_score(weighted_penalty: float, kloc: float) -> int:
+    """Ratio curve: 100 with no findings, 50 at HALF_SCORE_DENSITY, asymptotic to 0."""
+    density = weighted_penalty / kloc
+    return _clamp(100 / (1 + density / HALF_SCORE_DENSITY))
 
 
 def compute_score(session: Session, analysis_id: int) -> dict:
@@ -86,12 +107,11 @@ def compute_score(session: Session, analysis_id: int) -> dict:
         elif finding.status == FindingStatus.DISMISSED:
             pillar_dismissed[pillar] += 1
 
-    kloc = max((loc or 0) / 1000, 0.1)
+    kloc = max((loc or 0) / 1000, MIN_KLOC)
     pillars = {}
     for pillar in PILLARS:
-        penalty_per_kloc = pillar_penalty[pillar] / kloc
         pillars[pillar] = {
-            "score": _clamp(100 - penalty_per_kloc * SCALE),
+            "score": _pillar_score(pillar_penalty[pillar], kloc),
             "findings": pillar_counts[pillar],
             "verified": pillar_verified[pillar],
             "hypotheses": pillar_hypotheses[pillar],
@@ -101,12 +121,12 @@ def compute_score(session: Session, analysis_id: int) -> dict:
 
     overall = sum(pillars[p]["score"] * PILLAR_WEIGHTS[p] for p in PILLARS)
     return {
-        "version": 2,
+        "version": 3,
         "overall": _clamp(overall),
         "loc": loc,
-        "kloc": round(kloc, 2),
+        "kloc": round(kloc, 4),
         "pillars": pillars,
         "weights": PILLAR_WEIGHTS,
-        "scale": SCALE,
+        "half_score_density": HALF_SCORE_DENSITY,
         "status_factors": {k.value: v for k, v in STATUS_FACTOR.items()},
     }

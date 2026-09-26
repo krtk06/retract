@@ -124,6 +124,8 @@ class ScoreOut(BaseModel):
     pillars: dict[str, dict[str, Any]]
     previous_overall: int | None = None
     delta: int | None = None
+    # The curve's one calibration constant, so a client can explain the number.
+    half_score_density: float | None = None
 
 
 class SymbolOut(BaseModel):

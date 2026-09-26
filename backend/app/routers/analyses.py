@@ -89,9 +89,13 @@ def get_score(
         if previous is not None and previous.score_json:
             current = score.get("overall")
             earlier = previous.score_json.get("overall")
-            score["previous_overall"] = earlier
-            if isinstance(current, int) and isinstance(earlier, int):
-                score["delta"] = current - earlier
+            # Only compare like with like: a v2 and a v3 score come from different
+            # curves, so their difference is not a change in the repository.
+            same_curve = previous.score_json.get("version") == score.get("version")
+            if same_curve:
+                score["previous_overall"] = earlier
+                if isinstance(current, int) and isinstance(earlier, int):
+                    score["delta"] = current - earlier
         return ScoreOut.model_validate(score)
     score = compute_score(db, analysis_id)
     analysis.score_json = score

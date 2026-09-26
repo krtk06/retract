@@ -246,12 +246,14 @@ def test_honest_score_discounts_hypotheses_and_dismissals(analysis_id: int) -> N
         )
         score = compute_score(session, analysis_id)
         security = score["pillars"]["security"]
-        # 20 (verified) + 10 (hypothesis half) + 0 (dismissed) = 30 weighted, /1.0 kloc *2 = 60
+        # 20 (verified) + 10 (hypothesis half) + 0 (dismissed) = 30 weighted over
+        # 1.0 KLOC → density 30 → 100 / (1 + 30/250) = 89. The curve itself is
+        # covered by tests/test_scoring_curve.py.
         assert security["verified"] == 1
         assert security["hypotheses"] == 1
         assert security["dismissed"] == 1
         assert security["weighted_penalty"] == pytest.approx(30.0)
-        assert security["score"] == 40
-        assert score["version"] == 2
+        assert security["score"] == 89
+        assert score["version"] == 3
     finally:
         session.close()

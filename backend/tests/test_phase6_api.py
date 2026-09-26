@@ -144,6 +144,25 @@ def test_score_endpoint_exposes_delta(auth_client: TestClient, repo_with_analyse
     assert body["previous_overall"] == 60
 
 
+def test_score_delta_is_suppressed_across_curve_versions(
+    auth_client: TestClient, repo_with_analyses
+) -> None:
+    """A v2 and a v3 score come from different curves; their difference is not a change."""
+    _repo, first_id, second_id = repo_with_analyses
+    session = get_session_factory()()
+    try:
+        earlier = session.get(Analysis, first_id)
+        assert earlier is not None and earlier.score_json is not None
+        earlier.score_json = {**earlier.score_json, "version": 1}
+        session.commit()
+    finally:
+        session.close()
+
+    body = auth_client.get(f"/api/analyses/{second_id}/score").json()
+    assert body["delta"] is None
+    assert body["previous_overall"] is None
+
+
 def test_trust_summary(auth_client: TestClient, repo_with_analyses) -> None:
     _repo, _first_id, second_id = repo_with_analyses
     response = auth_client.get(f"/api/analyses/{second_id}/trust-summary")

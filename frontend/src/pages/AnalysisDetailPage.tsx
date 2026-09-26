@@ -1,7 +1,7 @@
 import { Suspense, lazy, useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 
-import { useAnalysis, useFindings } from "../api/hooks";
+import { useAnalysis, useFindings, useScore } from "../api/hooks";
 import type { AnalysisEvent } from "../api/types";
 import { ApprovalQueue } from "../components/ApprovalQueue";
 import { ExploreTab } from "../components/ExploreTab";
@@ -52,6 +52,7 @@ export function AnalysisDetailPage() {
   const isActive =
     analysis.data?.status === "pending" || analysis.data?.status === "running";
   const findings = useFindings(analysisId, analysis.data?.status === "done");
+  const score = useScore(analysisId);
   const [events, setEvents] = useState<AnalysisEvent[]>([]);
   const [tab, setTab] = useState<"overview" | "explore" | "agent">("overview");
 
@@ -141,7 +142,9 @@ export function AnalysisDetailPage() {
 
       {tab === "overview" && (
         <>
-          {data.status === "done" && <ScoreHero score={data.score_json} />}
+          {/* /score recomputes and persists a missing score, so an analysis whose
+              finalize step never cached one still shows its health score. */}
+          {data.status === "done" && <ScoreHero score={score.data ?? data.score_json} />}
 
           {data.status === "done" && <ApprovalQueue analysisId={analysisId} />}
 
