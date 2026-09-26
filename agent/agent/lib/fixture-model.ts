@@ -32,11 +32,19 @@ function firstTurnWithMarker(marker: string, request: MockModelRequest): boolean
 /**
  * The last tool result's text, lowercased. Lets a script tell a completed call
  * from a denied or failed one, so a demo never reports success for an action a
- * human just refused.
+ * human just refused or a tool that just 404'd.
  */
 function lastToolText(request: MockModelRequest): string {
   const results = request.messages.filter((message) => message.role === "tool");
   return (results[results.length - 1]?.text ?? "").toLowerCase();
+}
+
+/** True when the last tool result was a refusal or a failure. */
+function toolFailed(request: MockModelRequest): boolean {
+  const text = lastToolText(request);
+  return /denied|not approved|cancel|error|\b4\d\d\b|\b5\d\d\b|not found|unauthorized|forbidden/.test(
+    text,
+  );
 }
 
 /**
@@ -98,7 +106,9 @@ const SCRIPTS: Record<string, Script> = {
       "graph-answer",
       request,
       [{ toolCalls: [{ name: "get_analysis", input: { analysisId: ANALYSIS_ID } }] }],
-      "Analysis 42 is done: 3 findings, overall 71, published.",
+      toolFailed(request)
+        ? `I could not read analysis ${ANALYSIS_ID}: ${lastToolText(request).slice(0, 80)}`
+        : `Analysis ${ANALYSIS_ID} is done: 3 findings, overall 71, published.`,
     ),
 
   "graph-drilldown": (request) =>
@@ -116,7 +126,9 @@ const SCRIPTS: Record<string, Script> = {
           ],
         },
       ],
-      "authenticate lives at app/auth.py:12 and validates before hashing.",
+      toolFailed(request)
+        ? `I found the symbol but could not read its source: ${lastToolText(request).slice(0, 80)}`
+        : "authenticate lives at app/auth.py:12 and validates before hashing.",
     ),
 
   "cited-finding": (request) =>
@@ -160,12 +172,13 @@ const SCRIPTS: Record<string, Script> = {
           ],
         },
       ],
-      "That claim had no citation, so it was not recorded.",
+      toolFailed(request)
+        ? `That claim was rejected: ${lastToolText(request).slice(0, 80)}`
+        : "Recorded 1 finding citing app/cache_key.py:11.",
     ),
 
   "run-analysis": (request) => {
-    const toolText = lastToolText(request);
-    const final = /denied|not approved|cancel/.test(toolText)
+    const final = toolFailed(request)
       ? "Understood — I did not start an analysis. Say the word if you want one."
       : "Started analysis 43; it is running.";
     return steps("run-analysis", request, [
@@ -174,8 +187,7 @@ const SCRIPTS: Record<string, Script> = {
   },
 
   "decide-finding": (request) => {
-    const toolText = lastToolText(request);
-    const final = /denied|not approved|cancel/.test(toolText)
+    const final = toolFailed(request)
       ? "Understood — I did not record a decision. The finding stays pending."
       : "Recorded the reviewer's approval.";
     return steps(

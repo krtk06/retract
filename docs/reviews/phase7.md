@@ -66,18 +66,55 @@ agent suite.
 
 | Check | Result |
 | --- | --- |
-| backend `ruff check` / `format` / `mypy` / `pytest` | clean · 51 passed |
+| backend `ruff check` / `format` / `mypy` / `pytest` | clean · 56 passed |
 | frontend `lint` / `typecheck` / `test` / `build` | clean · 1 passed · initial chunk 245 kB (agent lazy-loaded) |
 | agent `typecheck` / `build` | clean · 0 diagnostics, 26 tools, 5 subagents |
 | agent `npm run eval` | 9 evals, 30 gates, all passing, no credentials |
+| agent `eve build` | 18.1 MB output (5.2 MB gzip) |
 | `docker compose config` | valid (`agent` service included) |
+
+## Second pass — desktop width (1280px), after the first round of fixes
+
+Re-ran the whole flow at 1280x900 (the first pass used a ~390px window, which
+stacked the layout and hid width problems).
+
+| Check | Result |
+| --- | --- |
+| `/analyses/18` Overview at 1280px | score hero, six pillar bars, approval queue, findings — no overflow |
+| Explore tab after RAG removal | graph summary (17 symbols / 10 calls / 8 imports), symbol filter, dependency drill-down works; **no search box**, as intended |
+| Agent tab at 1280px | tool chips, failed tool call in red with the real error, honest assistant reply |
+| Approval → approve | tool attempted after approval, 404 surfaced, agent did **not** claim success |
+| `h1` per page | `/analyses/:id` 1, `/` 1 — `/repos` had **0**, fixed with a visually-hidden `h1` |
+| Horizontal overflow | none on any page |
+| Console errors | 0 |
+
+### Two more bugs found and fixed
+
+8. **The fixture contradicted its own tool output.** After a visible
+   `404 /api/analyses/42`, the scripted reply still said "Analysis 42 is done:
+   3 findings, overall 71, published." The same class as the cancellation bug
+   above, missed for the read-only scripts. Every script now derives its final
+   line from the last tool result, so a failed call produces a failure message.
+9. **`/repos` had no `<h1>`.** Pre-existing (Phase 6 fixed the analysis page only),
+   caught by checking heading structure on every route rather than one.
+
+## Observations not fixed here (pre-existing, unrelated to the migration)
+
+- **The score floors at 0 on the seedy fixture.** All 18 analyses in the local DB
+  score 0/100: the repo is 83 LOC, so `scale` is 2.0, and a handful of verified
+  findings on a tiny codebase exceeds the penalty budget. The maths is doing what
+  it was designed to do (small codebases should not look healthy), but a 0 with no
+  explanation reads as "broken" rather than "small and bad". Worth revisiting
+  alongside the benchmark numbers in Phase 7.
+- **The pending review item is fixture data** ("Establish a test suite before
+  adding features", from the deleted mock-agent run), not a live finding.
 
 ## Limits of this review
 
 - The fixture model follows scripts, so this validates **wiring, tool discipline, and
   the HITL gates** — not answer quality. Answer quality needs a real provider and the
   Phase 7 benchmark (precision/recall per pillar), which is still open.
-- The browser window was ~390px wide for the agent panel, so the two-column
-  dashboard layout was not re-checked at 1280px in this pass.
+- The first pass used a ~390px window; the second pass covered 1280px. Only these
+  two widths were checked.
 - The Docker path is validated by `docker compose config` only; the daemon is not
   available on this machine, so `agent/Dockerfile` has never been built.

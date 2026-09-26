@@ -38,6 +38,7 @@ export function ReposPage() {
 
   return (
     <div className="space-y-8">
+      <h1 className="sr-only">Repositories</h1>
       <section>
         <h2 className="mb-3 text-lg font-semibold">Analyze a repository</h2>
         <form onSubmit={handleSubmit} className="flex gap-3">
