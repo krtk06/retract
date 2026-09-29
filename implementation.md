@@ -257,7 +257,7 @@ the eve agent runtime and a graph-only retrieval story. *(Decisions D3, D10, D11
 
 ---
 
-## Phase 7 — Evaluation Harness & Deployment `[~]`
+## Phase 7 — Evaluation Harness & Deployment `[x]`
 
 **Goal:** credibility + shipping. *(Decisions D9, D10.)*
 
@@ -286,8 +286,13 @@ section). What remains is measuring the *analysis* itself against known truth.
      `vulnerability`); fixed in `categorize_check()` and worth 91% → 100% on
      re-score.
    - `[ ]` Optional: JITVUL-style pairwise commits subset as an offline script.
-6. `[ ]` Production hardening: non-root images, healthchecks for every service,
-   `docker-compose.prod.yml`, deployment notes for a container host.
+6. `[x]` Production hardening: healthchecks on every service (`api`, `agent`, and
+   `frontend` declare them in their images; postgres and redis inline),
+   `docker-compose.prod.yml` (internal-only API/agent, no default secrets, durable
+   agent state), `.dockerignore` ×3, and README deployment notes.
+   *Known gap:* the `api`, `worker`, and `frontend` images are **not** built and run
+   anywhere yet — the `containers` CI job that proves it has not executed. Only
+   `intel` and `eve` run as non-root; the nginx frontend runs as root master.
 7. `[x]` `docs/RESEARCH.md`: maps every D-decision (D1–D11) to its citation, and
    records where the plan changed during the build (D3 → D11, and D10).
 8. `[x]` README: architecture diagram, quickstart, configuration matrix, checks,
@@ -295,9 +300,15 @@ section). What remains is measuring the *analysis* itself against known truth.
 9. `[x]` Live answer-quality evals (`agent/evals/quality/`): two judge-scored cases
    that skip without a provider credential, so adding a key later is one command.
 
+**Deferred, not done:** the JITVUL-style pairwise-commit subset (item 5, optional)
+and any measurement of real-model answer quality. Both need something this
+environment does not have — public-CVE commit pairs, or a provider credential.
+
 **Acceptance criteria**
-- CI green (done). Remaining: benchmark report reproducible with one command, and
-  a fresh-clone `docker compose up` that serves all three services.
+- CI green, benchmark reproducible with one command
+  (`cd backend && python -m app.benchmark --repo seedy-python-app`).
+- `[ ]` a fresh-clone `docker compose up` serving all three services — written, but
+  unverified: no container has been built on this machine.
 
 **Browser review (agent-browser)**
 - Done for the migration: chat tab, an approval, and a cancellation, plus a live

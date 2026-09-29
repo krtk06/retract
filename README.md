@@ -64,10 +64,14 @@ Differences from the dev stack, all deliberate:
 | Frontend | Vite dev server, HMR | nginx serving the built bundle |
 | Published ports | 5173, 8000, 3000 | 80 only — the API and agent are internal |
 | Healthchecks | none | every service; dependents wait for `service_healthy` |
-| Users | default | non-root (`intel`, `eve`), code dirs read-only |
+| Users | default | api and agent are non-root (`intel`, `eve`) with read-only code dirs; **the nginx frontend runs as root master** (it binds :80) |
 | Agent state | ephemeral | `agent_state` volume, so sessions survive restarts |
 | Secrets | dev defaults | refused at startup if unset |
 | Migrations | on boot | on boot, before uvicorn |
+
+The frontend is the one container that is not unprivileged. nginx's master process
+needs `CAP_NET_BIND_SERVICE` to bind port 80, so hardening it means moving to 8080
+as the `nginx` user and changing the compose port mapping. That has not been done.
 
 GitHub OAuth is required in production (`AI_INTEL_DEV_LOGIN=0` is forced), and the
 session cookie is marked `Secure`, so the frontend must be served over HTTPS —
