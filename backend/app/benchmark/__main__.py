@@ -17,6 +17,7 @@ from pathlib import Path
 from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
+from app.benchmark.calibration import sweep
 from app.benchmark.ground_truth import GroundTruthError, load_ground_truth
 from app.benchmark.match import score_findings
 from app.benchmark.report import render_report
@@ -71,6 +72,11 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--stdout", action="store_true", help="Print the report instead of writing it"
     )
+    parser.add_argument(
+        "--no-calibration",
+        action="store_true",
+        help="Skip the calibration sensitivity table",
+    )
     return parser
 
 
@@ -97,19 +103,34 @@ def main(argv: list[str] | None = None) -> int:
         truth_path = args.ground_truth or (
             DEFAULT_GROUND_TRUTH_DIR / f"{analysis.repository.name}.yaml"
         )
-        try:
-            truth = load_ground_truth(truth_path)
-        except GroundTruthError as exc:
-            print(f"error: {exc}", file=sys.stderr)
+        # A real repository has no planted expectations, so recall and precision are
+        # not measurable. The run is still worth reporting: finding counts, the
+        # per-pillar picture, and the calibration sweep all work from findings alone.
+        truth = None
+        if truth_path.is_file():
+            try:
+                truth = load_ground_truth(truth_path)
+            except GroundTruthError as exc:
+                print(f"error: {exc}", file=sys.stderr)
+                return 2
+        elif args.ground_truth:
+            print(f"error: ground-truth file not found: {truth_path}", file=sys.stderr)
             return 2
 
         findings = list(session.scalars(select(Finding).where(Finding.analysis_id == analysis.id)))
-        result = score_findings(truth, findings, analysis.id)
+        result = score_findings(truth, findings, analysis.id, loc=analysis.loc)
+        calibration = None if args.no_calibration else sweep(findings, analysis.loc)
 
-        command = (
-            f"cd backend && python -m app.benchmark --repo {truth.repo} --analysis-id {analysis.id}"
+        repo_label = (
+            truth.repo if truth else f"{analysis.repository.owner}/{analysis.repository.name}"
         )
-        report = render_report(result, command=command)
+        # score_findings cannot know the repository name without ground truth, which
+        # names it; the report is titled from here instead.
+        result.repo = repo_label
+        command = (
+            f"cd backend && python -m app.benchmark --repo {repo_label} --analysis-id {analysis.id}"
+        )
+        report = render_report(result, command=command, calibration=calibration)
         if args.stdout:
             print(report)
         else:
@@ -117,12 +138,19 @@ def main(argv: list[str] | None = None) -> int:
             out_path.parent.mkdir(parents=True, exist_ok=True)
             out_path.write_text(report)
             print(f"wrote {out_path}")
-            print(
-                f"recall={result.recall:.2f} precision(grounded)="
-                f"{result.precision_grounded:.2f} f1={result.f1_grounded:.2f}"
-                if result.recall is not None and result.precision_grounded is not None
-                else "no findings to score"
-            )
+            if truth is None:
+                print(
+                    f"no ground truth for {repo_label}: reported findings and calibration only "
+                    f"({result.open_findings} open, {result.dismissed_findings} dismissed)"
+                )
+            else:
+                print(
+                    f"recall={result.recall:.2f} "
+                    f"precision(grounded)={result.precision_grounded:.2f} "
+                    f"f1={result.f1_grounded:.2f}"
+                    if result.recall is not None and result.precision_grounded is not None
+                    else "no findings to score"
+                )
         return 0
     finally:
         session.close()

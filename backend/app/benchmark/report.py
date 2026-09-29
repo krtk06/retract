@@ -1,5 +1,6 @@
 """Render a benchmark result as Markdown."""
 
+from app.benchmark.calibration import CalibrationRow, current_settings
 from app.benchmark.match import BenchmarkResult
 
 
@@ -11,7 +12,97 @@ def _num(value: float | None, digits: int = 2) -> str:
     return "—" if value is None else f"{value:.{digits}f}"
 
 
-def render_report(result: BenchmarkResult, command: str = "") -> str:
+def render_calibration(
+    rows: list[CalibrationRow], loc: int | None, finding_count: int
+) -> list[str]:
+    """A grid of what this run would score under other calibrations.
+
+    The shipped constants were set against an 83-LOC fixture. Running a real
+    repository showed they are too lenient at 12 000 LOC, and the honest response
+    to "too lenient" is the trade-off table, not a number picked from one run.
+    """
+    lines: list[str] = []
+    density, headroom = current_settings()
+    densities = sorted({r.half_score_density for r in rows})
+    headrooms = sorted({r.worst_pillar_headroom for r in rows})
+
+    lines.append("## Calibration sensitivity")
+    lines.append("")
+    lines.append(
+        f"What this run's {finding_count} open findings would score under other "
+        f"calibrations, at {loc or 0} LOC. The shipped values are "
+        f"density {density:g}, headroom {headroom}."
+    )
+    lines.append("")
+    lines.append("| density \\ headroom | " + " | ".join(str(h) for h in headrooms) + " |")
+    lines.append("| --- |" + " --- |" * len(headrooms))
+    for d in densities:
+        cells = []
+        for h in headrooms:
+            row = next(
+                (r for r in rows if r.half_score_density == d and r.worst_pillar_headroom == h),
+                None,
+            )
+            if row is None:
+                cells.append("—")
+                continue
+            marker = " **←**" if (d == density and h == headroom) else ""
+            cells.append(f"{row.overall}{marker}")
+        lines.append(f"| {d:g} | " + " | ".join(cells) + " |")
+    lines.append("")
+    return lines
+
+
+def _render_ungrounded(
+    result: BenchmarkResult, calibration: list[CalibrationRow] | None, command: str
+) -> str:
+    """Report shape for a real repository: no planted truth, so no recall/precision."""
+    lines: list[str] = []
+    lines.append(f"# Benchmark report — `{result.repo}`")
+    lines.append("")
+    lines.append(f"Analysis: **#{result.analysis_id}** · {result.loc or 0} LOC")
+    if command:
+        lines.append("")
+        lines.append(f"Reproduce: `{command}`")
+    lines.append("")
+    lines.append(
+        "> **No ground truth for this repository.** Recall and precision are not "
+        "measurable without planted expectations, so they are not reported. What "
+        "follows is what the run produced and how sensitive the score is to its "
+        "calibration."
+    )
+    lines.append("")
+    lines.append("## What the run produced")
+    lines.append("")
+    lines.append("| Metric | Value |")
+    lines.append("| --- | --- |")
+    lines.append(
+        f"| Findings | {result.open_findings} open, {result.dismissed_findings} dismissed |"
+    )
+    lines.append(
+        f"| Verification coverage | {_pct(result.verification_coverage)} "
+        f"({result.verified_findings} verified / {result.hypothesis_findings} hypothesis) |"
+    )
+    lines.append("")
+    # With no ground truth every finding lands in `unreviewed`, because "unreviewed"
+    # means "not enumerated" — a distinction that only makes sense when there is
+    # something to enumerate against. Here it is just a count.
+    lines.append("| Category | Findings |")
+    lines.append("| --- | --- |")
+    for name, score in sorted(result.categories.items()):
+        total = score.open_findings + score.unreviewed_findings
+        lines.append(f"| {name} | {total or '—'} |")
+    lines.append("")
+    if calibration:
+        lines.extend(render_calibration(calibration, result.loc, result.open_findings))
+    return "\n".join(lines)
+
+
+def render_report(
+    result: BenchmarkResult,
+    command: str = "",
+    calibration: list[CalibrationRow] | None = None,
+) -> str:
     lines: list[str] = []
     lines.append(f"# Benchmark report — `{result.repo}`")
     lines.append("")
@@ -20,6 +111,9 @@ def render_report(result: BenchmarkResult, command: str = "") -> str:
         lines.append("")
         lines.append(f"Reproduce: `{command}`")
     lines.append("")
+
+    if not result.has_ground_truth:
+        return _render_ungrounded(result, calibration, command)
 
     lines.append("## Headline")
     lines.append("")
@@ -128,7 +222,9 @@ def render_report(result: BenchmarkResult, command: str = "") -> str:
             lines.append(f"- `{name}` ({count} finding{'s' if count != 1 else ''})")
         lines.append("")
 
-    lines.append("## How to read this")
+    if calibration:
+        lines.extend(render_calibration(calibration, result.loc, result.open_findings))
+        lines.append("## How to read this")
     lines.append("")
     lines.append(
         "- **Recall** is the number to improve by adding analyzers: an expectation with no "

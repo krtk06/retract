@@ -124,8 +124,14 @@ class ScoreOut(BaseModel):
     pillars: dict[str, dict[str, Any]]
     previous_overall: int | None = None
     delta: int | None = None
-    # The curve's one calibration constant, so a client can explain the number.
+    # The curve's calibration constants and the aggregation's inputs, so a client
+    # can explain the number instead of restating it: score = 100 / (1 + density /
+    # half_score_density) per pillar, overall = min(weighted_mean, worst_pillar +
+    # worst_pillar_headroom).
     half_score_density: float | None = None
+    worst_pillar_headroom: int | None = None
+    worst_pillar: int | None = None
+    weighted_mean: float | None = None
 
 
 class SymbolOut(BaseModel):

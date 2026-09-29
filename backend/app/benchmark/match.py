@@ -66,6 +66,7 @@ class CategoryScore:
 class BenchmarkResult:
     repo: str
     analysis_id: int
+    loc: int | None = None
     outcomes: list[ExpectationOutcome] = field(default_factory=list)
     categories: dict[str, CategoryScore] = field(default_factory=dict)
     open_findings: int = 0
@@ -75,6 +76,7 @@ class BenchmarkResult:
     matched_finding_ids: set[int] = field(default_factory=set)
     unreviewed_categories: set[str] = field(default_factory=set)
     untriaged_planted: list[ExpectationOutcome] = field(default_factory=list)
+    has_ground_truth: bool = True
     # Open findings that repeat a condition already matched by another finding.
     duplicate_findings: list[int] = field(default_factory=list)
     # Open findings in a grounded category that no expectation covers.
@@ -183,9 +185,21 @@ def _score(expectation: Expectation, findings: Sequence[Finding]) -> Match:
 
 
 def score_findings(
-    ground_truth: GroundTruth, findings: list[Finding], analysis_id: int
+    ground_truth: GroundTruth | None,
+    findings: list[Finding],
+    analysis_id: int,
+    loc: int | None = None,
 ) -> BenchmarkResult:
-    result = BenchmarkResult(repo=ground_truth.repo, analysis_id=analysis_id)
+    """Score a run.
+
+    ``ground_truth`` is ``None`` for a real repository: there are no planted
+    expectations, so recall and precision are reported as unavailable rather than
+    guessed. Everything derived from the findings alone still works.
+    """
+    repo = ground_truth.repo if ground_truth else "unknown"
+    result = BenchmarkResult(
+        repo=repo, analysis_id=analysis_id, loc=loc, has_ground_truth=ground_truth is not None
+    )
     open_findings = [f for f in findings if f.status != FindingStatus.DISMISSED]
     dismissed = [f for f in findings if f.status == FindingStatus.DISMISSED]
 
@@ -196,7 +210,7 @@ def score_findings(
         1 for f in open_findings if f.status == FindingStatus.HYPOTHESIS
     )
 
-    for expectation in ground_truth.expectations:
+    for expectation in ground_truth.expectations if ground_truth else []:
         score = result.categories.setdefault(
             expectation.category, CategoryScore(expectation.category)
         )
@@ -239,8 +253,10 @@ def score_findings(
             # Reported, but not at the line the ground truth names.
             outcome.finding_id = candidates[0].id
 
-    enumerated = {e.category for e in ground_truth.detectable}
-    planted_categories = {e.category for e in ground_truth.planted_false_positives}
+    enumerated = {e.category for e in ground_truth.detectable} if ground_truth else set()
+    planted_categories = (
+        {e.category for e in ground_truth.planted_false_positives} if ground_truth else set()
+    )
     counted = enumerated | planted_categories
     # A finding repeats a condition when another matched finding already covers
     # the same category and file — the same real problem reported twice.

@@ -308,3 +308,38 @@ def test_a_different_file_is_not_a_duplicate() -> None:
     )
     assert result.duplicate_findings == []
     assert result.unenumerated_findings == [2]
+
+
+def test_calibration_sweep_is_monotonic_in_both_constants() -> None:
+    """Stricter density or less headroom can only lower the score."""
+    from app.benchmark.calibration import sweep
+
+    # Dense enough that one pillar sits far below the mean, so the cap binds.
+    findings = [make_finding(i, "vulnerability", f"app/f{i}.py", 1) for i in range(1, 26)] + [
+        make_finding(100, "coverage", None, None)
+    ]
+    rows = sweep(findings, loc=5000, densities=(40.0, 250.0), headrooms=(0, 15))
+    by_key = {(r.half_score_density, r.worst_pillar_headroom): r for r in rows}
+    assert by_key[(40.0, 0)].overall < by_key[(250.0, 0)].overall
+    assert by_key[(250.0, 0)].overall < by_key[(250.0, 15)].overall
+
+
+def test_calibration_sweep_ignores_dismissed_findings() -> None:
+    from app.benchmark.calibration import sweep
+
+    open_only = [make_finding(1, "vulnerability", "app/a.py", 1)]
+    with_dismissal = open_only + [
+        make_finding(2, "vulnerability", "app/b.py", 2, status=FindingStatus.DISMISSED)
+    ]
+    a = sweep(open_only, loc=500, densities=(100.0,), headrooms=(0,))[0]
+    b = sweep(with_dismissal, loc=500, densities=(100.0,), headrooms=(0,))[0]
+    assert a.overall == b.overall
+
+
+def test_calibration_sweep_covers_every_combination() -> None:
+    from app.benchmark.calibration import DEFAULT_DENSITIES, DEFAULT_HEADROOMS, sweep
+
+    rows = sweep([make_finding(1, "secret", "app/a.py", 1)], loc=1000)
+    assert len(rows) == len(DEFAULT_DENSITIES) * len(DEFAULT_HEADROOMS)
+    assert all(0 <= r.overall <= 100 for r in rows)
+    assert all(r.worst_pillar <= r.overall or r.capped for r in rows)
