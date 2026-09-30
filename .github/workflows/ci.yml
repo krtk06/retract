@@ -84,6 +84,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Static container config check
+        # Catches a COPY of a path that does not exist, a CMD naming a missing npm
+        # script, and compose build targets that are not real Dockerfile stages —
+        # the failures that break a first `docker compose up`.
+        run: bash scripts/verify-container-config.sh
       - name: Build images
         run: docker compose -f infra/docker-compose.prod.yml build
         env:

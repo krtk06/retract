@@ -98,34 +98,71 @@ export function ScoreHero({ score }: { score: Score | null }) {
       </div>
 
       <div className="mt-6 space-y-3">
-        {pillars.map(({ key, label, data }) => (
-          <div key={key} className="flex items-center gap-3">
-            <span className="w-32 shrink-0 text-sm text-zinc-400">{label}</span>
-            <div className="h-2.5 flex-1 overflow-hidden rounded-full bg-zinc-800">
-              <div
-                className={`h-full rounded-full ${barColor(data.score)}`}
-                style={{
-                  width: `${data.score}%`,
-                  transition: "width 700ms cubic-bezier(0.22, 1, 0.36, 1)",
-                }}
-                role="progressbar"
-                aria-valuenow={data.score}
-                aria-valuemin={0}
-                aria-valuemax={100}
-                aria-label={`${label} score`}
-              />
+        {pillars.map(({ key, label, data }) => {
+          // A pillar with no findings scores 100, which is indistinguishable from
+          // "checked and clean" unless it is labelled. Nothing was found because
+          // nothing was measured, and the number should not read as reassurance.
+          const unmeasured = data.findings === 0;
+          return (
+            <div key={key} className="flex items-center gap-3">
+              <span className="w-32 shrink-0 text-sm text-zinc-400">{label}</span>
+              <div className="h-2.5 flex-1 overflow-hidden rounded-full bg-zinc-800">
+                {unmeasured ? (
+                  <div
+                    className="h-full w-full rounded-full bg-zinc-800"
+                    role="progressbar"
+                    aria-valuenow={data.score}
+                    aria-valuemin={0}
+                    aria-valuemax={100}
+                    aria-label={`${label} not measured: no findings, so no score is claimed`}
+                  />
+                ) : (
+                  <div
+                    className={`h-full rounded-full ${barColor(data.score)}`}
+                    style={{
+                      width: `${data.score}%`,
+                      transition: "width 700ms cubic-bezier(0.22, 1, 0.36, 1)",
+                    }}
+                    role="progressbar"
+                    aria-valuenow={data.score}
+                    aria-valuemin={0}
+                    aria-valuemax={100}
+                    aria-label={`${label} score`}
+                  />
+                )}
+              </div>
+              <span
+                className={`w-8 text-right text-sm font-medium ${unmeasured ? "text-zinc-600" : ""}`}
+              >
+                {unmeasured ? "—" : data.score}
+              </span>
+              <span
+                className="w-28 text-right text-xs text-zinc-500"
+                title={
+                  unmeasured
+                    ? "no findings — this dimension was not exercised, which is not the same as clean"
+                    : "verified / hypothesis / dismissed"
+                }
+              >
+                {unmeasured ? (
+                  <span className="text-zinc-600">not measured</span>
+                ) : (
+                  <>
+                    {data.verified}v / {data.hypotheses}h
+                    {data.dismissed != null ? ` / ${data.dismissed}d` : ""}
+                  </>
+                )}
+              </span>
             </div>
-            <span className="w-8 text-right text-sm font-medium">{data.score}</span>
-            <span
-              className="w-28 text-right text-xs text-zinc-500"
-              title="verified / hypothesis / dismissed"
-            >
-              {data.verified}v / {data.hypotheses}h
-              {data.dismissed != null ? ` / ${data.dismissed}d` : ""}
-            </span>
-          </div>
-        ))}
+          );
+        })}
       </div>
+      {pillars.some((p) => p.data.findings === 0) && (
+        <p className="mt-3 text-xs text-zinc-600">
+          A dimension with no findings is shown as &ldquo;not measured&rdquo;: nothing was
+          found because nothing triggered that analyzer, which is not the same as clean.
+        </p>
+      )}
     </section>
   );
 }

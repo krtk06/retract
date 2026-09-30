@@ -15,6 +15,7 @@
     "typecheck": "tsc"
   },
   "dependencies": {
+    "@ai-sdk/openai": "^4.0.82",
     "ai": "^7.0.114",
     "eve": "^0.66.3",
     "just-bash": "^3.4.2",

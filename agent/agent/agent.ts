@@ -1,21 +1,42 @@
+import { createOpenAI } from "@ai-sdk/openai";
 import { defineAgent } from "eve";
 import { mockModel } from "eve/evals";
 
 import { fixtureModel } from "./lib/fixture-model";
 
-const provider = process.env.AI_INTEL_LLM_PROVIDER ?? "gateway";
-const modelId = process.env.AI_INTEL_MODEL ?? "anthropic/claude-sonnet-4.5";
-
 /**
- * `AI_INTEL_LLM_PROVIDER=mock` swaps in the scripted fixture model, so evals,
- * local reviews, and CI exercise the full agent loop — tools, citations, HITL
- * gates — with no provider credentials. It replaces the deleted Python mock
- * harness.
+ * Model selection, driven entirely by the environment.
+ *
+ *   AI_INTEL_LLM_PROVIDER=mock      deterministic fixture model — no credentials,
+ *                                    used by CI, evals, and offline review
+ *   AI_INTEL_LLM_PROVIDER=openai    a real OpenAI key via the AI SDK provider
+ *   AI_INTEL_LLM_PROVIDER=gateway   anything else, by id, through the Vercel AI
+ *                                    Gateway (the default)
+ *
+ * A direct provider needs its AI SDK package installed, which is why
+ * `@ai-sdk/openai` is a dependency rather than an optional peer: `eve start` must
+ * not fail at import time on a host that only ever runs the mock.
  */
-const model = provider === "mock" ? mockModel(fixtureModel) : modelId;
+const provider = process.env.AI_INTEL_LLM_PROVIDER ?? "gateway";
+
+function resolveModel() {
+  if (provider === "mock") {
+    return mockModel(fixtureModel);
+  }
+  if (provider === "openai") {
+    const apiKey = process.env.AI_INTEL_API_KEY ?? process.env.OPENAI_API_KEY;
+    if (!apiKey) {
+      throw new Error(
+        "AI_INTEL_LLM_PROVIDER=openai requires AI_INTEL_API_KEY (or OPENAI_API_KEY)",
+      );
+    }
+    return createOpenAI({ apiKey })(process.env.AI_INTEL_MODEL ?? "gpt-5");
+  }
+  return process.env.AI_INTEL_MODEL ?? "anthropic/claude-sonnet-4.5";
+}
 
 export default defineAgent({
-  model,
+  model: resolveModel(),
   // Declared explicitly: the fixture model has no gateway context-window
   // metadata, and eve needs a known window to plan compaction.
   modelContextWindowTokens: 200_000,
