@@ -64,6 +64,18 @@ These categories produced findings but are not enumerated in the ground-truth fi
 - `test-plan` (1 finding)
 - `weak-crypto` (1 finding)
 
+## Calibration sensitivity
+
+What this run's 25 open findings would score under other calibrations, at 83 LOC. The shipped values are density 100, headroom 15.
+
+| density \ headroom | 0 | 5 | 10 | 15 | 25 |
+| --- | --- | --- | --- | --- | --- |
+| 25 | 1 | 6 | 9 | 9 | 9 |
+| 40 | 2 | 7 | 12 | 13 | 13 |
+| 60 | 3 | 8 | 13 | 18 | 18 |
+| 100 | 5 | 10 | 15 | 20 **←** | 26 |
+| 250 | 12 | 17 | 22 | 27 | 37 |
+
 ## How to read this
 
 - **Recall** is the number to improve by adding analyzers: an expectation with no matching finding is a gap in coverage.

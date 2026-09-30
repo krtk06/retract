@@ -74,6 +74,19 @@ def get_analysis(
     return out
 
 
+def _calibration_of(score: dict) -> tuple:
+    """The constants a stored score was produced with.
+
+    A score's meaning depends on these, so two scores are only comparable when they
+    match. Absent keys mean an older payload, which is treated as a mismatch rather
+    than assumed equal.
+    """
+    return (
+        score.get("half_score_density"),
+        score.get("worst_pillar_headroom"),
+    )
+
+
 @router.get("/{analysis_id}/score", response_model=ScoreOut)
 def get_score(
     analysis_id: int,
@@ -89,10 +102,14 @@ def get_score(
         if previous is not None and previous.score_json:
             current = score.get("overall")
             earlier = previous.score_json.get("overall")
-            # Only compare like with like: a v2 and a v3 score come from different
-            # curves, so their difference is not a change in the repository.
+            # Only compare like with like. Two things decide whether two scores are
+            # comparable: the formula version, and the calibration constants it was
+            # produced with. A version match alone is not enough — retuning
+            # HALF_SCORE_DENSITY changes every score without changing the shape, and
+            # subtracting across that change would report a phantom improvement.
             same_curve = previous.score_json.get("version") == score.get("version")
-            if same_curve:
+            same_calibration = _calibration_of(previous.score_json) == _calibration_of(score)
+            if same_curve and same_calibration:
                 score["previous_overall"] = earlier
                 if isinstance(current, int) and isinstance(earlier, int):
                     score["delta"] = current - earlier

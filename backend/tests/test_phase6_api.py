@@ -225,3 +225,29 @@ def test_compare_rejects_different_repositories(
 def test_unknown_analysis_404(auth_client: TestClient) -> None:
     assert auth_client.get("/api/analyses/99999/history").status_code == 404
     assert auth_client.get("/api/analyses/99999/trust-summary").status_code == 404
+
+
+def test_score_delta_is_suppressed_when_calibration_changes(
+    auth_client: TestClient, repo_with_analyses
+) -> None:
+    """Retuning a scoring constant changes every number without changing the version.
+
+    Comparing across that change would report a phantom change in the repository, so
+    the delta must be withheld just as it is across formula versions.
+    """
+    _repo, first_id, second_id = repo_with_analyses
+    session = get_session_factory()()
+    try:
+        earlier = session.get(Analysis, first_id)
+        assert earlier is not None and earlier.score_json is not None
+        earlier.score_json = {**earlier.score_json, "half_score_density": 250.0}
+        session.commit()
+    finally:
+        session.close()
+
+    body = auth_client.get(f"/api/analyses/{second_id}/score").json()
+    # The versions match, so the version guard alone would have allowed the
+    # comparison; only the calibration check withholds the delta.
+    assert body["version"] == 2
+    assert body["delta"] is None
+    assert body["previous_overall"] is None

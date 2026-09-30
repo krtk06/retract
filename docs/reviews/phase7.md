@@ -116,12 +116,16 @@ healthy pillars average away a catastrophic one.
 
 Same 19 real findings from analysis 18, at four repo sizes:
 
-| LOC | v2 | v3 | v4 | worst pillar |
-| --- | --- | --- | --- | --- |
-| 83 (seedy) | 0 | 37 | **27** | security 12 |
-| 500 | 9 | 73 | 57 | security 42 |
-| 2 000 | 55 | 90 | 90 | security 75 |
-| 20 000 | 94 | 99 | 99 | security 97 |
+| LOC | v2 | v3 | v4 (250) | v4 (100) | worst pillar |
+| --- | --- | --- | --- | --- | --- |
+| 83 (seedy) | 0 | 37 | 27 | **20** | security 5 |
+| 500 | 9 | 73 | 57 | 40 | security 21 |
+| 2 000 | 55 | 90 | 90 | 81 | security 65 |
+| 20 000 | 94 | 99 | 99 | 98 | security 94 |
+
+`HALF_SCORE_DENSITY` was later reduced from 250 to 100 after running the pipeline on
+`psf/requests`; see the Scoring section of the README. At 250 the worst pillar of
+that repository was 92, so the `+15` cap could never bind and was inert.
 
 Covered by `backend/tests/test_scoring_curve.py` (11 cases: monotonicity, density
 ordering, the discounting rules, the half-score constant, and the cap).
@@ -133,12 +137,12 @@ Two consequences handled rather than left dangling:
   an analysis whose finalize step never cached a score still shows one.
   `useScore` existed but was never called.
 
-**Known limit of the cap:** at 2 000 LOC, security 75 plus 15 headroom equals the
-weighted mean, so the cap does not bite and the overall stays 90. A repository
-with ~5 high-severity findings per KLOC therefore still reads as "mostly fine".
-Tightening `WORST_PILLAR_HEADROOM` is a one-constant change; left at 15 because
-that is the value agreed, and the benchmark (the remaining Phase 7 item) is what
-should provide evidence to move it.
+**Known limit, now measured:** at density 250 the cap did not bite on realistic
+repositories — `psf/requests` had a worst pillar of 92, so `92 + 15` never bound
+and the overall was the bare mean. Reducing the density to 100 fixed that (worst
+pillar 81, mean 92.05, cap 96) and dropped the repository from 96 to 92. The
+remaining gap is different: a pillar nobody measured still scores 100 and lifts
+the mean, which `psf/requests` demonstrates with `dependencies`.
 
 - **The pending review item is fixture data** ("Establish a test suite before
   adding features", from the deleted mock-agent run), not a live finding.

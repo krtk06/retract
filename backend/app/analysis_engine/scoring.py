@@ -67,15 +67,29 @@ PILLAR_WEIGHTS = {
 }
 
 # Weighted finding-points per KLOC at which a pillar scores 50. One calibration
-# constant for the whole curve: 250 means 12.5 high findings (or 25 medium) in
-# every thousand lines. Only the benchmark has evidence to move it, so it is
-# named, exported, and asserted in tests rather than buried in a formula.
-HALF_SCORE_DENSITY = 250.0
+# constant for the whole curve: 100 means 5 high-severity findings (or 10 medium)
+# in every thousand lines halves a pillar.
+#
+# This was 250 until the pipeline was run on a real repository rather than only the
+# 83-LOC fixture. At 250, `psf/requests` (12,032 LOC, 10 import cycles, SHA1-based
+# HMAC authentication) scored 96/100 with a worst pillar of 92 — and because the
+# worst pillar was that high, the headroom cap below could never bind, so
+# WORST_PILLAR_HEADROOM was inert. At 100 the same run scores 92, the cap actually
+# engages, and the bad fixture still lands at 20 rather than collapsing to ~0.
+#
+# Only the benchmark should move it, and moving it invalidates every stored score:
+# `tests/test_scoring_curve.py` pins the behaviour and `app/benchmark/calibration.py`
+# shows the trade-off against real findings. Named, exported, and asserted rather
+# than buried in a formula.
+HALF_SCORE_DENSITY = 100.0
 
 # How far above its worst pillar the overall may sit. A weighted mean alone lets
 # five healthy pillars average away one catastrophic one — a repository with
 # secrets and no tests still read as "mostly fine". The cap keeps the mean as the
 # headline while making sure the weakest dimension is visible in it.
+#
+# The two constants partly substitute for each other: a stricter curve lowers the
+# mean on its own, which is why this one was left at 15.
 WORST_PILLAR_HEADROOM = 15
 
 # Guards division by zero for an unknown or empty LOC. Not a density assumption:

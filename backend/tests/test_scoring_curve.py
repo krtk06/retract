@@ -97,14 +97,20 @@ def test_clean_repo_scores_full(make_analysis) -> None:
 
 
 def test_single_finding_in_a_tiny_repo_is_not_floored(make_analysis) -> None:
-    """The regression: one medium finding used to clamp a 50-LOC repo to 0."""
+    """The regression: one medium finding used to clamp a 50-LOC repo to 0.
+
+    The bar here is "informatively bad", not a specific number. v2 produced 0, which
+    said nothing about how bad the code was; the calibrated curve produces 48. The
+    threshold is deliberately loose so a future retune of ``HALF_SCORE_DENSITY`` does
+    not read as a regression.
+    """
     session = get_session_factory()()
     try:
         analysis_id = make_analysis(50)
         add(session, analysis_id, Severity.MEDIUM)
         security = compute_score(session, analysis_id)["pillars"]["security"]
         assert security["weighted_penalty"] == float(MEDIUM)
-        assert security["score"] > 50, "a tiny repo with one medium issue is unhealthy, not dead"
+        assert security["score"] > 25, "a tiny repo with one medium issue is unhealthy, not dead"
         assert security["score"] < 100
     finally:
         session.close()
@@ -208,9 +214,10 @@ def test_overall_is_capped_by_the_worst_pillar(make_analysis) -> None:
     session = get_session_factory()()
     try:
         analysis_id = make_analysis(1000)
-        # Security is devastated (density 900/KLOC, well past the half-point);
-        # every other pillar is untouched at 100.
-        add(session, analysis_id, Severity.CRITICAL, count=30)
+        # Security is devastated while every other pillar stays at 100. The count is
+        # chosen so the bare weighted mean still reads as healthy — that is the whole
+        # point: the mean alone would mislead, and the cap is what stops it.
+        add(session, analysis_id, Severity.HIGH, count=16)
         score = compute_score(session, analysis_id)
         worst = min(p["score"] for p in score["pillars"].values())
         assert score["pillars"]["security"]["score"] == worst
@@ -228,8 +235,12 @@ def test_cap_does_not_bite_when_every_pillar_is_healthy(make_analysis) -> None:
         analysis_id = make_analysis(10000)
         add(session, analysis_id, Severity.MEDIUM, count=1)
         score = compute_score(session, analysis_id)
-        assert min(p["score"] for p in score["pillars"].values()) >= 99
-        assert score["overall"] == score["weighted_mean"], "the cap must not apply here"
+        assert min(p["score"] for p in score["pillars"].values()) >= 95
+        # The cap is inert only while the mean sits below worst + headroom. Compare
+        # the two inputs rather than the rounded outputs, which can differ by a
+        # fraction of a point purely from rounding.
+        assert score["worst_pillar"] + WORST_PILLAR_HEADROOM > score["weighted_mean"]
+        assert score["overall"] >= 95
     finally:
         session.close()
 

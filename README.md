@@ -125,6 +125,9 @@ Latest run on `benchmark/seedy-python-app` (analysis #18, 11 planted expectation
 | Verification coverage | 92% (23 verified / 2 hypothesis) |
 | Planted false positives triaged | 1/1 dismissed |
 
+The score curve was recalibrated against a real repository after this fixture was
+built. See [Scoring](#scoring) for what changed and why.
+
 Two numbers are reported on purpose. A ground-truth file enumerates *conditions*,
 while a pipeline reports findings per *(tool × rule × occurrence)*, so flagging one
 hardcoded key with three rules is three findings for one problem. `Precision
@@ -150,6 +153,44 @@ The committed report still shows 91% because analysis #18 predates the fix; the
 next run with semgrep installed will show 100%. Semgrep is not installed in this
 development environment, so the fix is verified by unit test and by re-scoring,
 not by a fresh end-to-end run.
+
+## Scoring
+
+The health score is computed, not vibes:
+
+```
+per-pillar score = 100 / (1 + weighted_findings_per_KLOC / 100)
+overall          = min(weighted_mean, worst_pillar + 15)
+```
+
+Three constants, all exported and covered by tests:
+
+| Constant | Value | Meaning |
+| --- | --- | --- |
+| `HALF_SCORE_DENSITY` | 100 | findings per KLOC at which a pillar scores 50 — i.e. 5 high-severity findings per thousand lines |
+| `WORST_PILLAR_HEADROOM` | 15 | how far the overall may sit above its worst pillar |
+| `SEVERITY_WEIGHT` | 30/20/10/5 | critical/high/medium/low |
+
+`HALF_SCORE_DENSITY` was 250 until the pipeline was run on a real repository.
+At 250, `psf/requests` (12,032 LOC, 10 import cycles, SHA1-based HMAC
+authentication) scored 96/100 with a worst pillar of 92 — and because the worst
+pillar was that high, the headroom cap could never bind, leaving it inert. At 100
+the same run scores 92 and the cap engages:
+
+| | before (250) | after (100) |
+| --- | --- | --- |
+| `psf/requests`, 12 032 LOC | 96 | **92** |
+| `seedy-python-app`, 83 LOC | 27 | **20** |
+
+Changing either constant changes every score without changing the formula version,
+so the dashboard withholds the run-over-run delta when the calibration differs, not
+just when the version does. `python -m app.benchmark` prints a sensitivity table
+over both constants for any analysis, which is how the value above was chosen —
+from two repositories and the trade-off between them, not from one anecdote.
+
+**Known limitation:** a pillar nobody measured scores 100 and flatters the mean.
+`psf/requests` has zero dependency findings and scores 100 there. Unmeasured is not
+the same as clean, and the current aggregation does not distinguish them.
 
 ## Configuration
 
