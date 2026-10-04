@@ -1,6 +1,6 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { Suspense, lazy, useEffect, useRef, useState } from "react";
-import { useParams } from "react-router-dom";
+import { Link, useParams } from "react-router-dom";
 
 import { useAnalysis, useFindings, useScore } from "../api/hooks";
 import type { AnalysisEvent } from "../api/types";
@@ -102,6 +102,12 @@ export function AnalysisDetailPage() {
   return (
     <div className="space-y-8">
       <section className="rounded-lg border border-zinc-800 bg-zinc-900 p-5">
+        <Link
+          to="/"
+          className="mb-3 inline-flex items-center gap-1 text-sm text-zinc-400 hover:text-zinc-100 hover:underline"
+        >
+          ← Back
+        </Link>
         <div className="flex items-center justify-between">
           <h1 className="text-lg font-semibold">{title}</h1>
           <div className="flex items-center gap-2">
