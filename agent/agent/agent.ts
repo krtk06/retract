@@ -21,6 +21,17 @@ const provider = process.env.AI_INTEL_LLM_PROVIDER ?? "gateway";
 
 function resolveModel() {
   if (provider === "mock") {
+    // The fixture model answers from canned transcripts, so a deployment left on it
+    // looks entirely healthy while every finding and claim is invented. `.env.example`
+    // ships `mock` because the offline dev quickstart needs no credentials, which
+    // makes this the single most likely production misconfiguration. Refuse it.
+    if (process.env.NODE_ENV === "production") {
+      throw new Error(
+        "AI_INTEL_LLM_PROVIDER=mock is a deterministic fixture model and must not " +
+          "run in production; use gateway (the default) or openai. If you copied " +
+          ".env.example unchanged, set AI_INTEL_LLM_PROVIDER=gateway.",
+      );
+    }
     return mockModel(fixtureModel);
   }
   if (provider === "openai") {
