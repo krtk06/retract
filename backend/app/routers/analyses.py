@@ -15,7 +15,7 @@ from app.config import get_settings
 from app.db import get_db
 from app.deps import get_current_user
 from app.events import get_bus
-from app.models import Analysis, Finding, User
+from app.models import Analysis, AnalysisStatus, Finding, User
 from app.schemas import (
     AgentFindingsIn,
     AgentFindingsOut,
@@ -94,6 +94,20 @@ def get_score(
     _: User = Depends(get_current_user),
 ) -> ScoreOut:
     analysis = _get_analysis(db, analysis_id)
+    # Never score an analysis that is still running. Findings land progressively, so
+    # a score computed mid-run counts only what exists at that moment — for a run
+    # whose analyzers had not yet reported, that is zero findings, every pillar at
+    # 100, and an overall of a confident-looking 100. Worse, the value was persisted,
+    # so it outlived the run: the client cached it and, because the score query is
+    # never invalidated when the analysis completes, kept displaying 100 next to a
+    # finished analysis that actually scored 88. finalize_analysis writes the real
+    # score in the same commit that flips the status to done, so an unfinished
+    # analysis simply has no score yet.
+    if analysis.status != AnalysisStatus.DONE and not analysis.score_json:
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            detail="analysis has not finished; no score exists yet",
+        )
     if analysis.score_json:
         score = dict(analysis.score_json)
         score.setdefault("previous_overall", None)

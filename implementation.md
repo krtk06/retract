@@ -287,12 +287,12 @@ section). What remains is measuring the *analysis* itself against known truth.
      re-score.
    - `[ ]` Optional: JITVUL-style pairwise commits subset as an offline script.
 6. `[x]` Production hardening: healthchecks on every service (`api`, `agent`, and
-   `frontend` declare them in their images; postgres and redis inline),
+   `frontend` declare them in their images; `worker` declares its own in compose
+   because it shares the `api` image; postgres and redis inline),
    `docker-compose.prod.yml` (internal-only API/agent, no default secrets, durable
    agent state), `.dockerignore` ×3, and README deployment notes.
-   *Known gap:* the `api`, `worker`, and `frontend` images are **not** built and run
-   anywhere yet — the `containers` CI job that proves it has not executed. Only
-   `intel` and `eve` run as non-root; the nginx frontend runs as root master.
+   *Known gap:* only `intel` and `eve` run as non-root; the nginx frontend runs as
+   root master.
 7. `[x]` `docs/RESEARCH.md`: maps every D-decision (D1–D11) to its citation, and
    records where the plan changed during the build (D3 → D11, and D10).
 8. `[x]` README: architecture diagram, quickstart, configuration matrix, checks,
@@ -307,8 +307,119 @@ environment does not have — public-CVE commit pairs, or a provider credential.
 **Acceptance criteria**
 - CI green, benchmark reproducible with one command
   (`cd backend && python -m app.benchmark --repo seedy-python-app`).
-- `[ ]` a fresh-clone `docker compose up` serving all three services — written, but
-  unverified: no container has been built on this machine.
+- `[x]` a fresh `docker compose up` serving all services — verified by building and
+  running the production stack locally, not just written. Cold start to six healthy
+  containers takes ~35s (`up --wait`). Verified through nginx on the published
+  port: `/` serves the hashed bundle, `/health` → `ok`, `/api/health` →
+  `{"status":"ok","db":"ok","redis":"ok"}`, SPA fallback on `/analyses`, and
+  `/eve/v1/info` → 401 bare / 200 with a backend-minted HS256 token (26 static
+  tools advertised).
+
+  Running it for real is what surfaced five defects that the static checks, the
+  unit suites, and local `eve start` had all passed over:
+  1. `addgroup -S` is rejected by the Debian trixie base behind `python:3.12-slim`
+     (exit 51), so no backend image built at all.
+  2. The agent healthcheck probed `/eve/v1/info`, which sits behind the channel's
+     auth walk once `AI_INTEL_JWT_SECRET` is set → permanently unhealthy. It had
+     looked public only because local `eve start` ran with no secret set.
+  3. The worker inherited the API's HTTP healthcheck from the shared image, but a
+     Celery worker serves no HTTP → permanently unhealthy while working fine.
+  4. `dev` was the last stage of `frontend/Dockerfile`, and an unqualified build
+     takes the last stage — so production shipped the Vite dev server and
+     published host `:80` to a container serving `:5173`.
+  5. `verify-container-config.sh` did not require an explicit build target, so (4)
+     passed it; it now rejects any multi-stage build without one, and the CI probe
+     asserted a 200 from an authenticated route.
+  6. nginx resolved `api` and `agent` once at config load and cached their IPs, so
+     recreating either container left the published port returning 502 until nginx
+     itself was restarted — with both upstreams healthy and serving. It now
+     re-resolves via Docker's embedded DNS (`resolver 127.0.0.11`), using a variable
+     upstream plus `$request_uri` to keep the forwarded URI unchanged.
+
+  Two documentation bugs also surfaced: the README implied compose reads `.env`
+  from the working directory (it resolves against the compose file's directory,
+  `infra/`), and the CI probe expected 200 from `/eve/v1/info`.
+
+**Scoring a running analysis (found by browser review)**
+
+  A finished analysis of `krtk06/Chaty` displayed **100/100 with all six pillars marked
+  "not measured"** while listing 13 findings below it. The backend had it right the whole
+  time — `score_json` held `overall: 88`, security 76 over 4 findings, code-quality 81
+  over 6 — and `GET /score` returned exactly that. Three defects compounded:
+
+  1. `useScore` was enabled by `id > 0` alone, so the page fetched the score while the
+     analysis was still running.
+  2. `GET /score` treats a missing `score_json` as "never scored" and recomputes it.
+     Mid-run that counts only the findings reported so far — none, early on — so every
+     pillar scored 100. It then **persisted** that value (`analysis.score_json = score`),
+     which is what made it outlive the run.
+  3. Nothing invalidated the `["score", id]` query when the analysis reached `done`, so
+     the client kept rendering the cached 100 indefinitely.
+
+  The 100 was therefore never computed from the findings — it was an empty analysis
+  scored on demand, displayed as final. Fixed on both sides: the endpoint now returns 409
+  for an unfinished analysis with no score rather than inventing and persisting one
+  (`finalize_analysis` writes the real score in the same commit that flips the status),
+  and the client fetches only once the analysis is done and refetches on the transition.
+  Regression-tested in `tests/test_score_timing.py`, including that nothing is persisted.
+
+  The dev compose had the same worker healthcheck gap as prod — the shared backend image's
+  HTTP probe can never pass for a Celery worker — so `docker compose up` there reported
+  `worker` unhealthy while it worked. Both files now carry the control-channel probe.
+
+**Fail-closed secrets (`backend/app/config.py`)**
+
+  Compose refuses to start without its five required variables, but the application
+  did not: started directly with `AI_INTEL_ENVIRONMENT=production` and no
+  `AI_INTEL_JWT_SECRET`, it booted and signed cookies and eve tokens with the literal
+  `change-me-in-production` — a value published in this repository. It now refuses to
+  construct in production on a default, published, or under-32-character secret, on a
+  blank agent token, or with dev login enabled, reporting every problem at once.
+  `.env.example`'s own example value is on the deny-list, because it is 52 characters
+  long and so passes a length check on its own.
+
+  The agent gained the matching guard for the fixture model: `.env.example` ships
+  `AI_INTEL_LLM_PROVIDER=mock` so the dev quickstart works with no credentials, which
+  makes it the likeliest production misconfiguration — and it looks entirely healthy
+  while answering from canned transcripts. `eve start` now refuses `mock` when
+  `NODE_ENV=production`, which `docker-compose.prod.yml` sets (it also makes the
+  agent's auth walk fail closed when the shared secret is missing).
+
+  Adding the API guard immediately caught a sixth defect: the Celery worker imports
+  `app.config` through `celery_app` and had been silently inheriting the default
+  signing secret, since the worker service was never given either secret. It receives
+  both now.
+
+**Open limitation — the model is chosen at image build time**
+
+  Driving a live turn through the running stack (session created, message accepted,
+  SSE stream flowing through nginx, model call attempted) showed everything wired
+  correctly: the call reached the AI Gateway and failed only with "AI Gateway rejected
+  the provided API key". So a real key is all that stands between the current image and
+  live answers.
+
+  It also exposed that `AI_INTEL_LLM_PROVIDER` and `AI_INTEL_MODEL` do nothing in the
+  Docker image. eve compiles the agent definition — including the resolved model —
+  into `.output/.eve/compile/compiled-agent-manifest.json` during `eve build`, which the
+  image runs before any `AI_INTEL_*` variable exists. The manifest therefore froze the
+  provider to its `?? "gateway"` default and the model to `anthropic/claude-sonnet-4.5`.
+  Verified: a container started with `AI_INTEL_LLM_PROVIDER=openai` and a valid
+  `AI_INTEL_API_KEY` still called the AI Gateway, and the manifest contained no
+  occurrence of `openai`. The `NODE_ENV=production` fixture-model guard is inert in the
+  image for the same reason — it holds for `eve start` on a host, not in the container.
+
+  Moving the build to container start was tried and does not work: `eve start` refuses to
+  boot without existing output, and building there fails with `EXDEV: cross-device link
+  not permitted` because eve renames `.eve/builds/<hash>/output` onto `/srv/agent/.output`
+  while `agent_state` is mounted at `.eve` — two filesystems.
+
+  The corollary matters for security: a provider that needs a key (`openai`) would have
+  that key baked into the manifest at build time, so the image must never be built with
+  one. Leaving this open deliberately — the options are (a) find a supported way to
+  relocate eve's build output so it is same-filesystem and build at start, (b) make
+  provider and model build args and ship a provider-specific image, keeping keys
+  runtime-only, or (c) drop the `agent_state` volume so the build can happen at start.
+  Each trades cold-start time, image reusability, or durable agent state.
 
 **Browser review (agent-browser)**
 - Done for the migration: chat tab, an approval, and a cancellation, plus a live

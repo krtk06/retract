@@ -35,11 +35,17 @@ export function useAnalyzeRepo() {
   });
 }
 
-export function useScore(id: number) {
+export function useScore(id: number, enabled = true) {
   return useQuery({
     queryKey: ["score", id],
     queryFn: () => request<Score>(`/api/analyses/${id}/score`),
-    enabled: id > 0,
+    // Only once the analysis is finished. Fetching mid-run asks the backend to score
+    // an incomplete analysis, which counts only the findings reported so far — none,
+    // early on — and yields an overall of 100 with every pillar unmeasured. That value
+    // was cached under this key and, with nothing invalidating it on completion, kept
+    // being displayed beside a finished analysis that had actually scored 88.
+    enabled: enabled && id > 0,
+    retry: false,
   });
 }
 

@@ -1,4 +1,5 @@
-import { Suspense, lazy, useEffect, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
+import { Suspense, lazy, useEffect, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
 
 import { useAnalysis, useFindings, useScore } from "../api/hooks";
@@ -52,9 +53,23 @@ export function AnalysisDetailPage() {
   const isActive =
     analysis.data?.status === "pending" || analysis.data?.status === "running";
   const findings = useFindings(analysisId, analysis.data?.status === "done");
-  const score = useScore(analysisId);
+  const isDone = analysis.data?.status === "done";
+  const score = useScore(analysisId, isDone);
   const [events, setEvents] = useState<AnalysisEvent[]>([]);
   const [tab, setTab] = useState<"overview" | "explore" | "agent">("overview");
+
+  // The score is finalised in the same commit that flips the status to done, so the
+  // transition is the signal to read it. Without this the page can keep showing
+  // whatever was fetched before completion — which, mid-run, is a 100 scored against
+  // an empty finding set.
+  const queryClient = useQueryClient();
+  const wasDone = useRef(false);
+  useEffect(() => {
+    if (isDone && !wasDone.current) {
+      queryClient.invalidateQueries({ queryKey: ["score", analysisId] });
+    }
+    wasDone.current = isDone;
+  }, [isDone, analysisId, queryClient]);
 
   useEffect(() => {
     setEvents([]);
