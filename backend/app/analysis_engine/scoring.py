@@ -67,21 +67,34 @@ PILLAR_WEIGHTS = {
 }
 
 # Weighted finding-points per KLOC at which a pillar scores 50. One calibration
-# constant for the whole curve: 100 means 5 high-severity findings (or 10 medium)
-# in every thousand lines halves a pillar.
+# constant for the whole curve.
 #
-# This was 250 until the pipeline was run on a real repository rather than only the
-# 83-LOC fixture. At 250, `psf/requests` (12,032 LOC, 10 import cycles, SHA1-based
-# HMAC authentication) scored 96/100 with a worst pillar of 92 — and because the
-# worst pillar was that high, the headroom cap below could never bind, so
-# WORST_PILLAR_HEADROOM was inert. At 100 the same run scores 92, the cap actually
-# engages, and the bad fixture still lands at 20 rather than collapsing to ~0.
+# History: 250 until the pipeline ran on a real repository rather than only the 83-LOC
+# fixture; then 100, chosen from a single run. Both were too lenient once measured
+# against several repositories at once, because one run cannot show where the curve
+# should bend.
 #
-# Only the benchmark should move it, and moving it invalidates every stored score:
-# `tests/test_scoring_curve.py` pins the behaviour and `app/benchmark/calibration.py`
-# shows the trade-off against real findings. Named, exported, and asserted rather
-# than buried in a formula.
-HALF_SCORE_DENSITY = 100.0
+# Recalibrated against five real repositories — krtk06/Chaty, psf/requests,
+# pallets/click, pallets/flask, encode/httpx — whose worst-pillar densities land in a
+# tight band of 22–39 weighted points per KLOC:
+#
+#   HALF   Chaty  requests  click  flask  httpx   (overall)
+#     25      59       67     58     54     54
+#     30      64       72     62     59     59
+#     35      68       75     66     62     63
+#    100      88       92     90     87     87
+#
+# At 100 every repository scored in the high eighties or above: Chaty's 4 high-severity
+# security findings read as 88/100, which is not a number a reader should act on. At 30
+# the median repository's weakest dimension sits near half marks (worst pillars 44–57)
+# and overalls land in the high fifties to low seventies — uncomfortable, and honest
+# about what the analyzers actually found. benchmark/REPORT.md holds the per-repository
+# reports and this table.
+#
+# Only the benchmark should move it, and moving it invalidates every stored score.
+# `tests/test_scoring_curve.py` pins the behaviour relative to this constant rather than
+# to literals, and `app/benchmark/calibration.py` shows the trade-off.
+HALF_SCORE_DENSITY = 30.0
 
 # How far above its worst pillar the overall may sit. A weighted mean alone lets
 # five healthy pillars average away one catastrophic one — a repository with
@@ -96,6 +109,25 @@ WORST_PILLAR_HEADROOM = 15
 # with the ratio curve a small denominator no longer saturates the score.
 MIN_KLOC = 0.001
 
+# Weighted finding-points at which a pillar scores 50 when the repository has no LOC
+# measurement, so density cannot be computed.
+#
+# Density is the right basis only when the denominator was actually measured. The
+# indexer stores `loc = 0` when it indexes nothing — a repository of one README, or
+# a language it does not recognise — and dividing by MIN_KLOC then yields densities in
+# the tens of thousands, so two trivial findings ("no test suite", "no README") scored
+# a repository 15/100, while 13 findings including 4 high-severity security hits on a
+# real 2,565-line repository scored 88. Both numbers were artefacts of the denominator.
+#
+# So a missing LOC switches basis instead of substituting a tiny one: the same ratio
+# curve over raw weighted finding-points. It stays monotonic and saturating, and the
+# payload records which basis produced the number so a reader is never misled about
+# comparing a count-scored repository with a density-scored one.
+#
+# 20 points is roughly two high-severity or four medium findings, which reads as
+# "half marks" for a repository too small to measure.
+COUNT_HALF_SCORE_PENALTY = 20.0
+
 
 def _clamp(value: float, low: int = 0, high: int = 100) -> int:
     return max(low, min(high, round(value)))
@@ -105,6 +137,15 @@ def _pillar_score(weighted_penalty: float, kloc: float) -> int:
     """Ratio curve: 100 with no findings, 50 at HALF_SCORE_DENSITY, asymptotic to 0."""
     density = weighted_penalty / kloc
     return _clamp(100 / (1 + density / HALF_SCORE_DENSITY))
+
+
+def _pillar_score_by_count(weighted_penalty: float) -> int:
+    """Ratio curve over raw weighted points, for a repository with no LOC measurement.
+
+    Same shape as the density curve so the aggregation, the worst-pillar cap, and the
+    direction of every comparison are unchanged; only the denominator differs.
+    """
+    return _clamp(100 / (1 + weighted_penalty / COUNT_HALF_SCORE_PENALTY))
 
 
 def compute_score(session: Session, analysis_id: int) -> dict:
@@ -133,16 +174,32 @@ def compute_score(session: Session, analysis_id: int) -> dict:
         elif finding.status == FindingStatus.DISMISSED:
             pillar_dismissed[pillar] += 1
 
-    kloc = max((loc or 0) / 1000, MIN_KLOC)
+    # A measured LOC means density is meaningful. An absent one does not, and the old
+    # MIN_KLOC floor turned "unmeasured" into a density of tens of thousands, so
+    # switch basis to raw weighted points rather than invent a denominator.
+    basis = "density" if loc else "count"
+    kloc = (loc / 1000) if loc else None
     pillars = {}
     for pillar in PILLARS:
+        penalty = pillar_penalty[pillar]
+        if kloc is not None:
+            pillar_score = _pillar_score(penalty, kloc)
+        else:
+            pillar_score = _pillar_score_by_count(penalty)
+        # A pillar with findings never reports 0. The curve is asymptotic, so a strict
+        # calibration rounds the worst cases down to 0, which reads as "clean" rather
+        # than "catastrophic" and is indistinguishable from a pillar nothing was measured
+        # on unless the reader also checks the finding count. 1 is the floor: still
+        # terrible, still ordered, never ambiguous.
+        if penalty > 0:
+            pillar_score = max(1, pillar_score)
         pillars[pillar] = {
-            "score": _pillar_score(pillar_penalty[pillar], kloc),
+            "score": pillar_score,
             "findings": pillar_counts[pillar],
             "verified": pillar_verified[pillar],
             "hypotheses": pillar_hypotheses[pillar],
             "dismissed": pillar_dismissed[pillar],
-            "weighted_penalty": round(pillar_penalty[pillar], 2),
+            "weighted_penalty": round(penalty, 2),
         }
 
     weighted_mean = sum(pillars[p]["score"] * PILLAR_WEIGHTS[p] for p in PILLARS)
@@ -150,10 +207,12 @@ def compute_score(session: Session, analysis_id: int) -> dict:
     # An unmeasured pillar scores 100, so it can never lower the cap.
     overall = min(weighted_mean, worst_pillar + WORST_PILLAR_HEADROOM)
     return {
-        "version": 4,
+        "version": 5,
         "overall": _clamp(overall),
         "loc": loc,
-        "kloc": round(kloc, 4),
+        "kloc": round(kloc, 4) if kloc is not None else None,
+        "basis": basis,
+        "count_half_score_penalty": COUNT_HALF_SCORE_PENALTY,
         "pillars": pillars,
         "weights": PILLAR_WEIGHTS,
         "half_score_density": HALF_SCORE_DENSITY,

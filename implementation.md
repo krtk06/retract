@@ -367,6 +367,46 @@ environment does not have — public-CVE commit pairs, or a provider credential.
   HTTP probe can never pass for a Celery worker — so `docker compose up` there reported
   `worker` unhealthy while it worked. Both files now carry the control-channel probe.
 
+**Scoring: a missing denominator, and recalibration against several repositories**
+
+  Browser review of a second repository (`octocat/Hello-World`, 2 trivial findings)
+  returned **15/100** while `krtk06/Chaty` — 13 findings including 4 high-severity
+  credential hits — returned **88**. Both numbers were artefacts of the denominator.
+  The indexer stores `loc = 0` for a repository it cannot index, and the density curve
+  divided by `MIN_KLOC = 0.001`, i.e. one line of code, giving densities in the tens of
+  thousands. Two fixes:
+
+  - A missing LOC now switches basis to raw weighted finding-points
+    (`COUNT_HALF_SCORE_PENALTY = 20`) instead of substituting a tiny denominator, and the
+    payload carries `basis: "count"` plus `kloc: null` so a count-scored repository is
+    never silently compared with a density-scored one. `version` is now 5.
+    Hello-World scores 65.
+  - The stricter calibration made the asymptotic curve round its worst cases to 0, which
+    reads as "clean" rather than "catastrophic" — the failure the v3 rewrite was meant to
+    remove. A pillar with findings now floors at 1.
+
+  `HALF_SCORE_DENSITY` went 250 → 100 → **30**, the first two from single runs. Measured
+  across five real repositories (`krtk06/Chaty`, `psf/requests`, `pallets/click`,
+  `pallets/flask`, `encode/httpx`), worst-pillar density clusters in 22–39 points per
+  KLOC; at 100 every repository scored 87–92. At 30 the median repository's weakest
+  dimension sits near half marks and overalls land at 59–72. Reports and the sweep are in
+  `benchmark/REPORT.md`, and changing the constant invalidates every stored score, so the
+  dashboard's run-over-run delta stays suppressed when the calibration differs.
+
+  A by-product worth noting: the strictness revealed that `tests/test_scoring_curve.py`
+  encoded the *previous* calibration in three places — a finding count that only produced
+  a meaningful density while the constant was 20 times the HIGH weight, a "tiny repo is
+  unhealthy, not dead" threshold, and a worst-pillar-cap fixture whose bare mean stopped
+  looking healthy. Those now assert the behaviour rather than the old numbers.
+
+**Navigation: getting back to the repository list**
+
+  An analysis page offered no way back to the list, so starting a second repository meant
+  editing the URL. The header title was in fact a working link to `/`, but styled as
+  static text with no hover cue. Added an explicit `← Back` control above the repository
+  name — present while the analysis is still running, so a run can be abandoned — and
+  gave the title a hover underline and muted colour.
+
 **Fail-closed secrets (`backend/app/config.py`)**
 
   Compose refuses to start without its five required variables, but the application

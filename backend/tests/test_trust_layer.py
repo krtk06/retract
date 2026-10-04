@@ -252,8 +252,10 @@ def test_honest_score_discounts_hypotheses_and_dismissals(analysis_id: int) -> N
         assert security["verified"] == 1
         assert security["hypotheses"] == 1
         assert security["dismissed"] == 1
+        # 20 verified + 20 hypothesis at half weight = 30 points over 1 KLOC, which is
+        # exactly HALF_SCORE_DENSITY, so the pillar lands on the half-score point.
         assert security["weighted_penalty"] == pytest.approx(30.0)
-        assert security["score"] == 77
-        assert score["version"] == 4
+        assert security["score"] == 50
+        assert score["version"] == 5
     finally:
         session.close()

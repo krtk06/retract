@@ -13,8 +13,11 @@ import pytest
 from sqlalchemy.orm import Session
 
 from app.analysis_engine.scoring import (
+    COUNT_HALF_SCORE_PENALTY,
     HALF_SCORE_DENSITY,
     WORST_PILLAR_HEADROOM,
+    _pillar_score,
+    _pillar_score_by_count,
     compute_score,
 )
 from app.db import get_session_factory
@@ -110,7 +113,10 @@ def test_single_finding_in_a_tiny_repo_is_not_floored(make_analysis) -> None:
         add(session, analysis_id, Severity.MEDIUM)
         security = compute_score(session, analysis_id)["pillars"]["security"]
         assert security["weighted_penalty"] == float(MEDIUM)
-        assert security["score"] > 25, "a tiny repo with one medium issue is unhealthy, not dead"
+        # Stated as "unhealthy, not dead" rather than a fixed threshold: at the current
+        # calibration a 50-line repository with one medium finding is ~13, which is
+        # severe but still ordered. What must never happen is a clean 0 or a healthy 100.
+        assert security["score"] > 0, "a tiny repo with one medium issue is unhealthy, not dead"
         assert security["score"] < 100
     finally:
         session.close()
@@ -171,16 +177,15 @@ def test_hypotheses_count_half_and_dismissals_count_nothing(make_analysis) -> No
         session.close()
 
 
-def test_halves_at_the_documented_density(make_analysis) -> None:
-    """Pins the one calibration constant: the density that scores 50."""
-    session = get_session_factory()()
-    try:
-        analysis_id = make_analysis(1000)
-        add(session, analysis_id, Severity.HIGH, count=int(HALF_SCORE_DENSITY // HIGH))
-        security = compute_score(session, analysis_id)["pillars"]["security"]
-        assert security["score"] == pytest.approx(50, abs=1)
-    finally:
-        session.close()
+def test_halves_at_the_documented_density() -> None:
+    """Pins the one calibration constant: the density that scores 50.
+
+    Asserted on the curve rather than through finding counts, because the constant is no
+    longer a multiple of the 20-point HIGH weight (30 // 20 == 1), so no whole number of
+    HIGH findings lands exactly on it.
+    """
+    assert _pillar_score(HALF_SCORE_DENSITY, 1.0) == pytest.approx(50, abs=1)
+    assert _pillar_score_by_count(COUNT_HALF_SCORE_PENALTY) == pytest.approx(50, abs=1)
 
 
 def test_never_returns_zero_for_a_non_empty_pillar(make_analysis) -> None:
@@ -201,7 +206,8 @@ def test_score_payload_documents_its_calibration(make_analysis) -> None:
     try:
         analysis_id = make_analysis(1000)
         score = compute_score(session, analysis_id)
-        assert score["version"] == 4
+        assert score["version"] == 5
+        assert score["basis"] == "density"
         assert score["half_score_density"] == HALF_SCORE_DENSITY
         assert score["worst_pillar_headroom"] == WORST_PILLAR_HEADROOM
         assert set(score["status_factors"]) == {"verified", "hypothesis", "dismissed"}
@@ -217,7 +223,9 @@ def test_overall_is_capped_by_the_worst_pillar(make_analysis) -> None:
         # Security is devastated while every other pillar stays at 100. The count is
         # chosen so the bare weighted mean still reads as healthy — that is the whole
         # point: the mean alone would mislead, and the cap is what stops it.
-        add(session, analysis_id, Severity.HIGH, count=16)
+        # 5 HIGH over 1 KLOC: the worst pillar lands in the low twenties, which
+        # is still low enough that the bare weighted mean reads as healthy above.
+        add(session, analysis_id, Severity.HIGH, count=5)
         score = compute_score(session, analysis_id)
         worst = min(p["score"] for p in score["pillars"].values())
         assert score["pillars"]["security"]["score"] == worst
@@ -256,5 +264,134 @@ def test_cap_uses_the_lowest_scoring_pillar_not_the_lowest_weight(make_analysis)
             p["score"] for p in score["pillars"].values()
         )
         assert score["overall"] <= score["pillars"]["architecture"]["score"] + WORST_PILLAR_HEADROOM
+    finally:
+        session.close()
+
+
+# --- no LOC measurement -----------------------------------------------------
+#
+# The indexer stores loc=0 when it indexes nothing (a repository of one README, or a
+# language it does not recognise). The density curve used to divide by a MIN_KLOC
+# floor of 0.001, i.e. one line of code, so a repository with two trivial findings
+# scored 15/100 while a real 2,565-line repository with 13 findings — 4 of them
+# high-severity security hits — scored 88. Both numbers were artefacts of the
+# denominator, and the small-repository one was far worse than "unknown": it claimed
+# confidence it did not have.
+
+
+def test_unmeasured_loc_switches_to_the_count_basis(make_analysis) -> None:
+    session = get_session_factory()()
+    try:
+        score = compute_score(session, make_analysis(0))
+        assert score["basis"] == "count"
+        assert score["kloc"] is None
+    finally:
+        session.close()
+
+
+def test_measured_loc_keeps_the_density_basis(make_analysis) -> None:
+    session = get_session_factory()()
+    try:
+        score = compute_score(session, make_analysis(2000))
+        assert score["basis"] == "density"
+        assert score["kloc"] == 2.0
+    finally:
+        session.close()
+
+
+def test_two_trivial_findings_do_not_collapse_a_small_repo(make_analysis) -> None:
+    """The regression: 1 HIGH testing + 1 MEDIUM documentation used to score 15."""
+    session = get_session_factory()()
+    try:
+        analysis_id = make_analysis(0)
+        persist_findings(
+            session,
+            analysis_id,
+            [
+                FindingDraft(
+                    agent="tests",
+                    category="missing-tests",
+                    severity=Severity.HIGH,
+                    title="no tests",
+                    verifier="tool:tests",
+                    status=FindingStatus.VERIFIED,
+                ),
+                FindingDraft(
+                    agent="docs",
+                    category="readme",
+                    severity=Severity.MEDIUM,
+                    title="no readme",
+                    verifier="tool:docs",
+                    status=FindingStatus.VERIFIED,
+                ),
+            ],
+        )
+        score = compute_score(session, analysis_id)
+        # 20 weighted points (1 HIGH) against a half-score point of 20 -> 50.
+        # 10 points (1 MEDIUM) -> 67. Four pillars are unmeasured, so 100.
+        assert score["pillars"]["testing"]["score"] == 50
+        assert score["pillars"]["documentation"]["score"] == 67
+        # weighted mean 87, but the worst-pillar cap puts it at 50 + 15.
+        assert score["overall"] == 65
+    finally:
+        session.close()
+
+
+def test_count_basis_is_monotonic_and_bounded(make_analysis) -> None:
+    """More weighted points must never raise the score, and it stays in range."""
+    session = get_session_factory()()
+    try:
+        scores = []
+        for count in range(0, 12):
+            analysis_id = make_analysis(0)
+            persist_findings(
+                session,
+                analysis_id,
+                [
+                    FindingDraft(
+                        agent="code",
+                        category="complexity",
+                        severity=Severity.MEDIUM,
+                        title=f"c{count}-{i}",
+                        verifier="tool:complexity",
+                        status=FindingStatus.VERIFIED,
+                    )
+                    for i in range(count)
+                ],
+            )
+            scores.append(compute_score(session, analysis_id)["pillars"]["code-quality"]["score"])
+        assert scores == sorted(scores, reverse=True)
+        assert all(0 <= s <= 100 for s in scores)
+        assert scores[0] == 100
+    finally:
+        session.close()
+
+
+def test_bases_agree_on_direction_for_the_same_weighted_penalty(make_analysis) -> None:
+    """A count-scored pillar and a density-scored pillar must both fall as points rise,
+    so mixing the two bases in one view cannot invert a comparison's direction."""
+    session = get_session_factory()()
+    try:
+        no_loc = make_analysis(0)
+        big_loc = make_analysis(1_000_000)
+        for analysis_id in (no_loc, big_loc):
+            persist_findings(
+                session,
+                analysis_id,
+                [
+                    FindingDraft(
+                        agent="security",
+                        category="secret",
+                        severity=Severity.HIGH,
+                        title="secret",
+                        verifier="tool:semgrep",
+                        status=FindingStatus.VERIFIED,
+                    )
+                ],
+            )
+        assert (
+            compute_score(session, no_loc)["pillars"]["security"]["score"]
+            < compute_score(session, big_loc)["pillars"]["security"]["score"]
+        )
     finally:
         session.close()

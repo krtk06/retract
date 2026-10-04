@@ -121,8 +121,8 @@ The pipeline is scored against fixture repositories with known planted condition
 
 ```bash
 cd backend
-python -m app.benchmark --repo seedy-python-app            # writes benchmark/REPORT.md
-python -m app.benchmark --repo seedy-python-app --stdout   # print instead
+python -m app.benchmark --analysis-id 1 --stdout           # re-score an existing run
+python -m app.benchmark --analysis-id 1 --out ../benchmark/reports/Chaty.md
 ```
 
 Latest run on `benchmark/seedy-python-app` (analysis #18, 11 planted expectations):
@@ -136,8 +136,8 @@ Latest run on `benchmark/seedy-python-app` (analysis #18, 11 planted expectation
 | Verification coverage | 92% (23 verified / 2 hypothesis) |
 | Planted false positives triaged | 1/1 dismissed |
 
-The score curve was recalibrated against a real repository after this fixture was
-built. See [Scoring](#scoring) for what changed and why.
+The score curve is calibrated against several real repositories, not this fixture. See
+[Scoring](#scoring) and [benchmark/REPORT.md](benchmark/REPORT.md).
 
 Two numbers are reported on purpose. A ground-truth file enumerates *conditions*,
 while a pipeline reports findings per *(tool × rule × occurrence)*, so flagging one
@@ -178,20 +178,36 @@ Three constants, all exported and covered by tests:
 
 | Constant | Value | Meaning |
 | --- | --- | --- |
-| `HALF_SCORE_DENSITY` | 100 | findings per KLOC at which a pillar scores 50 — i.e. 5 high-severity findings per thousand lines |
+| `HALF_SCORE_DENSITY` | 30 | weighted finding-points per KLOC at which a pillar scores 50 |
+| `COUNT_HALF_SCORE_PENALTY` | 20 | the same half-score point when no LOC was measured, in raw points |
 | `WORST_PILLAR_HEADROOM` | 15 | how far the overall may sit above its worst pillar |
 | `SEVERITY_WEIGHT` | 30/20/10/5 | critical/high/medium/low |
 
-`HALF_SCORE_DENSITY` was 250 until the pipeline was run on a real repository.
-At 250, `psf/requests` (12,032 LOC, 10 import cycles, SHA1-based HMAC
-authentication) scored 96/100 with a worst pillar of 92 — and because the worst
-pillar was that high, the headroom cap could never bind, leaving it inert. At 100
-the same run scores 92 and the cap engages:
+`HALF_SCORE_DENSITY` has been 250, then 100, and is now **30**. It was 250 until the
+pipeline ran on a real repository instead of only an 83-line fixture; it was 100 after
+that single run, which turned out to be far too lenient once measured against several
+repositories at once — at 100 every repository measured scored 87–92, including one with
+four high-severity credential findings. The worst-pillar density across five real
+repositories clusters in 22–39 points per KLOC, so 30 puts a typical repository's weakest
+dimension near half marks:
 
-| | before (250) | after (100) |
+| | at 100 | at 30 |
 | --- | --- | --- |
-| `psf/requests`, 12 032 LOC | 96 | **92** |
-| `seedy-python-app`, 83 LOC | 27 | **20** |
+| `krtk06/Chaty`, 2 565 LOC, 13 findings | 88 | **64** |
+| `psf/requests`, 12 032 LOC, 63 findings | 92 | **72** |
+| `pallets/click`, 30 181 LOC, 164 findings | 90 | **62** |
+| `pallets/flask`, 18 352 LOC, 163 findings | 87 | **59** |
+| `encode/httpx`, 17 753 LOC, 157 findings | 87 | **59** |
+
+Per-repository reports and the full sweep are in
+[benchmark/REPORT.md](benchmark/REPORT.md).
+
+**When no LOC was measured**, density cannot be computed at all — the indexer stores
+`loc = 0` for a repository it cannot index. The curve then switches to raw weighted
+finding-points (`COUNT_HALF_SCORE_PENALTY`) instead of dividing by a tiny floor, and the
+payload reports `basis: "count"` so the number is never silently compared against a
+density-scored one. `octocat/Hello-World` scores 65 this way; under the old floor the
+same two trivial findings scored it 15.
 
 Changing either constant changes every score without changing the formula version,
 so the dashboard withholds the run-over-run delta when the calibration differs, not

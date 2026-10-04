@@ -89,9 +89,14 @@ export function ScoreHero({ score }: { score: Score | null }) {
         </div>
         <div className="text-right">
           <Delta delta={score.delta} />
-          {score.loc != null && (
+          {score.loc != null && score.kloc != null && (
             <p className="mt-1 text-xs text-zinc-500">
               {score.loc.toLocaleString()} LOC · {score.kloc} KLOC
+            </p>
+          )}
+          {score.basis === "count" && (
+            <p className="mt-1 text-xs text-zinc-500">
+              No LOC measured — scored on finding count
             </p>
           )}
         </div>

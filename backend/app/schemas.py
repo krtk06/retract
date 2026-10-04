@@ -120,7 +120,11 @@ class ScoreOut(BaseModel):
     version: int
     overall: int
     loc: int | None
-    kloc: float
+    # None when no LOC was measured: the score then comes from raw weighted
+    # finding-points rather than density, and `basis` says so.
+    kloc: float | None = None
+    basis: str | None = None
+    count_half_score_penalty: float | None = None
     pillars: dict[str, dict[str, Any]]
     previous_overall: int | None = None
     delta: int | None = None

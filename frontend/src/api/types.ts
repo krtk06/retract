@@ -30,7 +30,10 @@ export interface Score {
   version: number;
   overall: number;
   loc: number | null;
-  kloc: number;
+  // null when no LOC was measured; the score then comes from raw weighted
+  // finding-points rather than density.
+  kloc: number | null;
+  basis?: "density" | "count" | null;
   pillars: Record<string, ScorePillar>;
   previous_overall?: number | null;
   delta?: number | null;
