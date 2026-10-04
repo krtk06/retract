@@ -97,34 +97,41 @@ jobs:
           AI_INTEL_AGENT_TOKEN: ci-agent-token
           AI_INTEL_JWT_SECRET: ci-jwt-secret-at-least-32-bytes-long
           AI_GATEWAY_API_KEY: ci-not-a-real-key
-      - name: Start stack
-        run: docker compose -f infra/docker-compose.prod.yml up -d
+      - name: Start stack and wait for health
+        # `--wait` gates on every service's healthcheck, which is what caught the
+        # three healthcheck bugs found by running this locally (the agent probing an
+        # authenticated route, and the Celery worker inheriting the API's HTTP probe).
+        # Cold start is ~35s; the timeout is slack for a loaded runner.
+        run: docker compose -f infra/docker-compose.prod.yml up -d --wait --wait-timeout 300
         env:
           POSTGRES_USER: postgres
           POSTGRES_PASSWORD: postgres
           AI_INTEL_AGENT_TOKEN: ci-agent-token
           AI_INTEL_JWT_SECRET: ci-jwt-secret-at-least-32-bytes-long
           AI_GATEWAY_API_KEY: ci-not-a-real-key
-      - name: Wait for health
+      - name: Diagnostics on failure
+        if: failure()
         run: |
-          set -euo pipefail
-          for i in $(seq 1 60); do
-            if [ "$(docker inspect -f '{{.State.Health.Status}}' infra-frontend-1 2>/dev/null)" = "healthy" ]; then
-              echo "frontend healthy after ${i}0s"; exit 0
-            fi
-            sleep 10
-          done
-          echo "frontend never became healthy:"; docker compose -f infra/docker-compose.prod.yml ps
-          docker compose -f infra/docker-compose.prod.yml logs --tail=50
-          exit 1
+          docker compose -f infra/docker-compose.prod.yml ps -a
+          docker compose -f infra/docker-compose.prod.yml logs --tail=80
       - name: Probe through the frontend
-        # Proving the nginx layer: these paths are served by the bundle, proxied
+        # Proving the nginx layer: these paths are served by the bundle and proxied
         # to the API and the agent respectively.
         run: |
           set -euo pipefail
           curl --fail --silent --show-error http://localhost/api/health
           echo
-          curl --fail --silent --show-error http://localhost/eve/v1/info > /dev/null
+          # A 401 is the pass condition here, and it is the *informative* one: it
+          # proves the request reached eve through nginx and that the channel refuses
+          # anonymous callers. Asserting 200 would mean auth had been bypassed.
+          # (Verified against a running stack: /eve/v1/info -> 401 bare, 200 with a
+          # backend-minted HS256 token.)
+          code=$(curl --silent --output /dev/null --write-out '%{http_code}' http://localhost/eve/v1/info)
+          if [ "$code" != "401" ]; then
+            echo "expected 401 from /eve/v1/info, got $code"
+            exit 1
+          fi
+          echo "agent reachable through nginx and rejecting anonymous callers (401)"
           echo "nginx bundle proxied /api and /eve"
       - name: Service auth fails closed
         run: |

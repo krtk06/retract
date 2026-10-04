@@ -9,6 +9,16 @@ RUN npm ci
 COPY . .
 
 # Build once so `eve start` serves the compiled Nitro output.
+#
+# KNOWN LIMITATION: eve compiles the agent definition — including the *resolved model* —
+# into .output/.eve/compile/compiled-agent-manifest.json at build time, so in this image
+# AI_INTEL_LLM_PROVIDER, AI_INTEL_MODEL and the NODE_ENV fixture-model guard are resolved
+# from the *build* environment and ignored at run time. Verified: a container started with
+# AI_INTEL_LLM_PROVIDER=openai and a valid AI_INTEL_API_KEY still called the AI Gateway,
+# and the manifest contained no occurrence of "openai". Note the corollary — a provider
+# needing a key (openai) would have that key baked into the manifest, so it must never be
+# built with one. Build args are the supported way to select the provider; see
+# implementation.md for the options and the reason this is not simply moved to start-up.
 RUN npm run build
 
 # Run unprivileged. /srv/agent is owned by root so the image contents cannot be
@@ -26,13 +36,17 @@ ENV HOME=/home/eve \
 
 EXPOSE 3000
 
-# /eve/v1/info is the framework's agent-info route: public (outside the auth
-# walk), ~6ms, and it only answers once the runtime is serving. Two traps avoided
-# here, both verified against a running `eve start`:
-#   * `/health` is NOT exposed by eve 0.66 in `eve start` (returns 404).
-#   * `wget --spider` sends HEAD, which this route does not answer (404); a plain
-#     GET is required, or a healthy container is reported unhealthy.
+# Liveness probe. Routes tested against a real container:
+#   /eve/v1/health -> 200, unauthenticated. This is the route to use: eve keeps it
+#                     outside the channel's auth walk.
+#   /eve/v1/info   -> 401 once AI_INTEL_JWT_SECRET is set, so it cannot be probed
+#                     blindly. (It only looked public in development, where no
+#                     secret is set and `none()` admits every caller.)
+#   /health        -> 404; /eve/health -> 404. eve does not serve either, despite
+#                     its docs implying a health route.
+# A plain GET is used rather than `wget --spider`, which sends HEAD and reports a
+# healthy server as failed.
 HEALTHCHECK --interval=15s --timeout=3s --start-period=20s --retries=3 \
-  CMD wget --quiet --tries=1 --output-document=/dev/null http://127.0.0.1:3000/eve/v1/info || exit 1
+  CMD wget --quiet --tries=1 --output-document=/dev/null http://127.0.0.1:3000/eve/v1/health || exit 1
 
 CMD ["npm", "run", "start"]

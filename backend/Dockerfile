@@ -23,7 +23,11 @@ RUN pip install .
 # Run unprivileged. /srv/app stays root-owned and read-only to the service; the
 # only writable path is the checkout/data directory the analysis pipeline uses,
 # which is a mounted volume in compose.
-RUN addgroup -S intel && adduser -S -G intel -h /home/intel intel \
+#
+# The long option forms are deliberate: python:3.12-slim is Debian trixie, whose
+# adduser/addgroup no longer accept the `-S`/`-G` short flags (they fail with exit
+# 51 and print usage), which broke the first image build.
+RUN addgroup --system intel && adduser --system --ingroup intel --home /home/intel intel \
     && mkdir -p /data \
     && chown intel:intel /data
 

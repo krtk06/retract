@@ -5,9 +5,15 @@
 #     require credentials (see README "Configuration").
 #
 # Bring it up with:
-#   AI_INTEL_AGENT_TOKEN=... AI_INTEL_JWT_SECRET=... docker compose -f docker-compose.prod.yml up --build
+#   docker compose --env-file .env -f infra/docker-compose.prod.yml up --build
 #
-# Those two secrets have no default on purpose: refusing to start without them is
+# `--env-file .env` is required from the repository root: an implicit .env is only
+# looked for beside this file, i.e. in infra/, so a root .env would be ignored and
+# every required secret below would report as missing. Passing them inline
+# (AI_INTEL_JWT_SECRET=... docker compose -f infra/docker-compose.prod.yml up)
+# also works.
+#
+# Those secrets have no default on purpose: refusing to start without them is
 # better than starting an agent that can reach the API unauthenticated.
 
 services:
@@ -78,9 +84,42 @@ services:
       AI_INTEL_DATABASE_URL: postgresql+psycopg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-ai_intel}
       AI_INTEL_REDIS_URL: redis://redis:6379/0
       AI_INTEL_DATA_DIR: /data
+      # The worker imports app.config through celery_app, so it is subject to the
+      # same production guard as the api — and it was previously inheriting the
+      # published default jwt secret silently, which is how the guard was noticed.
+      # It signs nothing itself, but any task that mints a token needs these, and
+      # same-deployment secrets should be the same secrets.
+      AI_INTEL_JWT_SECRET: ${AI_INTEL_JWT_SECRET:?set AI_INTEL_JWT_SECRET}
+      AI_INTEL_AGENT_TOKEN: ${AI_INTEL_AGENT_TOKEN:?set AI_INTEL_AGENT_TOKEN}
     command: celery -A app.tasks.celery_app:celery_app worker --loglevel=info --concurrency=2
     volumes:
       - repo_data:/data
+    # The worker needs its own probe. api and worker share one image
+    # (`build: ../backend`), so this container inherits the HTTP healthcheck baked
+    # into backend/Dockerfile -- which can never pass here, because a Celery worker
+    # serves no HTTP. Observed exactly that: ConnectionRefused on :8000, leaving the
+    # container permanently "unhealthy" while it was in fact ready and connected.
+    #
+    # The probe asks the worker's own control channel, so it asserts the worker is
+    # responsive, not merely running. A process check would be vacuous: PID 1 *is*
+    # the worker, and Docker already restarts a container whose main process exits.
+    #
+    # The timings are deliberately loose. `inspect ping` is answered between tasks,
+    # so a worker mid-analysis cannot reply; analysis runs take minutes here, and
+    # `docker compose up --wait` (used in CI) would otherwise fail spuriously.
+    # timeout > the ~4s the `celery` CLI needs to import the app: /srv/app is
+    # read-only to the unprivileged user, so no bytecode cache is written and every
+    # invocation re-compiles it.
+    # `CMD-SHELL`, not `CMD`: with the exec form the node name reaches Celery
+    # literally and `$(hostname)` is never expanded, so the probe pings a node that
+    # does not exist and fails with "No nodes replied within time constraint" (seen).
+    # Compose collapses the `$$` to `$`, the container shell expands it.
+    healthcheck:
+      test: ["CMD-SHELL", "celery -A app.tasks.celery_app:celery_app inspect ping -d \"celery@$$(hostname)\" -t 10 || exit 1"]
+      interval: 60s
+      timeout: 20s
+      start_period: 120s
+      retries: 5
     depends_on:
       postgres:
         condition: service_healthy
@@ -91,11 +130,20 @@ services:
     build: ../agent
     restart: unless-stopped
     environment:
+      # Not cosmetic: eve.ts fails the auth walk closed on NODE_ENV=production when
+      # AI_INTEL_JWT_SECRET is missing, and agent.ts refuses the fixture model. Both
+      # guards are inert without this.
+      NODE_ENV: production
       AI_INTEL_API_URL: http://api:8000
       AI_INTEL_AGENT_TOKEN: ${AI_INTEL_AGENT_TOKEN:?set AI_INTEL_AGENT_TOKEN}
       AI_INTEL_JWT_SECRET: ${AI_INTEL_JWT_SECRET:?set AI_INTEL_JWT_SECRET}
       AI_INTEL_LLM_PROVIDER: ${AI_INTEL_LLM_PROVIDER:-gateway}
       AI_INTEL_MODEL: ${AI_INTEL_MODEL:-anthropic/claude-sonnet-4.5}
+      # Only read when AI_INTEL_LLM_PROVIDER=openai, which fails fast without it.
+      # Not previously passed through, so choosing `openai` here could not work at all.
+      AI_INTEL_API_KEY: ${AI_INTEL_API_KEY:-}
+      # Required by this compose file regardless of provider, so `openai` and `mock`
+      # still need some value here even though they never call the gateway.
       AI_GATEWAY_API_KEY: ${AI_GATEWAY_API_KEY:?set AI_GATEWAY_API_KEY}
       PORT: "3000"
     volumes:
@@ -109,7 +157,13 @@ services:
       - "3000"
 
   frontend:
-    build: ../frontend
+    build:
+      context: ../frontend
+      # Explicit, because this compose file ships the built bundle behind nginx.
+      # Without a target the build takes the Dockerfile's last stage, which is
+      # easy to break by reordering: doing so once published the Vite dev server
+      # on :80 and every request to the published port was refused.
+      target: runtime
     restart: unless-stopped
     ports:
       - "${HTTP_PORT:-80}:80"

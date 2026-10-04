@@ -40,22 +40,33 @@ re-checks. The agent cannot publish a score or judge a finding by itself.
 
 ```bash
 cp .env.example .env      # set AI_INTEL_AGENT_TOKEN and AI_INTEL_JWT_SECRET
-cd infra
-docker compose up --build
+docker compose --env-file .env -f infra/docker-compose.yml up --build
 ```
+
+`--env-file .env` is required, not decorative. Compose looks for an implicit `.env`
+next to the compose file, and both compose files live in `infra/`, so a `.env` at
+the repository root is silently ignored and every required secret comes back
+missing. Passing the file explicitly is what makes the root `.env` do double duty
+for both local (non-Docker) development and the containers. Passing secrets inline
+instead also works.
 
 - Frontend: http://localhost:5173 (Vite dev server)
 - API: http://localhost:8000 (`/api/health`, OpenAPI at `/docs`)
-- Agent: http://localhost:3000 (`/eve`)
+- Agent: http://localhost:3000 — its bundled UI is at `/`, and its HTTP API at
+  `/eve/v1/*` (the eve React SDK's base path). There is no UI at `/eve`; that path
+  belongs to the API prefix only.
 
 ### Production
 
 ```bash
-cd infra
-POSTGRES_USER=... POSTGRES_PASSWORD=... \
-AI_INTEL_JWT_SECRET=... AI_INTEL_AGENT_TOKEN=... AI_GATEWAY_API_KEY=... \
-docker compose -f docker-compose.prod.yml up --build
+docker compose --env-file .env -f infra/docker-compose.prod.yml up --build
 ```
+
+with `POSTGRES_USER`, `POSTGRES_PASSWORD`, `AI_INTEL_JWT_SECRET`,
+`AI_INTEL_AGENT_TOKEN` and `AI_GATEWAY_API_KEY` in `.env` (see `.env.example`).
+They are deliberately required with no defaults: refusing to start beats starting
+an agent that can reach the API unauthenticated. Note that *every* compose
+subcommand interpolates the file, so `ps` and `down` need those variables too.
 
 Differences from the dev stack, all deliberate:
 
