@@ -1,5 +1,6 @@
 """Architecture runner: import cycles and god modules from the symbol graph (D4)."""
 
+import logging
 from collections import defaultdict
 
 from sqlalchemy import select
@@ -12,6 +13,18 @@ from app.services.tools.findings import FindingDraft
 MAX_CYCLES_REPORTED = 10
 FAN_IN_FLOOR = 10
 FAN_IN_FACTOR = 3
+
+# The search below restarts a DFS from every module, and the per-path length cap (10)
+# bounds the depth but not the width: a large acyclic graph with many distinct paths
+# still explores combinatorially. Capping on "cycles found" does not help, because a
+# repository with few or no cycles never reaches that cap and the loop runs to
+# exhaustion — which is why this step was the one that timed out on the biggest
+# repositories in the sweep. A step counter bounds the work directly, regardless of
+# whether the answer is one cycle or none.
+MAX_CYCLE_STEPS = 200_000
+MAX_CYCLE_PATH = 10
+
+logger = logging.getLogger(__name__)
 
 
 def run_architecture(ctx: ToolContext) -> list[FindingDraft]:
@@ -64,13 +77,23 @@ def _is_internal(name: str, module_names: set[str]) -> bool:
 def _cycles(
     imports_out: dict[int, set[int]], module_by_id: dict[int, Symbol]
 ) -> list[FindingDraft]:
-    # Iterative DFS cycle detection, limited to keep runtime bounded.
+    """Iterative DFS cycle detection, bounded by total steps rather than by results.
+
+    Two independent limits apply. `remaining` caps total exploration so a wide acyclic
+    graph cannot run away, and the `found` cap stops the outer loop once enough cycles
+    are known. The step budget is the one that matters for runtime, since a repository
+    with no cycles at all never satisfies the second.
+    """
     found: list[list[int]] = []
     seen_cycles: set[frozenset] = set()
+    remaining = MAX_CYCLE_STEPS
     for start in imports_out:
+        if remaining <= 0 or len(found) >= MAX_CYCLES_REPORTED * 2:
+            break
         stack = [(start, [start])]
-        while stack and len(found) < MAX_CYCLES_REPORTED * 2:
+        while stack and remaining > 0 and len(found) < MAX_CYCLES_REPORTED * 2:
             node, path = stack.pop()
+            remaining -= 1
             for nxt in imports_out.get(node, ()):
                 if nxt == start:
                     cycle = path
@@ -78,8 +101,16 @@ def _cycles(
                     if key not in seen_cycles:
                         seen_cycles.add(key)
                         found.append(cycle)
-                elif nxt not in path and len(path) < 10:
+                elif nxt not in path and len(path) < MAX_CYCLE_PATH:
                     stack.append((nxt, [*path, nxt]))
+        if remaining <= 0:
+            logger.info(
+                "import-cycle search stopped at the %d step budget; reported %d of a "
+                "possible unknown number of cycles",
+                MAX_CYCLE_STEPS,
+                len(found),
+            )
+            break
 
     drafts: list[FindingDraft] = []
     for cycle in found[:MAX_CYCLES_REPORTED]:

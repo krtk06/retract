@@ -98,8 +98,21 @@ def run_analysis(analysis_id: int) -> dict:
 
         # Deterministic tools in parallel, then verify + score.
         # The eve agent (agent/ in this repo) runs afterwards against this analysis.
+        #
+        # on_error is not optional. run_tool catches its own exceptions so a single
+        # failing tool cannot break the chord, but a hard `time_limit` is enforced by
+        # billiard in the pool *parent*, which SIGKILLs the child. That exception never
+        # reaches run_tool's except clause, so the chord dependency simply never
+        # returns, `finalize_analysis` is never called, and the analysis is stranded at
+        # `running` with no score and no error. The callback is what turns that silence
+        # into a recorded failure.
         header = group(run_tool.s(name, analysis_id, str(dest)) for name in TOOL_RUNNERS)
-        chord(header)(finalize_analysis.s(analysis_id))
+        result = chord(header)(finalize_analysis.s(analysis_id))
+        # Eager mode (tests) returns an EagerResult, which runs inline and has no
+        # errback to attach; there the exception propagates to the handler above, which
+        # records the failure directly. Only a real dispatched AsyncResult needs this.
+        if hasattr(result, "on_error"):
+            result.on_error(on_chord_error.s(analysis_id))
         return {"ok": True, "dispatched": list(TOOL_RUNNERS)}
     except Exception as exc:  # noqa: BLE001 — record and report, don't crash the worker
         logger.exception("analysis %s failed", analysis_id)
@@ -116,6 +129,43 @@ def run_analysis(analysis_id: int) -> dict:
         return {"ok": False, "error": str(exc)}
     finally:
         session.close()
+
+
+@celery_app.task(name="app.tasks.analysis.on_chord_error")
+def on_chord_error(exc: BaseException, analysis_id: int) -> dict:
+    """Record a failed fan-out so the analysis cannot stay `running` forever.
+
+    A tool killed by Celery's hard time limit produces a ChordError here rather than a
+    task result, so without this the analysis row keeps `status=running` indefinitely:
+    no score, no error message, and nothing for the dashboard to show. Marking it
+    `failed` is the difference between "this repo could not be analyzed" and a run that
+    hangs with no explanation.
+
+    `finalize_analysis` is not called on this path even though most findings may have
+    been persisted, because a partial score would misrepresent the repository.
+    """
+    logger.exception("analysis %s fan-out failed", analysis_id)
+    detail = f"{type(exc).__name__}: {exc}" if exc else "unknown chord failure"
+    message = f"analysis tools did not complete ({detail[:500]})"
+    try:
+        session = get_session_factory()()
+    except Exception:  # noqa: BLE001 — never let the failure reporter itself raise
+        logger.exception("could not open a session to record the failure")
+        return {"ok": False, "analysis_id": analysis_id}
+
+    try:
+        analysis = session.get(Analysis, analysis_id)
+        if analysis is not None and analysis.status != AnalysisStatus.DONE:
+            analysis.status = AnalysisStatus.FAILED
+            analysis.finished_at = datetime.now(UTC)
+            analysis.error = message
+            session.commit()
+        get_bus().publish(analysis_id, "failed", {"error": message})
+    except Exception:  # noqa: BLE001
+        logger.exception("failed to record chord failure for analysis %s", analysis_id)
+    finally:
+        session.close()
+    return {"ok": True, "analysis_id": analysis_id, "error": message}
 
 
 @celery_app.task(name="app.tasks.analysis.finalize_analysis")
