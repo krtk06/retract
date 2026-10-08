@@ -356,12 +356,12 @@ def summary(db: Session, analysis_id: int) -> dict:
     ).all():
         symbol_counts[kind.value] = count
     edge_counts: dict[str, int] = {}
-    for kind, count in db.execute(
+    for edge_kind, count in db.execute(
         select(Edge.kind, func.count(Edge.id))
         .where(Edge.analysis_id == analysis_id)
         .group_by(Edge.kind)
     ).all():
-        edge_counts[kind.value] = count
+        edge_counts[edge_kind.value] = count
     top_modules = db.execute(
         select(Symbol.name, func.count(Edge.id).label("imports"))
         .join(Edge, Edge.src_symbol_id == Symbol.id)

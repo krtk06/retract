@@ -154,4 +154,13 @@ jobs:
         run: docker compose -f infra/docker-compose.prod.yml logs --tail=100
       - name: Tear down
         if: always()
+        # Same interpolation rules as `up`: compose resolves every `${VAR:?}`
+        # before executing any subcommand, so teardown needs the variables even
+        # though it tears nothing that uses them. Missing here is what left this
+        # job red after a fully successful run.
         run: docker compose -f infra/docker-compose.prod.yml down -v
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          RETRACT_AGENT_TOKEN: ci-agent-token
+          RETRACT_JWT_SECRET: ci-jwt-secret-at-least-32-bytes-long
