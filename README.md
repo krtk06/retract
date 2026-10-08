@@ -62,11 +62,17 @@ instead also works.
 docker compose --env-file .env -f infra/docker-compose.prod.yml up --build
 ```
 
-with `POSTGRES_USER`, `POSTGRES_PASSWORD`, `AI_INTEL_JWT_SECRET`,
-`AI_INTEL_AGENT_TOKEN` and `AI_GATEWAY_API_KEY` in `.env` (see `.env.example`).
-They are deliberately required with no defaults: refusing to start beats starting
-an agent that can reach the API unauthenticated. Note that *every* compose
-subcommand interpolates the file, so `ps` and `down` need those variables too.
+with `POSTGRES_USER`, `POSTGRES_PASSWORD`, `AI_INTEL_JWT_SECRET` and
+`AI_INTEL_AGENT_TOKEN` in `.env` (see `.env.example`). They are deliberately
+required with no defaults: refusing to start beats starting an agent that can
+reach the API unauthenticated. Note that *every* compose subcommand interpolates
+the file, so `ps` and `down` need those variables too.
+
+The LLM credential is *not* in that list, because the agent validates it itself,
+per provider: `openai` reads `AI_INTEL_API_KEY` and `gateway` reads
+`AI_GATEWAY_API_KEY`, and a missing or placeholder one stops the agent at startup
+with a message naming the variable — which is why no dummy value is needed for a
+provider that never calls the gateway.
 
 Differences from the dev stack, all deliberate:
 
@@ -226,8 +232,13 @@ the same as clean, and the current aggregation does not distinguish them.
 | `AI_INTEL_DATABASE_URL`, `AI_INTEL_REDIS_URL` | backend | storage and progress bus |
 | `AI_INTEL_JWT_SECRET` | backend **and** agent | signs session cookies; the agent verifies the exchanged eve token (`iss=ai-intel`, `aud=eve-agent`) |
 | `AI_INTEL_AGENT_TOKEN` | backend **and** agent | shared secret the agent presents on service calls (`X-Agent-Token`); blank disables agent API access |
-| `AI_INTEL_LLM_PROVIDER` | agent | `mock` for the deterministic fixture model (evals, CI, offline review) or `gateway` |
-| `AI_INTEL_MODEL` | agent | model id when not mocking |
+| `AI_INTEL_LLM_PROVIDER` | agent | `mock` for the deterministic fixture model (evals, CI, offline review), `openai`, or `gateway` (the default) |
+| `AI_INTEL_MODEL` | agent | model id (defaults: `gpt-5` for `openai`, `anthropic/claude-sonnet-4.5` for `gateway`); required when `AI_INTEL_LLM_BASE_URL` is set |
+| `AI_INTEL_LLM_BASE_URL` | agent | optional OpenAI-compatible endpoint (opencode-go, local vLLM, Ollama); no extra dependency |
+| `AI_INTEL_LLM_API_MODE` | agent | `chat` (default, `/chat/completions`) or `responses`; must match the endpoint |
+| `AI_INTEL_LLM_API_KEY` | agent | credential for a custom `AI_INTEL_LLM_BASE_URL` (preferred over `AI_INTEL_API_KEY`) |
+| `AI_INTEL_API_KEY` | agent | credential for `AI_INTEL_LLM_PROVIDER=openai` (falls back to `OPENAI_API_KEY`) |
+| `AI_GATEWAY_API_KEY` | agent | credential for `AI_INTEL_LLM_PROVIDER=gateway`; optional otherwise — the agent refuses to start without the credential its chosen provider reads |
 | `AI_INTEL_API_URL` | agent | base URL of the backend API (default `http://localhost:8110`) |
 
 ## Checks
@@ -245,19 +256,37 @@ cd agent && npm run typecheck && npm run build && npm run eval
 
 `npm run eval` runs the agent's evals hermetically: a fixture model plus an
 in-process fixture API, so no provider credentials, database, or containers are
-needed. 9 cases / 30 gates cover tool discipline, the citation rule, multi-turn
-behaviour, and the human-in-the-loop gates.
+needed. 10 cases / 33 gates cover tool discipline, the citation rule, remediation
+recording, multi-turn behaviour, and the human-in-the-loop gates.
 
 Two further cases grade *answer quality* with a judge model. They skip themselves
 unless a provider is configured, so CI stays green while the suite stays ready:
 
 ```bash
+# via OpenAI
+AI_INTEL_LLM_PROVIDER=openai AI_INTEL_API_KEY=... npm run eval:live -- quality
+
+# via opencode-go (any OpenAI-compatible endpoint)
+AI_INTEL_LLM_PROVIDER=openai \
+AI_INTEL_LLM_BASE_URL=https://opencode.ai/zen/go/v1 \
+AI_INTEL_LLM_API_MODE=chat \
+AI_INTEL_LLM_API_KEY=... \
+AI_INTEL_MODEL=longcat-2.5-preview-free \
+npm run eval:live -- quality
+
+# or via the Vercel AI Gateway
 AI_INTEL_LLM_PROVIDER=gateway \
 AI_INTEL_MODEL=anthropic/claude-sonnet-4.5 \
 AI_GATEWAY_API_KEY=... \
 AI_INTEL_EVAL_LIVE=1 \
-npm run eval -- quality
+npm run eval:live -- quality
 ```
+
+Use `eval:live`, not `eval`. `eval` pins `AI_INTEL_LLM_PROVIDER=mock` as an inline
+assignment, which overrides whatever the shell exported — so the same command with
+`eval` would silently grade the fixture model. Setting `AI_INTEL_EVAL_LIVE=1`
+alongside a mocked agent is refused outright rather than skipped, because a judge
+grading a scripted transcript passes for the wrong reason.
 
 Set `AI_INTEL_JUDGE_MODEL` if the judge should use the same provider as the agent.
 

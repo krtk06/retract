@@ -10,6 +10,8 @@
     "build": "eve build",
     "dev": "eve dev",
     "eval": "AI_INTEL_LLM_PROVIDER=mock AI_INTEL_AGENT_TOKEN=eval-agent-service-token eve eval",
+    "eval:live": "AI_INTEL_AGENT_TOKEN=eval-agent-service-token eve eval",
+    "test": "node --experimental-strip-types --test agent/**/*.test.ts",
     "info": "eve info",
     "start": "eve start",
     "typecheck": "tsc"

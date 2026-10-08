@@ -75,6 +75,27 @@ services:
       redis:
         condition: service_healthy
 
+# Beat exists only to run the reaper that fails analyses stranded by a killed tool,
+  # a crashed worker, or a host restart. It shares the worker's image and broker but
+  # sends nothing to the queue, so it cannot compete with analysis work.
+  beat:
+    build: ../backend
+    env_file:
+      - path: ../.env
+        required: false
+    environment:
+      AI_INTEL_DATABASE_URL: postgresql+psycopg://postgres:postgres@postgres:5432/ai_intel
+      AI_INTEL_REDIS_URL: redis://redis:6379/0
+      AI_INTEL_DATA_DIR: /data
+    command: celery -A app.tasks.celery_app:celery_app beat --loglevel=info
+    volumes:
+      - repo_data:/data
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
   agent:
     build:
       context: ../agent

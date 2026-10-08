@@ -185,6 +185,34 @@ function recordFindings(body: unknown): { status: number; payload: unknown } {
   };
 }
 
+function recordRemediation(body: unknown): { status: number; payload: unknown } {
+  const input = (body ?? {}) as {
+    agent?: string;
+    remediations?: { finding_id?: number; action?: string }[];
+  };
+  const submitted = input.remediations ?? [];
+  const known = new Set(FINDINGS.map((finding) => finding.id));
+  const reasons: string[] = [];
+  let recorded = 0;
+  for (const item of submitted) {
+    if (item.finding_id == null || !known.has(item.finding_id)) {
+      reasons.push(`finding ${item.finding_id} not found in this analysis`);
+      continue;
+    }
+    recorded += 1;
+  }
+  return {
+    status: 200,
+    payload: {
+      analysis_id: ANALYSIS_ID,
+      agent: input.agent ?? "eve",
+      recorded,
+      rejected: submitted.length - recorded,
+      reasons,
+    },
+  };
+}
+
 export async function startFixtureApi(): Promise<FixtureApi> {
   const requests: RecordedRequest[] = [];
 
@@ -274,6 +302,51 @@ export async function startFixtureApi(): Promise<FixtureApi> {
           return;
         }
         json(response, 200, FINDINGS);
+        return;
+      }
+      if (path === `/api/analyses/${ANALYSIS_ID}/remediation`) {
+        // Without this route record_remediation's eval 404s, and a 404 reads to the
+        // model as "this tool does not work" rather than "the fixture is incomplete".
+        if (request.method === "POST") {
+          const result = recordRemediation(body);
+          json(response, result.status, result.payload);
+          return;
+        }
+        json(response, 200, {
+          analysis_id: ANALYSIS_ID,
+          loc: 2565,
+          current_overall: 68,
+          projected_overall: 100,
+          recoverable_points: 32,
+          findings_considered: FINDINGS.length,
+          unverified_items: 0,
+          truncated_findings: 0,
+          work_items: [
+            {
+              key: "secret",
+              pillar: "security",
+              action: "Rotate the exposed credential",
+              severity: "high",
+              effort: "low",
+              source: "catalog",
+              steps: ["Revoke and reissue at the provider."],
+              verify: "Re-run the analysis.",
+              references: [],
+              findings: FINDINGS.map((finding) => ({
+                finding_id: finding.id,
+                title: finding.title,
+                severity: finding.severity,
+                status: finding.status,
+                file_path: finding.file_path,
+                line_start: finding.line_start,
+              })),
+              finding_count: FINDINGS.length,
+              marginal_points: 32,
+              weighted_penalty_removed: 20,
+              payoff: 20,
+            },
+          ],
+        });
         return;
       }
       if (path === `/api/analyses/${ANALYSIS_ID}/score`) {

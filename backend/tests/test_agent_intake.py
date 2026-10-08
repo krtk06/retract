@@ -7,7 +7,7 @@ from fastapi.testclient import TestClient
 
 from app.config import get_settings
 from app.db import get_session_factory
-from app.models import Analysis, Finding, Repository, User
+from app.models import Analysis, Finding, Repository, User, UserRepository
 from app.security import decode_eve_token
 
 settings = get_settings()
@@ -31,6 +31,8 @@ def analysis_id() -> int:
             added_by=user.id,
         )
         session.add(repo)
+        session.commit()
+        session.add(UserRepository(repo_id=repo.id, user_id=user.id))
         session.commit()
         analysis = Analysis(repository_id=repo.id, loc=500)
         session.add(analysis)

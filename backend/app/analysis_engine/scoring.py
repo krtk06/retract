@@ -19,7 +19,13 @@ and covered by tests in ``tests/test_scoring_curve.py``.
 
 Formula: per-pillar score = 100 / (1 + weighted_penalty / KLOC / HALF_SCORE_DENSITY)
         overall       = min(Σ pillar×weight, min(pillar) + WORST_PILLAR_HEADROOM)
+
+The aggregation itself lives in ``aggregate()`` so a caller holding an arbitrary
+set of findings — the remediation planner, asking what the score would be if some
+of them were fixed — scores it with this exact curve rather than approximating it.
 """
+
+from collections.abc import Iterable
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -153,7 +159,18 @@ def compute_score(session: Session, analysis_id: int) -> dict:
     loc = analysis.loc if analysis is not None and analysis.loc else None
 
     findings = session.scalars(select(Finding).where(Finding.analysis_id == analysis_id)).all()
+    return aggregate(findings, loc)
 
+
+def aggregate(findings: Iterable[Finding], loc: int | None) -> dict:
+    """Score an arbitrary set of findings as if it were a repository's finding set.
+
+    Split out from :func:`compute_score` so the remediation planner can ask the
+    *same* question of a hypothetical repository — one with some findings fixed —
+    and get a number produced by the identical curve. A projection that used a
+    different formula than the score it is predicting would be a second opinion
+    dressed up as arithmetic.
+    """
     pillar_penalty: dict[str, float] = {p: 0.0 for p in PILLARS}
     pillar_counts: dict[str, int] = {p: 0 for p in PILLARS}
     pillar_verified: dict[str, int] = {p: 0 for p in PILLARS}

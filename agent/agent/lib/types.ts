@@ -109,3 +109,10 @@ export type ApprovalOut = {
   pending_count: number;
   published: boolean;
 };
+export type RemediationSubmitOut = {
+  analysis_id: number;
+  agent: string;
+  recorded: number;
+  rejected: number;
+  reasons: string[];
+};

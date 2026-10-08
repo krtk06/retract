@@ -5,24 +5,39 @@ import logging
 from collections.abc import Generator
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi.responses import Response
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 from sse_starlette.sse import EventSourceResponse
 
-from app.analysis_engine import trust
+from app.analysis_engine import remediation, trust
 from app.analysis_engine.scoring import compute_score
 from app.config import get_settings
 from app.db import get_db
-from app.deps import get_current_user
+from app.deps import get_current_user, get_owned_analysis_or_404
 from app.events import get_bus
-from app.models import Analysis, AnalysisStatus, Finding, User
+from app.models import (
+    Analysis,
+    AnalysisStatus,
+    Finding,
+    FindingStatus,
+    Repository,
+    User,
+    UserRepository,
+)
 from app.schemas import (
     AgentFindingsIn,
     AgentFindingsOut,
     AnalysisHistoryOut,
     AnalysisOut,
+    AnalysisSummaryOut,
     CompareOut,
     FindingOut,
+    RemediationItemOut,
+    RemediationPlanOut,
+    RemediationSubmitIn,
+    RemediationSubmitOut,
+    RemediationTargetOut,
     ScoreOut,
     TrustSummaryOut,
 )
@@ -31,24 +46,62 @@ router = APIRouter(prefix="/analyses", tags=["analyses"])
 logger = logging.getLogger(__name__)
 
 
-def _get_analysis(db: Session, analysis_id: int) -> Analysis:
-    analysis = db.get(Analysis, analysis_id)
-    if analysis is None:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Analysis not found")
-    return analysis
+def _get_analysis(db: Session, analysis_id: int, user: User) -> Analysis:
+    """Owned-analysis lookup: 404 for both missing and non-owned rows."""
+    return get_owned_analysis_or_404(db, analysis_id, user)
 
 
 # Declared before /{analysis_id} so the literal path is not shadowed by the int param.
+@router.get("", response_model=list[AnalysisSummaryOut])
+def list_analyses(
+    limit: int = Query(default=50, le=200),
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+) -> list[AnalysisSummaryOut]:
+    """Recent analyses across the caller's repositories: the dashboard feed."""
+    counts = (
+        select(Finding.analysis_id, func.count(Finding.id).label("finding_count"))
+        .group_by(Finding.analysis_id)
+        .subquery()
+    )
+    rows = db.execute(
+        select(Analysis, Repository, counts.c.finding_count)
+        .join(Repository, Repository.id == Analysis.repository_id)
+        .join(UserRepository, UserRepository.repo_id == Repository.id)
+        .outerjoin(counts, counts.c.analysis_id == Analysis.id)
+        .where(UserRepository.user_id == user.id)
+        .order_by(Analysis.created_at.desc(), Analysis.id.desc())
+        .limit(limit)
+    ).all()
+    return [
+        AnalysisSummaryOut(
+            id=analysis.id,
+            repository_id=analysis.repository_id,
+            repo_owner=repo.owner,
+            repo_name=repo.name,
+            commit_sha=analysis.commit_sha,
+            status=analysis.status.value,
+            created_at=analysis.created_at,
+            finished_at=analysis.finished_at,
+            loc=analysis.loc,
+            published=bool(analysis.published),
+            finding_count=finding_count or 0,
+            overall=(analysis.score_json or {}).get("overall"),
+        )
+        for analysis, repo, finding_count in rows
+    ]
+
+
 @router.get("/compare", response_model=CompareOut)
 def compare_analyses(
     left: int = Query(ge=1),
     right: int = Query(ge=1),
     db: Session = Depends(get_db),
-    _: User = Depends(get_current_user),
+    user: User = Depends(get_current_user),
 ) -> CompareOut:
     """Side-by-side comparison of two analyses (score + per-pillar deltas)."""
-    left_row = _get_analysis(db, left)
-    right_row = _get_analysis(db, right)
+    left_row = _get_analysis(db, left, user)
+    right_row = _get_analysis(db, right, user)
     if left_row.repository_id != right_row.repository_id:
         raise HTTPException(
             status.HTTP_422_UNPROCESSABLE_CONTENT,
@@ -61,9 +114,9 @@ def compare_analyses(
 def get_analysis(
     analysis_id: int,
     db: Session = Depends(get_db),
-    _: User = Depends(get_current_user),
+    user: User = Depends(get_current_user),
 ) -> AnalysisOut:
-    analysis = _get_analysis(db, analysis_id)
+    analysis = _get_analysis(db, analysis_id, user)
     out = AnalysisOut.model_validate(analysis)
     out.finding_count = (
         db.scalar(select(func.count(Finding.id)).where(Finding.analysis_id == analysis_id)) or 0
@@ -91,9 +144,9 @@ def _calibration_of(score: dict) -> tuple:
 def get_score(
     analysis_id: int,
     db: Session = Depends(get_db),
-    _: User = Depends(get_current_user),
+    user: User = Depends(get_current_user),
 ) -> ScoreOut:
-    analysis = _get_analysis(db, analysis_id)
+    analysis = _get_analysis(db, analysis_id, user)
     # Never score an analysis that is still running. Findings land progressively, so
     # a score computed mid-run counts only what exists at that moment — for a run
     # whose analyzers had not yet reported, that is zero findings, every pillar at
@@ -143,9 +196,9 @@ def list_findings(
     limit: int = Query(default=100, le=500),
     offset: int = 0,
     db: Session = Depends(get_db),
-    _: User = Depends(get_current_user),
+    user: User = Depends(get_current_user),
 ) -> list[FindingOut]:
-    _get_analysis(db, analysis_id)
+    _get_analysis(db, analysis_id, user)
     stmt = select(Finding).where(Finding.analysis_id == analysis_id)
     if agent:
         stmt = stmt.where(Finding.agent == agent)
@@ -162,7 +215,7 @@ def record_findings(
     analysis_id: int,
     payload: AgentFindingsIn,
     db: Session = Depends(get_db),
-    _: User = Depends(get_current_user),
+    user: User = Depends(get_current_user),
 ) -> AgentFindingsOut:
     """Intake for the eve agent: persist D2 verdict claims, then re-run the trust layer.
 
@@ -172,7 +225,7 @@ def record_findings(
     from app.analysis_engine import agent_findings, approvals, verify
     from app.analysis_engine import calibration as calibration_mod
 
-    analysis = _get_analysis(db, analysis_id)
+    analysis = _get_analysis(db, analysis_id, user)
     result = agent_findings.record_findings(
         db, analysis_id, payload.agent, [f.model_dump() for f in payload.findings]
     )
@@ -211,14 +264,159 @@ def record_findings(
     )
 
 
+def _plan_out(plan: remediation.RemediationPlan) -> RemediationPlanOut:
+    return RemediationPlanOut(
+        analysis_id=plan.analysis_id,
+        loc=plan.loc,
+        current_overall=plan.current_overall,
+        projected_overall=plan.projected_overall,
+        recoverable_points=plan.recoverable_points,
+        findings_considered=plan.findings_considered,
+        unverified_items=plan.unverified_items,
+        truncated_findings=plan.truncated_findings,
+        work_items=[
+            RemediationItemOut(
+                key=item.key,
+                pillar=item.pillar,
+                action=item.action,
+                severity=item.severity,
+                effort=item.effort,
+                source=item.source,
+                steps=item.steps,
+                verify=item.verify,
+                references=item.references,
+                finding_count=item.finding_count,
+                pillar_points=item.pillar_points,
+                weighted_penalty_removed=item.weighted_penalty_removed,
+                payoff=round(item.payoff(), 2),
+                findings=[
+                    RemediationTargetOut(
+                        finding_id=f.id,
+                        title=f.title,
+                        severity=f.severity.value,
+                        status=f.status.value,
+                        file_path=f.file_path,
+                        line_start=f.line_start,
+                    )
+                    for f in item.findings
+                ],
+            )
+            for item in plan.work_items
+        ],
+    )
+
+
+def _require_finished(analysis: Analysis) -> None:
+    """Refuse to advise on a run that has not produced findings yet.
+
+    The same contract as /score: findings land progressively, so a plan built
+    mid-run would describe a repository the analyzers have not finished reading —
+    and unlike the score, it reads as authoritative advice.
+    """
+    if analysis.status != AnalysisStatus.DONE:
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            detail="analysis has not finished; no remediation plan exists yet",
+        )
+
+
+@router.get("/{analysis_id}/remediation", response_model=RemediationPlanOut)
+def get_remediation(
+    analysis_id: int,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+) -> RemediationPlanOut:
+    """Prioritised fix plan: what to fix, in what order, and what it is worth."""
+    analysis = _get_analysis(db, analysis_id, user)
+    _require_finished(analysis)
+    return _plan_out(remediation.build_plan(db, analysis_id))
+
+
+@router.get("/{analysis_id}/remediation.md")
+def get_remediation_markdown(
+    analysis_id: int,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+) -> Response:
+    """The plan as a Markdown document, for an issue or a PR description."""
+    analysis = _get_analysis(db, analysis_id, user)
+    _require_finished(analysis)
+    repo = analysis.repository
+    label = f"{repo.owner}/{repo.name}" if repo else f"analysis-{analysis_id}"
+    body = remediation.render_markdown(
+        remediation.build_plan(db, analysis_id), label, analysis.commit_sha
+    )
+    filename = f"{label.replace('/', '-')}-fix-plan.md"
+    return Response(
+        content=body,
+        media_type="text/markdown; charset=utf-8",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+@router.post("/{analysis_id}/remediation", response_model=RemediationSubmitOut)
+def record_remediation(
+    analysis_id: int,
+    payload: RemediationSubmitIn,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+) -> RemediationSubmitOut:
+    """Intake for LLM-authored fixes.
+
+    Stored in the finding's ``evidence_json`` alongside the verification,
+    calibration, and triage records, so a fix lives and dies with its finding:
+    dismiss the finding as a false positive and its advice goes with it. The
+    submitted action is *not* verified or scored — advice is not a claim about
+    the code — but it is attributed to the submitting agent so a reader can
+    always tell it apart from catalog advice.
+    """
+    from app.analysis_engine.remediation import EFFORT_WEIGHT
+
+    _get_analysis(db, analysis_id, user)
+    reasons: list[str] = []
+    recorded = 0
+    for item in payload.remediations:
+        finding = db.get(Finding, item.finding_id)
+        if finding is None or finding.analysis_id != analysis_id:
+            reasons.append(f"finding {item.finding_id} not found in this analysis")
+            continue
+        if finding.status == FindingStatus.DISMISSED:
+            reasons.append(f"finding {item.finding_id} is dismissed; its fix was not stored")
+            continue
+        effort = item.effort if item.effort in EFFORT_WEIGHT else "medium"
+        evidence = dict(finding.evidence_json or {})
+        evidence["remediation"] = {
+            "action": item.action,
+            "steps": [s[:500] for s in item.steps][:10],
+            "effort": effort,
+            "verify": item.verify[:500],
+            "references": [r[:400] for r in item.references][:5],
+            "source": payload.agent,
+            "reasoning": item.reasoning[:1000],
+        }
+        finding.evidence_json = evidence
+        recorded += 1
+
+    if recorded:
+        db.commit()
+
+    return RemediationSubmitOut(
+        analysis_id=analysis_id,
+        agent=payload.agent,
+        recorded=recorded,
+        rejected=len(payload.remediations) - recorded,
+        reasons=reasons,
+    )
+
+
 @router.get("/{analysis_id}/events")
 def stream_events(
     analysis_id: int,
     db: Session = Depends(get_db),
-    _: User = Depends(get_current_user),
+    user: User = Depends(get_current_user),
 ) -> EventSourceResponse:
     """Replay event history, then stream live events until a terminal event."""
-    _get_analysis(db, analysis_id)
+    _get_analysis(db, analysis_id, user)
     bus = get_bus()
 
     def events() -> Generator[dict, None, None]:
@@ -239,10 +437,10 @@ def stream_events(
 def analysis_history(
     analysis_id: int,
     db: Session = Depends(get_db),
-    _: User = Depends(get_current_user),
+    user: User = Depends(get_current_user),
 ) -> list[AnalysisHistoryOut]:
     """All analyses for the same repository, newest first (for delta + compare)."""
-    analysis = _get_analysis(db, analysis_id)
+    analysis = _get_analysis(db, analysis_id, user)
     rows = db.scalars(
         select(Analysis)
         .where(Analysis.repository_id == analysis.repository_id)
@@ -255,12 +453,12 @@ def analysis_history(
 def trust_summary(
     analysis_id: int,
     db: Session = Depends(get_db),
-    _: User = Depends(get_current_user),
+    user: User = Depends(get_current_user),
 ) -> TrustSummaryOut:
     """Verification coverage and per-agent confidence for the trust panel."""
     from app.analysis_engine import trust
 
-    _get_analysis(db, analysis_id)
+    _get_analysis(db, analysis_id, user)
     return TrustSummaryOut.model_validate(trust.build_trust_summary(db, analysis_id))
 
 
@@ -271,7 +469,7 @@ def code_snippet(
     line_start: int = Query(ge=1, default=1),
     context: int = Query(ge=0, le=20, default=4),
     db: Session = Depends(get_db),
-    _: User = Depends(get_current_user),
+    user: User = Depends(get_current_user),
 ) -> dict:
     """Return a code snippet around a cited line from the analyzed snapshot.
 
@@ -280,7 +478,7 @@ def code_snippet(
     """
     from app.config import get_settings
 
-    analysis = _get_analysis(db, analysis_id)
+    analysis = _get_analysis(db, analysis_id, user)
     settings = get_settings()
     repo_root = (
         settings.data_dir / "repos" / str(analysis.repository_id) / str(analysis_id)

@@ -67,6 +67,10 @@ jobs:
         run: npm run typecheck
       - name: Build
         run: npm run build
+      - name: Tests
+        # The credential guard, as node:test units: a wrong provider credential is
+        # silent until the first message, so what this pins is what startup refuses.
+        run: npm test
       - name: Evals
         # The mock fixture model and the in-process fixture API make this
         # hermetic: no provider credentials, no database, no containers.
@@ -96,19 +100,25 @@ jobs:
           POSTGRES_PASSWORD: postgres
           AI_INTEL_AGENT_TOKEN: ci-agent-token
           AI_INTEL_JWT_SECRET: ci-jwt-secret-at-least-32-bytes-long
-          AI_GATEWAY_API_KEY: ci-not-a-real-key
       - name: Start stack and wait for health
         # `--wait` gates on every service's healthcheck, which is what caught the
         # three healthcheck bugs found by running this locally (the agent probing an
         # authenticated route, and the Celery worker inheriting the API's HTTP probe).
         # Cold start is ~35s; the timeout is slack for a loaded runner.
+        #
+        # No LLM credential is set here, and none is needed: eve bakes the provider
+        # and model into its build output (see the agent Dockerfile), so this build
+        # runs with no AI_INTEL_* in the environment and resolves the gateway default
+        # without a key. The credential guard only fires for a production start on a
+        # host, where the runtime environment is the real one. This job asserts that
+        # images build and services come up healthy; it makes no model call, so
+        # answer quality stays with the eval suites.
         run: docker compose -f infra/docker-compose.prod.yml up -d --wait --wait-timeout 300
         env:
           POSTGRES_USER: postgres
           POSTGRES_PASSWORD: postgres
           AI_INTEL_AGENT_TOKEN: ci-agent-token
           AI_INTEL_JWT_SECRET: ci-jwt-secret-at-least-32-bytes-long
-          AI_GATEWAY_API_KEY: ci-not-a-real-key
       - name: Diagnostics on failure
         if: failure()
         run: |

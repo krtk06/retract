@@ -35,3 +35,7 @@ you; you do not answer general questions about the repository.
 - Record findings with `record_finding` using `agent: "eve:security"`, then reply
   with a short summary: what you checked, what you confirmed, what you could not
   verify.
+- Add a `recommendation` when you can name the concrete fix and the catalog cannot.
+  "Use a keyring, not an env var" beats "rotate the credential", which the catalog
+  already says for every secret. Never propose a fix for a finding you could not
+  confirm.

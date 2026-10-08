@@ -6,9 +6,10 @@ findings as hypotheses for the trust layer to verify.
 """
 
 import logging
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 from celery import chord, group
+from sqlalchemy import select
 
 from app.config import get_settings
 from app.db import get_session_factory
@@ -21,6 +22,12 @@ from app.tasks.celery_app import celery_app
 from app.tasks.tools import run_tool
 
 logger = logging.getLogger(__name__)
+
+# Generous on purpose. The slowest legitimate run observed was sqlalchemy at ~24min on a
+# 644k-LOC repository, and a tool that hits its 1260s hard limit still has to unwind, so
+# anything under half an hour is a stall rather than a slow repository.
+STALLED_AFTER_SECONDS = 3600
+REAP_INTERVAL_SECONDS = 300
 
 
 @celery_app.task(name="app.tasks.analysis.run_analysis")
@@ -107,12 +114,14 @@ def run_analysis(analysis_id: int) -> dict:
         # `running` with no score and no error. The callback is what turns that silence
         # into a recorded failure.
         header = group(run_tool.s(name, analysis_id, str(dest)) for name in TOOL_RUNNERS)
-        result = chord(header)(finalize_analysis.s(analysis_id))
-        # Eager mode (tests) returns an EagerResult, which runs inline and has no
-        # errback to attach; there the exception propagates to the handler above, which
-        # records the failure directly. Only a real dispatched AsyncResult needs this.
-        if hasattr(result, "on_error"):
-            result.on_error(on_chord_error.s(analysis_id))
+        # The errback must be linked on the chord's *signature* before it is applied.
+        # Calling the chord returns an AsyncResult, and AsyncResult has no on_error:
+        # attaching it there silently does nothing, which is how this strand bug survived
+        # one round of fixes. The body has to be passed to the chord constructor for the
+        # same reason — on_error links through self.body.
+        signature = chord(header, finalize_analysis.s(analysis_id))
+        signature.on_error(on_chord_error.s(analysis_id))
+        signature.apply_async()
         return {"ok": True, "dispatched": list(TOOL_RUNNERS)}
     except Exception as exc:  # noqa: BLE001 — record and report, don't crash the worker
         logger.exception("analysis %s failed", analysis_id)
@@ -131,22 +140,18 @@ def run_analysis(analysis_id: int) -> dict:
         session.close()
 
 
-@celery_app.task(name="app.tasks.analysis.on_chord_error")
-def on_chord_error(exc: BaseException, analysis_id: int) -> dict:
-    """Record a failed fan-out so the analysis cannot stay `running` forever.
+def fail_stalled_analysis(analysis_id: int, message: str) -> dict:
+    """Mark an analysis `failed` so it cannot sit at `running` with no explanation.
 
-    A tool killed by Celery's hard time limit produces a ChordError here rather than a
-    task result, so without this the analysis row keeps `status=running` indefinitely:
-    no score, no error message, and nothing for the dashboard to show. Marking it
-    `failed` is the difference between "this repo could not be analyzed" and a run that
-    hangs with no explanation.
+    Called from two places, both of which exist because the failure is otherwise silent:
+    `on_chord_error` when the fan-out as a whole fails, and `_on_tool_failure` when a
+    single tool is SIGKILLed by the hard time limit. In both cases the analysis cannot be
+    scored honestly, because not every tool reported, so `finalize_analysis` is
+    deliberately not called even though most findings may already be persisted.
 
-    `finalize_analysis` is not called on this path even though most findings may have
-    been persisted, because a partial score would misrepresent the repository.
+    An analysis that has already finished is left alone: Celery does not order a chord
+    body against its error handler, so a late callback must not overwrite a real score.
     """
-    logger.exception("analysis %s fan-out failed", analysis_id)
-    detail = f"{type(exc).__name__}: {exc}" if exc else "unknown chord failure"
-    message = f"analysis tools did not complete ({detail[:500]})"
     try:
         session = get_session_factory()()
     except Exception:  # noqa: BLE001 — never let the failure reporter itself raise
@@ -155,17 +160,70 @@ def on_chord_error(exc: BaseException, analysis_id: int) -> dict:
 
     try:
         analysis = session.get(Analysis, analysis_id)
-        if analysis is not None and analysis.status != AnalysisStatus.DONE:
-            analysis.status = AnalysisStatus.FAILED
-            analysis.finished_at = datetime.now(UTC)
-            analysis.error = message
-            session.commit()
-        get_bus().publish(analysis_id, "failed", {"error": message})
+        if analysis is None:
+            return {"ok": False, "analysis_id": analysis_id, "error": "analysis not found"}
+        if analysis.status == AnalysisStatus.DONE:
+            return {"ok": True, "analysis_id": analysis_id, "error": "already finished"}
+        analysis.status = AnalysisStatus.FAILED
+        analysis.finished_at = datetime.now(UTC)
+        analysis.error = message[:2000]
+        session.commit()
+        get_bus().publish(analysis_id, "failed", {"error": analysis.error})
     except Exception:  # noqa: BLE001
-        logger.exception("failed to record chord failure for analysis %s", analysis_id)
+        logger.exception("failed to record failure for analysis %s", analysis_id)
     finally:
         session.close()
     return {"ok": True, "analysis_id": analysis_id, "error": message}
+
+
+@celery_app.task(name="app.tasks.analysis.on_chord_error")
+def on_chord_error(exc: BaseException, analysis_id: int) -> dict:
+    """Record a failed fan-out so the analysis cannot stay `running` forever."""
+    logger.error("analysis %s fan-out failed: %r", analysis_id, exc)
+    detail = f"{type(exc).__name__}: {exc}" if exc else "unknown chord failure"
+    return fail_stalled_analysis(analysis_id, f"analysis tools did not complete ({detail[:500]})")
+
+
+@celery_app.task(name="app.tasks.analysis.reap_stalled_analyses")
+def reap_stalled_analyses(max_age_seconds: int = STALLED_AFTER_SECONDS) -> dict:
+    """Fail analyses that have been `running` far longer than any legitimate run.
+
+    This is the guarantee, and the errbacks are only an optimisation.
+
+    A tool killed by the hard time limit, a worker that OOMs, a host reboot, or a
+    `docker compose down` mid-run all strand the analysis row: `run_analysis` set it to
+    `running`, and the only thing that would move it on is `finalize_analysis` being
+    reached through the chord. Every one of those paths was observed during the
+    27-repository sweep, and none of them can be relied on to deliver a callback. A
+    stale row is worse than a failed one, because it reports nothing at all.
+
+    Keying on `started_at` rather than on any event means it also catches a run whose
+    worker vanished entirely, which no in-process handler can observe.
+    """
+    cutoff = datetime.now(UTC) - timedelta(seconds=max_age_seconds)
+    session = get_session_factory()()
+    reaped: list[int] = []
+    try:
+        stalled = session.scalars(
+            select(Analysis).where(
+                Analysis.status.in_((AnalysisStatus.RUNNING, AnalysisStatus.PENDING)),
+                Analysis.started_at.is_not(None),
+                Analysis.started_at < cutoff,
+            )
+        ).all()
+        for analysis in stalled:
+            started = analysis.started_at.isoformat() if analysis.started_at else "unknown"
+            fail_stalled_analysis(
+                analysis.id,
+                f"analysis did not finish within {max_age_seconds}s (started {started}); "
+                "it is being marked failed rather than left running forever",
+            )
+            reaped.append(analysis.id)
+    finally:
+        session.close()
+    if reaped:
+        logger.warning("reaped %d stalled analyses: %s", len(reaped), reaped)
+    return {"ok": True, "reaped": reaped}
 
 
 @celery_app.task(name="app.tasks.analysis.finalize_analysis")

@@ -31,3 +31,5 @@ documentation matches what the code does — not whether a README exists.
   actively wrong, not merely absent.
 - Record with `record_finding` using `agent: "eve:docs"`, then summarize the
   highest-value documentation gaps.
+- Add a `recommendation` only when you know what the docstring should say. For an
+  absent docstring the catalog's steps are already the right advice.

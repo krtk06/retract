@@ -139,12 +139,23 @@ services:
       AI_INTEL_JWT_SECRET: ${AI_INTEL_JWT_SECRET:?set AI_INTEL_JWT_SECRET}
       AI_INTEL_LLM_PROVIDER: ${AI_INTEL_LLM_PROVIDER:-gateway}
       AI_INTEL_MODEL: ${AI_INTEL_MODEL:-anthropic/claude-sonnet-4.5}
+      # Optional OpenAI-compatible endpoint (opencode-go, local vLLM, Ollama). The SDK
+      # sends the URL and key per call and eve bakes neither into the image, so these
+      # are safe to pass through and safe to leave blank.
+      AI_INTEL_LLM_BASE_URL: ${AI_INTEL_LLM_BASE_URL:-}
+      AI_INTEL_LLM_API_MODE: ${AI_INTEL_LLM_API_MODE:-chat}
+      AI_INTEL_LLM_API_KEY: ${AI_INTEL_LLM_API_KEY:-}
       # Only read when AI_INTEL_LLM_PROVIDER=openai, which fails fast without it.
       # Not previously passed through, so choosing `openai` here could not work at all.
       AI_INTEL_API_KEY: ${AI_INTEL_API_KEY:-}
-      # Required by this compose file regardless of provider, so `openai` and `mock`
-      # still need some value here even though they never call the gateway.
-      AI_GATEWAY_API_KEY: ${AI_GATEWAY_API_KEY:?set AI_GATEWAY_API_KEY}
+      # Only read when AI_INTEL_LLM_PROVIDER=gateway. Deliberately optional
+      # (`:-`, not `:?`): the `:?` form cannot be conditional on the provider, so it
+      # demanded a gateway key from `openai` and `mock` deployments that never call
+      # the gateway, which meant every such deployment had to invent a dummy value
+      # to satisfy a variable nothing read. agent.ts now refuses to start when the
+      # credential its chosen provider actually needs is missing, so the check moved
+      # to where it can be provider-aware and the message can name the right variable.
+      AI_GATEWAY_API_KEY: ${AI_GATEWAY_API_KEY:-}
       PORT: "3000"
     volumes:
       # Durable workflow state. Without this volume every container restart

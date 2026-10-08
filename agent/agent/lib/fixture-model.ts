@@ -186,6 +186,45 @@ const SCRIPTS: Record<string, Script> = {
     ], final);
   },
 
+  "remediation-plan": (request) => {
+    const final = toolFailed(request)
+      ? "Understood — I did not attach the fix. The catalog's generic steps still stand."
+      : "Attached a repo-specific fix for finding 900, citing app/cache_key.py:11.";
+    return steps(
+      "remediation-plan",
+      request,
+      [
+        {
+          toolCalls: [
+            {
+              name: "record_remediation",
+              input: {
+                analysisId: ANALYSIS_ID,
+                agent: "eve:security",
+                remediations: [
+                  {
+                    finding_id: 900,
+                    action: "Load the salt from the OS keyring at process start",
+                    steps: [
+                      "Read the salt once in app/cache_key.py and pass it in, instead of "
+                        + "recomputing the SHA1 on every call.",
+                      "Delete the module-level literal at app/cache_key.py:11.",
+                    ],
+                    effort: "low",
+                    verify: "Re-run gitleaks; finding 900 should disappear.",
+                    reasoning: "The catalog says rotate it, which does not help here: the "
+                      + "value is not a credential, it is a cache salt.",
+                  },
+                ],
+              },
+            },
+          ],
+        },
+      ],
+      final,
+    );
+  },
+
   "decide-finding": (request) => {
     const final = toolFailed(request)
       ? "Understood — I did not record a decision. The finding stays pending."

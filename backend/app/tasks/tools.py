@@ -4,6 +4,7 @@ import logging
 import time
 from pathlib import Path
 
+from celery.app.task import ExceptionInfo
 from celery.exceptions import SoftTimeLimitExceeded
 
 from app.events import get_bus
@@ -41,6 +42,55 @@ def _describe_failure(tool_name: str, exc: BaseException) -> str:
     return f"Tool '{tool_name}' failed: {str(exc)[:1000]}"
 
 
+def _on_tool_failure(
+    task_id: str | None,
+    args: tuple | None,
+    kwargs: dict | None,
+    einfo: ExceptionInfo,
+) -> None:
+    """Fail the analysis when a tool is killed by the hard time limit.
+
+    This handler is registered on the *task*, not on the chord, and that placement is
+    the whole point. A hard time limit is enforced by billiard in the pool parent,
+    which SIGKILLs the child; the task body never returns, so no `except` clause can
+    run. Celery runs the task-level error handler in the surviving parent process,
+    which is the only place left that can still act.
+
+    A chord-level `on_error` cannot cover this case: it links the errback to the chord
+    *body*, and when a header task dies the body is never invoked, so the errback is
+    never dispatched. That was verified against a real 1260s timeout on psf/black —
+    the chord logged ChordError and nothing else happened, leaving the analysis at
+    `running` forever.
+
+    The exception is a `TimeLimitExceeded` in every case observed here, which means the
+    tool outran its budget and the analysis cannot be scored honestly. Other failures
+    are already caught and recorded by the task body; they never reach this handler, so
+    reaching it at all is a strong signal the analysis is unrecoverable.
+    """
+    tool_name = args[0] if args else "unknown"
+    analysis_id = args[1] if args and len(args) > 1 else None
+    if analysis_id is None:
+        logger.exception("tool %s failed with no analysis id; cannot fail the analysis", tool_name)
+        return
+
+    reason = getattr(einfo, "exc_type", None)
+    logger.error(
+        "tool %s (task %s) was killed for analysis %s (%s); failing the analysis",
+        tool_name,
+        task_id,
+        analysis_id,
+        reason.__name__ if isinstance(reason, type) else reason,
+    )
+    from app.tasks.analysis import fail_stalled_analysis
+
+    fail_stalled_analysis(
+        analysis_id,
+        f"tool '{tool_name}' exceeded its {TOOL_HARD_TIME_LIMIT}s hard time limit and was "
+        f"killed ({reason.__name__ if isinstance(reason, type) else reason}); the analysis "
+        "cannot be scored because not every tool reported",
+    )
+
+
 def _build_context(analysis_id: int, repo_root_path: str) -> ToolContext:
     root = Path(repo_root_path)
     files, _total, _truncated = build_inventory(root)
@@ -53,6 +103,7 @@ def _build_context(analysis_id: int, repo_root_path: str) -> ToolContext:
     soft_time_limit=TOOL_SOFT_TIME_LIMIT,
     time_limit=TOOL_HARD_TIME_LIMIT,
     max_retries=0,
+    on_error=_on_tool_failure,
 )
 def run_tool(tool_name: str, analysis_id: int, repo_root: str) -> dict:
     """Run one analysis tool; persist findings; never raise (chord robustness).

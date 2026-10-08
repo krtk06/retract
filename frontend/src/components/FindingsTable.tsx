@@ -87,7 +87,14 @@ function FindingRow({
 }) {
   const [expanded, setExpanded] = useState(false);
   const canSnippet = showSnippet && finding.file_path != null && finding.line_start != null;
-  const snippet = useSnippet(analysisId, canSnippet && expanded ? finding.file_path : null, finding.line_start);
+  const snippet = useSnippet(
+    analysisId,
+    canSnippet && expanded ? finding.file_path : null,
+    finding.line_start,
+  );
+  // The server derives this from the finding's category and evidence, so it costs
+  // nothing extra. Optional because a stored payload from an older build has none.
+  const fix = finding.remediation;
 
   const blobUrl =
     repository && !repository.url.startsWith("local://") && finding.file_path
@@ -111,6 +118,11 @@ function FindingRow({
       </div>
       {finding.description && (
         <p className="mt-1 text-sm text-zinc-400">{finding.description}</p>
+      )}
+      {fix && (
+        <p className="mt-1 text-sm text-emerald-400/90">
+          <span className="text-zinc-500">Fix:</span> {fix.action}
+        </p>
       )}
       <div className="mt-1.5 flex flex-wrap items-center gap-3 text-xs">
         {finding.file_path && (

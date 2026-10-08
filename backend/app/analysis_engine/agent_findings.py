@@ -32,6 +32,10 @@ class VerdictFinding(BaseModel):
     severity: str = "medium"
     confidence: float = Field(default=0.5, ge=0.0, le=1.0)
     category: str = Field(default="insight", max_length=64)
+    # Optional fix, filed as this finding's remediation. The deterministic catalog
+    # covers every category, so this earns its place only when the agent can name a
+    # change the catalog's generic steps would miss.
+    recommendation: str | None = Field(default=None, min_length=3, max_length=300)
 
 
 class RecordResult(BaseModel):
@@ -49,6 +53,20 @@ def normalize_path(path: str | None) -> str | None:
 
 def to_draft(item: VerdictFinding, agent: str) -> FindingDraft:
     severity = item.severity if item.severity in _SEVERITIES else "medium"
+    evidence_json: dict[str, Any] = {
+        "claim": item.claim,
+        "evidence": item.evidence,
+        "source": "eve",
+        "verifier": EVE_VERIFIER,
+    }
+    if item.recommendation:
+        # Same shape the remediation endpoint writes, so an agent-authored fix and a
+        # later-submitted one are read by the plan identically.
+        evidence_json["remediation"] = {
+            "action": item.recommendation[:300],
+            "steps": [],
+            "source": agent,
+        }
     return FindingDraft(
         agent=agent,
         category=item.category or "insight",
@@ -58,12 +76,7 @@ def to_draft(item: VerdictFinding, agent: str) -> FindingDraft:
         file_path=normalize_path(item.file_path),
         line_start=item.line_start,
         line_end=item.line_end,
-        evidence_json={
-            "claim": item.claim,
-            "evidence": item.evidence,
-            "source": "eve",
-            "verifier": EVE_VERIFIER,
-        },
+        evidence_json=evidence_json,
         verifier=EVE_VERIFIER,
         confidence=item.confidence,
         status=FindingStatus.HYPOTHESIS,

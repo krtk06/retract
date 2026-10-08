@@ -30,3 +30,6 @@ actually catch its bugs.
   you which symbols exist.
 - Record with `record_finding` using `agent: "eve:tests"`, then summarize what is
   genuinely untested and what you could not determine.
+- Add a `recommendation` naming the specific missing case, not "add tests". "A
+  test that calls `refresh_token` with an expired token is missing" is a fix; the
+  catalog already tells the user to add a suite.

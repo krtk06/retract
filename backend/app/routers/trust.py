@@ -5,28 +5,27 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.analysis_engine import approvals
+from app.analysis_engine.scoring import compute_score
 from app.db import get_db
-from app.deps import get_current_user
-from app.models import Analysis, Approval, ApprovalDecision, CalibrationStat, User
+from app.deps import get_current_user, get_owned_analysis_or_404
+from app.models import Analysis, AnalysisStatus, Approval, ApprovalDecision, CalibrationStat, User
 from app.schemas import ApprovalOut, ApprovalRequest, CalibrationStatOut, FindingOut, QueueOut
 
 router = APIRouter(tags=["trust"])
 
 
-def _ensure_analysis(db: Session, analysis_id: int) -> Analysis:
-    analysis = db.get(Analysis, analysis_id)
-    if analysis is None:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Analysis not found")
-    return analysis
+def _ensure_analysis(db: Session, analysis_id: int, user: User) -> Analysis:
+    """Owned-analysis lookup: 404 for both missing and non-owned rows."""
+    return get_owned_analysis_or_404(db, analysis_id, user)
 
 
 @router.get("/analyses/{analysis_id}/approvals/queue", response_model=QueueOut)
 def get_queue(
     analysis_id: int,
     db: Session = Depends(get_db),
-    _: User = Depends(get_current_user),
+    user: User = Depends(get_current_user),
 ) -> QueueOut:
-    analysis = _ensure_analysis(db, analysis_id)
+    analysis = _ensure_analysis(db, analysis_id, user)
     pending = approvals.pending_findings(db, analysis_id)
     summary = approvals.summarize(db, analysis_id)
     return QueueOut(
@@ -46,7 +45,7 @@ def decide_approval(
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ) -> ApprovalOut:
-    _ensure_analysis(db, analysis_id)
+    _ensure_analysis(db, analysis_id, user)
     if payload.decision not in ("approve", "dismiss"):
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, detail="invalid decision")
     try:
@@ -67,6 +66,17 @@ def decide_approval(
         .order_by(Approval.created_at.desc())
         .limit(1)
     )
+
+    # A review decision changes what counts, so the score has to be recomputed here.
+    # Without it the dashboard kept displaying the pre-review number next to a
+    # findings table that had already changed: dismiss every finding as a false
+    # positive and the hero still read 11/100 while nothing was left to fix.
+    # Same treatment the agent intake path gives a claim it just persisted.
+    analysis = _ensure_analysis(db, analysis_id, user)
+    if analysis.status == AnalysisStatus.DONE:
+        analysis.score_json = compute_score(db, analysis_id)
+        db.commit()
+
     return ApprovalOut(
         finding_id=finding.id,
         decision=payload.decision,
@@ -74,7 +84,7 @@ def decide_approval(
         confidence=finding.confidence,
         note=latest.note if latest else payload.note,
         pending_count=len(approvals.pending_findings(db, analysis_id)),
-        published=bool(_ensure_analysis(db, analysis_id).published),
+        published=bool(_ensure_analysis(db, analysis_id, user).published),
     )
 
 

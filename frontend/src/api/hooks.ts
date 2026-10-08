@@ -15,15 +15,50 @@ export function useMe() {
   });
 }
 
+export function useRegister() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ email, password }: { email: string; password: string }) =>
+      api.register(email, password),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["me"] }),
+  });
+}
+
+export function useLogin() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ email, password }: { email: string; password: string }) =>
+      api.login(email, password),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["me"] }),
+  });
+}
+
 export function useRepos(enabled: boolean) {
   return useQuery({ queryKey: ["repos"], queryFn: api.listRepos, enabled });
+}
+
+export function useRecentAnalyses(enabled: boolean) {
+  return useQuery({
+    queryKey: ["recent-analyses"],
+    queryFn: api.listAnalyses,
+    enabled,
+    // Pending/running rows should resolve on their own once the worker reports in.
+    refetchInterval: (query) => {
+      const hasActive = query.state.data?.some(
+        (row) => row.status === "pending" || row.status === "running",
+      );
+      return hasActive ? 3000 : false;
+    },
+  });
 }
 
 export function useCreateRepo() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: api.createRepo,
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["repos"] }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["repos"] });
+    },
   });
 }
 
@@ -31,7 +66,10 @@ export function useAnalyzeRepo() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: api.analyzeRepo,
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["repos"] }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["repos"] });
+      queryClient.invalidateQueries({ queryKey: ["recent-analyses"] });
+    },
   });
 }
 
@@ -153,6 +191,18 @@ export function useCompare(left: number | null, right: number | null) {
     queryKey: ["compare", left, right],
     queryFn: () => api.compare(left as number, right as number),
     enabled: left != null && right != null && left !== right,
+  });
+}
+
+export function useRemediation(id: number, enabled: boolean) {
+  // Gated on a finished analysis for the same reason as useScore: findings land
+  // progressively, so a plan built mid-run would describe a repository the
+  // analyzers have not finished reading — and it reads as authoritative advice,
+  // not a partial count.
+  return useQuery({
+    queryKey: ["remediation", id],
+    queryFn: () => api.remediation(id),
+    enabled,
   });
 }
 

@@ -6,7 +6,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app.db import get_session_factory
-from app.models import Analysis, FindingStatus, Repository, Severity, User
+from app.models import Analysis, FindingStatus, Repository, Severity, User, UserRepository
 from app.services.tools.findings import FindingDraft, persist_findings
 
 
@@ -28,6 +28,8 @@ def repo_with_analyses() -> tuple[int, int, int]:
             added_by=user.id,
         )
         session.add(repo)
+        session.commit()
+        session.add(UserRepository(repo_id=repo.id, user_id=user.id))
         session.commit()
 
         first = Analysis(repository_id=repo.id, loc=1000, published=True)
@@ -208,6 +210,8 @@ def test_compare_rejects_different_repositories(
             added_by=user.id,
         )
         session.add(other_repo)
+        session.commit()
+        session.add(UserRepository(repo_id=other_repo.id, user_id=user.id))
         session.commit()
         other_analysis = Analysis(repository_id=other_repo.id)
         session.add(other_analysis)

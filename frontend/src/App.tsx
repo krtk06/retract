@@ -3,6 +3,7 @@ import { Navigate, Route, Routes } from "react-router-dom";
 import { useMe } from "./api/hooks";
 import { Layout } from "./components/Layout";
 import { AnalysisDetailPage } from "./pages/AnalysisDetailPage";
+import { DashboardPage } from "./pages/DashboardPage";
 import { LoginPage } from "./pages/LoginPage";
 import { ReposPage } from "./pages/ReposPage";
 
@@ -24,7 +25,8 @@ export default function App() {
   return (
     <Layout user={me.data}>
       <Routes>
-        <Route path="/" element={<ReposPage />} />
+        <Route path="/" element={<DashboardPage />} />
+        <Route path="/repos" element={<ReposPage />} />
         <Route path="/analyses/:id" element={<AnalysisDetailPage />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>

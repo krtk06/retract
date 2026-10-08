@@ -3,7 +3,17 @@
 import enum
 from datetime import UTC, datetime
 
-from sqlalchemy import JSON, Boolean, Enum, Float, ForeignKey, Integer, Text, UniqueConstraint
+from sqlalchemy import (
+    JSON,
+    Boolean,
+    Enum,
+    Float,
+    ForeignKey,
+    Integer,
+    String,
+    Text,
+    UniqueConstraint,
+)
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -49,9 +59,33 @@ class User(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     github_id: Mapped[int | None] = mapped_column(unique=True, nullable=True)
     login: Mapped[str] = mapped_column(unique=True)
+    # Email accounts (bcrypt hash) are optional: a user may exist with either or
+    # both credential sets (GitHub-only, email-only, or GitHub + a set password).
+    email: Mapped[str | None] = mapped_column(String(320), unique=True, nullable=True)
+    password_hash: Mapped[str | None] = mapped_column(String(255), nullable=True)
     created_at: Mapped[datetime] = mapped_column(default=utcnow)
 
     repositories: Mapped[list["Repository"]] = relationship(back_populates="added_by_user")
+    repository_access: Mapped[list["UserRepository"]] = relationship(
+        back_populates="user", cascade="all, delete-orphan"
+    )
+
+
+class UserRepository(Base):
+    """Ownership table: which users may see (and analyze) which repositories.
+
+    Deliberately many-to-many rather than a per-user repo duplicate: several users
+    adding the same GitHub URL share one clone and one analysis history, while the
+    association keeps visibility private to people who actually added it.
+    """
+
+    __tablename__ = "user_repositories"
+
+    repo_id: Mapped[int] = mapped_column(ForeignKey("repositories.id"), primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), primary_key=True)
+
+    repository: Mapped["Repository"] = relationship(back_populates="owners")
+    user: Mapped["User"] = relationship(back_populates="repository_access")
 
 
 class Repository(Base):
@@ -66,6 +100,9 @@ class Repository(Base):
     created_at: Mapped[datetime] = mapped_column(default=utcnow)
 
     added_by_user: Mapped[User] = relationship(back_populates="repositories")
+    owners: Mapped[list["UserRepository"]] = relationship(
+        back_populates="repository", cascade="all, delete-orphan"
+    )
     analyses: Mapped[list["Analysis"]] = relationship(back_populates="repository")
 
 

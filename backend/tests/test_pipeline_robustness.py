@@ -6,12 +6,13 @@ bound anything. The chord test deliberately avoids `task_always_eager`, because 
 mode never enforces time limits and therefore could not have caught the original bug.
 """
 
+import sys
 import time
 import uuid
 from pathlib import Path
 
 import pytest
-from celery.exceptions import ChordError, SoftTimeLimitExceeded
+from celery.exceptions import ChordError, SoftTimeLimitExceeded, TimeLimitExceeded
 from sqlalchemy.orm import Session
 
 from app.db import get_session_factory
@@ -19,9 +20,28 @@ from app.models import Analysis, AnalysisStatus, Finding, Repository, Severity, 
 from app.services.tools import architecture, deps
 from app.services.tools.findings import FindingDraft, persist_findings
 from app.tasks.analysis import on_chord_error
-from app.tasks.tools import TOOL_HARD_TIME_LIMIT, TOOL_SOFT_TIME_LIMIT, _describe_failure
+from app.tasks.tools import (
+    TOOL_HARD_TIME_LIMIT,
+    TOOL_SOFT_TIME_LIMIT,
+    _describe_failure,
+    _on_tool_failure,
+)
 
 # ---------------------------------------------------------------- chord failure
+
+
+def _time_limit_einfo() -> object:
+    """A celery ExceptionInfo carrying the exception a killed task would report.
+
+    Built by raising and catching for real rather than fabricating a traceback object,
+    because the handler only reads `exc_type` off it.
+    """
+    from celery.app.task import ExceptionInfo
+
+    try:
+        raise TimeLimitExceeded(1260)
+    except TimeLimitExceeded:
+        return ExceptionInfo(sys.exc_info())
 
 
 def _make_running_analysis(session: Session) -> Analysis:
@@ -98,10 +118,142 @@ def test_chord_error_does_not_overwrite_a_finished_analysis() -> None:
         session.close()
 
 
+def test_killed_tool_fails_the_analysis() -> None:
+    """The regression for the bug that survived one round of fixes.
+
+    A tool SIGKILLed by the hard time limit never returns, so the chord body never runs.
+    Linking an errback on the chord does not help: it attaches to the *body*, and the
+    body is exactly what never executes. Verified against a real 1260s timeout on
+    psf/black, where the chord logged ChordError and the analysis stayed at `running`
+    with nothing recorded.
+
+    The task-level error handler runs in the pool parent, which survives the kill, so
+    this is the only place that can still fail the analysis.
+    """
+    session = get_session_factory()()
+    try:
+        analysis = _make_running_analysis(session)
+        analysis_id = analysis.id
+
+        einfo = _time_limit_einfo()
+        _on_tool_failure(
+            "task-abc",
+            ("complexity", analysis_id, "/data/repos/1/2"),
+            {},
+            einfo,
+        )
+
+        session.expire_all()
+        failed = session.get(Analysis, analysis_id)
+        assert failed is not None
+        assert failed.status == AnalysisStatus.FAILED
+        assert failed.error is not None
+        assert "complexity" in failed.error
+        assert "hard time limit" in failed.error
+    finally:
+        session.close()
+
+
+def test_killed_tool_handler_ignores_an_unidentifiable_failure() -> None:
+    """No analysis id means there is nothing safe to fail, so it must not guess."""
+    # Must not raise even though it cannot resolve an analysis.
+    einfo = _time_limit_einfo()
+    _on_tool_failure("task-abc", ("complexity",), {}, einfo)
+
+
+def test_killed_tool_handler_leaves_a_finished_analysis_alone() -> None:
+    session = get_session_factory()()
+    try:
+        analysis = _make_running_analysis(session)
+        session.get(Analysis, analysis.id).status = AnalysisStatus.DONE
+        session.get(Analysis, analysis.id).score_json = {"overall": 71}
+        session.commit()
+
+        einfo = _time_limit_einfo()
+        _on_tool_failure("t", ("semgrep", analysis.id, "/x"), {}, einfo)
+
+        session.expire_all()
+        done = session.get(Analysis, analysis.id)
+        assert done is not None
+        assert done.status == AnalysisStatus.DONE
+        assert done.score_json == {"overall": 71}
+    finally:
+        session.close()
+
+
+def test_reaper_fails_a_stranded_analysis() -> None:
+    """The watchdog is the actual guarantee; the errbacks are only an optimisation.
+
+    Everything that can strand a row — a SIGKILLed tool, a crashed worker, a host
+    reboot, a `docker compose down` mid-run — was observed during the sweep, and none of
+    them reliably deliver a callback. The reaper only needs to observe that the row is
+    old, which survives all of them.
+    """
+    from datetime import UTC, datetime, timedelta
+
+    from app.tasks.analysis import reap_stalled_analyses
+
+    session = get_session_factory()()
+    try:
+        analysis = _make_running_analysis(session)
+        started = datetime.now(UTC) - timedelta(hours=3)
+        session.get(Analysis, analysis.id).started_at = started
+        session.commit()
+
+        result = reap_stalled_analyses()
+
+        session.expire_all()
+        reaped = session.get(Analysis, analysis.id)
+        assert reaped is not None
+        assert analysis.id in result["reaped"]
+        assert reaped.status == AnalysisStatus.FAILED
+        assert reaped.error is not None
+        assert "did not finish" in reaped.error
+    finally:
+        session.close()
+
+
+def test_reaper_leaves_a_recent_analysis_alone() -> None:
+    """A slow repository is not a stall, and must not be killed mid-run."""
+    from app.tasks.analysis import reap_stalled_analyses
+
+    session = get_session_factory()()
+    try:
+        analysis = _make_running_analysis(session)
+        result = reap_stalled_analyses()
+        session.expire_all()
+        still = session.get(Analysis, analysis.id)
+        assert analysis.id not in result["reaped"]
+        assert still is not None
+        assert still.status == AnalysisStatus.RUNNING
+    finally:
+        session.close()
+
+
+def test_reaper_interval_is_scheduled() -> None:
+    """Beat must actually be pointed at the reaper, or it never runs."""
+    from app.tasks.celery_app import celery_app
+
+    schedule = celery_app.conf.beat_schedule
+    assert "reap-stalled-analyses" in schedule
+    entry = schedule["reap-stalled-analyses"]
+    assert entry["task"] == "app.tasks.analysis.reap_stalled_analyses"
+    assert entry["schedule"] > 0
+
+
+def test_reap_interval_matches_the_constant_the_task_documents() -> None:
+    from app.tasks.analysis import REAP_INTERVAL_SECONDS as from_task
+    from app.tasks.celery_app import REAP_INTERVAL_SECONDS as from_config
+
+    assert from_task == from_config
+
+
 def test_chord_error_handles_missing_analysis() -> None:
     """The failure reporter must never raise, even for an analysis that no longer exists."""
     result = on_chord_error(ChordError("boom"), 999_999)
-    assert result["ok"] is True
+    # No row to update is a legitimate outcome, reported rather than raised.
+    assert result["ok"] is False
+    assert result["error"] == "analysis not found"
 
 
 def test_chord_error_survives_an_exception_with_no_message() -> None:
@@ -207,9 +359,7 @@ def test_registry_lookups_run_within_the_deadline(monkeypatch: pytest.MonkeyPatc
 def test_outdated_reports_real_lag(monkeypatch: pytest.MonkeyPatch) -> None:
     """The parallel path still produces the finding it used to."""
     latest = {"old-pkg": "2.0.0", "new-pkg": "1.0.0"}
-    monkeypatch.setattr(
-        deps, "_latest_version", lambda client, dep: latest.get(dep.name)
-    )
+    monkeypatch.setattr(deps, "_latest_version", lambda client, dep: latest.get(dep.name))
 
     drafts = deps._outdated(
         [

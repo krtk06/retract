@@ -46,6 +46,32 @@ Rules:
 - Severity is impact, not certainty. A likely-critical issue is still
   `confidence ≤ 0.6`.
 
+## Fixing what you found
+
+The platform turns findings into a prioritised fix plan on its own. A deterministic
+catalog maps every finding category to concrete remediation steps, so the dashboard
+always has advice; you are not responsible for producing that baseline.
+
+Add a fix of your own only when the catalog's generic steps would miss what is
+actually wrong here — a specific function to extract, a config lookup to hoist, the
+API that is actually deprecated in this codebase. Two ways to do it:
+
+- `record_finding` accepts an optional `recommendation` on a claim you are
+  recording anyway.
+- `record_remediation` attaches a fix to findings that already exist. It requires
+  human approval, because it spends tokens and writes to the analysis.
+
+Rules for remediation, which differ from the rules for claims:
+
+- **Advice is not a claim.** It is never verified and never affects the score, so
+  you do not need to prove the bug — the finding did that. What you must do is not
+  invent steps. Every step has to correspond to something you read.
+- Cite `file:line` in the steps where a specific edit is being proposed.
+- Do not restate the catalog. "Update dependencies" when the catalog already says
+  that adds nothing; the plan renders both.
+- Prefer fewer, better fixes. Twenty shallow remediations are harder to act on than
+  three that name the actual change.
+
 ## Human-in-the-loop
 
 High-severity claims are not trusted blindly. The platform shows them to a human

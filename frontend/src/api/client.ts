@@ -1,6 +1,7 @@
 import type {
   Analysis,
   AnalysisHistoryItem,
+  AnalysisSummary,
   ApprovalQueue,
   ApprovalResult,
   CalibrationStat,
@@ -8,6 +9,7 @@ import type {
   Finding,
   GraphNeighborhood,
   GraphSummary,
+  RemediationPlan,
   Repository,
   SnippetResponse,
   SymbolRef,
@@ -47,8 +49,19 @@ export const api = {
   me: () => request<User>("/api/auth/me"),
   devLogin: (login: string) =>
     request<{ ok: boolean }>(`/api/auth/dev/login?login=${encodeURIComponent(login)}`),
+  register: (email: string, password: string) =>
+    request<User>("/api/auth/register", {
+      method: "POST",
+      body: JSON.stringify({ email, password }),
+    }),
+  login: (email: string, password: string) =>
+    request<User>("/api/auth/login", {
+      method: "POST",
+      body: JSON.stringify({ email, password }),
+    }),
   logout: () => request<{ ok: boolean }>("/api/auth/logout", { method: "POST" }),
   listRepos: () => request<Repository[]>("/api/repos"),
+  listAnalyses: () => request<AnalysisSummary[]>("/api/analyses"),
   createRepo: (url: string) =>
     request<Repository>("/api/repos", { method: "POST", body: JSON.stringify({ url }) }),
   analyzeRepo: (repoId: number) =>
@@ -64,7 +77,9 @@ export const api = {
     request<GraphNeighborhood>(
       `/api/analyses/${id}/graph/neighborhood?symbol=${encodeURIComponent(symbol)}`,
     ),
-  history: (id: number) => request<AnalysisHistoryItem[]>(`/api/analyses/${id}/history`),  trustSummary: (id: number) => request<TrustSummary>(`/api/analyses/${id}/trust-summary`),
+  history: (id: number) => request<AnalysisHistoryItem[]>(`/api/analyses/${id}/history`),
+  trustSummary: (id: number) => request<TrustSummary>(`/api/analyses/${id}/trust-summary`),
+  remediation: (id: number) => request<RemediationPlan>(`/api/analyses/${id}/remediation`),
   compare: (left: number, right: number) =>
     request<CompareResult>(`/api/analyses/compare?left=${left}&right=${right}`),
   snippet: (id: number, path: string, lineStart: number) =>

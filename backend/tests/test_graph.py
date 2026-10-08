@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session
 
 from app.analysis_engine import graph
 from app.db import get_session_factory
-from app.models import Analysis, Repository, User
+from app.models import Analysis, Repository, User, UserRepository
 from app.services import indexer
 from app.services.ingestion import build_inventory
 
@@ -64,6 +64,8 @@ def analyzed(fixture_repo: Path) -> Generator[int, None, None]:
             added_by=user.id,
         )
         session.add(repo)
+        session.commit()
+        session.add(UserRepository(repo_id=repo.id, user_id=user.id))
         session.commit()
         analysis = Analysis(repository_id=repo.id)
         session.add(analysis)

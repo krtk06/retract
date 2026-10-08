@@ -104,12 +104,43 @@ check_compose() {
   echo
 }
 
+# The agent resolves its credential itself, per provider (agent/lib/credentials.ts),
+# so compose must not hard-require one with `${VAR:?…}`: that operator cannot be
+# conditional on AI_INTEL_LLM_PROVIDER, and it forced every deployment to invent a
+# gateway key the openai provider never reads. A regression here is invisible in the
+# app until an agent message fails, so it is checked statically.
+check_credential_not_hard_required() {
+  echo "→ infra/docker-compose.prod.yml (LLM credential)"
+  local file="$ROOT/infra/docker-compose.prod.yml"
+  if grep -qE 'AI_GATEWAY_API_KEY:.*\$\{AI_GATEWAY_API_KEY:\?' "$file"; then
+    fail "AI_GATEWAY_API_KEY uses \${VAR:?…} — the agent resolves credentials per provider; use \${VAR:-}"
+  else
+    echo "  ok   AI_GATEWAY_API_KEY is optional (the agent validates per provider)"
+  fi
+  if ! grep -qE 'AI_INTEL_API_KEY:.*\$\{AI_INTEL_API_KEY:-\}' "$file"; then
+    fail "AI_INTEL_API_KEY is not passed through to the agent container — the openai provider needs it"
+  else
+    echo "  ok   AI_INTEL_API_KEY is passed through"
+  fi
+  # The custom-endpoint variables must reach the agent too; without them a container
+  # a containerized openai deployment silently ignores AI_INTEL_LLM_BASE_URL.
+  for v in AI_INTEL_LLM_BASE_URL AI_INTEL_LLM_API_MODE AI_INTEL_LLM_API_KEY; do
+    if ! grep -qE "$v:.*\\\$\{$v:-" "$file"; then
+      fail "$v is not passed through to the agent container"
+    else
+      echo "  ok   $v is passed through"
+    fi
+  done
+  echo
+}
+
 echo "Container configuration check"
 echo
 for dir in backend frontend agent; do
   check_dockerfile "$dir"
 done
 check_compose
+check_credential_not_hard_required
 
 if [[ "$failures" -gt 0 ]]; then
   echo "$failures problem(s) found"

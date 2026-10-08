@@ -18,6 +18,19 @@ const AgentChat = lazy(() =>
   import("../components/AgentChat").then((module) => ({ default: module.AgentChat })),
 );
 
+// The eve client is ~450 kB of the bundle, and the fix plan is the other panel
+// that needs it only on demand.
+const RemediationPlanPanel = lazy(() =>
+  import("../components/RemediationPlan").then((module) => ({
+    default: module.RemediationPlanPanel,
+  })),
+);
+const RemediationSummaryCard = lazy(() =>
+  import("../components/RemediationPlan").then((module) => ({
+    default: module.RemediationSummaryCard,
+  })),
+);
+
 const EVENT_NAMES = ["status", "step", "tool", "agent", "done", "failed"];
 
 function formatTime(ts: number) {
@@ -56,7 +69,15 @@ export function AnalysisDetailPage() {
   const isDone = analysis.data?.status === "done";
   const score = useScore(analysisId, isDone);
   const [events, setEvents] = useState<AnalysisEvent[]>([]);
-  const [tab, setTab] = useState<"overview" | "explore" | "agent">("overview");
+  const [tab, setTab] = useState<"overview" | "explore" | "fixes" | "agent">("overview");
+  // Handed to the agent panel when the fix plan's "deep fix plan" button is used,
+  // so the same eve session is reused rather than a second one opened.
+  const [agentPrompt, setAgentPrompt] = useState<string | null>(null);
+
+  const openAgentWith = (prompt: string) => {
+    setAgentPrompt(prompt);
+    setTab("agent");
+  };
 
   // The score is finalised in the same commit that flips the status to done, so the
   // transition is the signal to read it. Without this the page can keep showing
@@ -143,8 +164,8 @@ export function AnalysisDetailPage() {
           </p>
         )}
         {data.status === "done" && (
-          <div className="mt-4 flex gap-1 border-b border-zinc-800">
-            {(["overview", "explore", "agent"] as const).map((name) => (
+          <div className="mt-4 flex flex-wrap gap-1 border-b border-zinc-800">
+            {(["overview", "explore", "fixes", "agent"] as const).map((name) => (
               <button
                 key={name}
                 onClick={() => setTab(name)}
@@ -215,16 +236,43 @@ export function AnalysisDetailPage() {
           {data.status === "done" && <TrustPanel analysisId={analysisId} />}
 
           {data.status === "done" && <HistoryCompare analysisId={analysisId} />}
+
+          {/* Last on the overview, because it is the answer to the question the
+              rest of the page raises: what do I actually do about all this? */}
+          {data.status === "done" && (
+            <Suspense fallback={null}>
+              <RemediationSummaryCard analysisId={analysisId} onOpen={() => setTab("fixes")} />
+            </Suspense>
+          )}
         </>
       )}
 
       {tab === "explore" && data.status === "done" && <ExploreTab analysisId={analysisId} />}
 
+      {tab === "fixes" && data.status === "done" && (
+        <Suspense fallback={<p className="text-sm text-zinc-500">Building the fix plan…</p>}>
+          <RemediationPlanPanel
+            analysisId={analysisId}
+            repository={repo}
+            commitSha={data.commit_sha}
+            onOpenAgent={() =>
+              openAgentWith(
+                "Produce a deep fix plan for this analysis. The dashboard already shows the " +
+                  "deterministic remediation catalog; read the findings it did not cover well, " +
+                  "and record a repo-specific remediation for each with record_remediation. " +
+                  "Cite file:line for every one, and do not invent steps the evidence does not " +
+                  "support.",
+              )
+            }
+          />
+        </Suspense>
+      )}
+
       {tab === "agent" && data.status === "done" && (
         <Suspense
           fallback={<p className="text-sm text-zinc-500">Loading the agent…</p>}
         >
-          <AgentChat analysisId={analysisId} />
+          <AgentChat analysisId={analysisId} initialPrompt={agentPrompt} />
         </Suspense>
       )}
     </div>

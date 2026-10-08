@@ -1,11 +1,11 @@
 """Knowledge graph endpoints (symbol structure, not vector retrieval)."""
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
 from app.analysis_engine import graph
 from app.db import get_db
-from app.deps import get_current_user
+from app.deps import get_current_user, get_owned_analysis_or_404
 from app.models import Analysis, User
 from app.schemas import (
     GraphNeighborhoodOut,
@@ -16,20 +16,18 @@ from app.schemas import (
 router = APIRouter(prefix="/analyses", tags=["graph"])
 
 
-def _ensure_analysis(db: Session, analysis_id: int) -> Analysis:
-    analysis = db.get(Analysis, analysis_id)
-    if analysis is None:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Analysis not found")
-    return analysis
+def _ensure_analysis(db: Session, analysis_id: int, user: User) -> Analysis:
+    """Owned-analysis lookup: 404 for both missing and non-owned rows."""
+    return get_owned_analysis_or_404(db, analysis_id, user)
 
 
 @router.get("/{analysis_id}/graph/summary", response_model=GraphSummaryOut)
 def graph_summary(
     analysis_id: int,
     db: Session = Depends(get_db),
-    _: User = Depends(get_current_user),
+    user: User = Depends(get_current_user),
 ) -> GraphSummaryOut:
-    _ensure_analysis(db, analysis_id)
+    _ensure_analysis(db, analysis_id, user)
     return GraphSummaryOut.model_validate(graph.summary(db, analysis_id))
 
 
@@ -40,9 +38,9 @@ def graph_symbols(
     kind: str | None = None,
     limit: int = Query(default=100, le=500),
     db: Session = Depends(get_db),
-    _: User = Depends(get_current_user),
+    user: User = Depends(get_current_user),
 ) -> list[SymbolOut]:
-    _ensure_analysis(db, analysis_id)
+    _ensure_analysis(db, analysis_id, user)
     return [
         SymbolOut.model_validate(item, from_attributes=True)
         for item in graph.search_symbols(db, analysis_id, query=q, kind=kind, limit=limit)
@@ -55,9 +53,9 @@ def graph_neighborhood(
     symbol: str,
     depth: int = Query(default=2, ge=1, le=4),
     db: Session = Depends(get_db),
-    _: User = Depends(get_current_user),
+    user: User = Depends(get_current_user),
 ) -> GraphNeighborhoodOut:
-    _ensure_analysis(db, analysis_id)
+    _ensure_analysis(db, analysis_id, user)
     result = graph.neighborhood(db, analysis_id, symbol, depth=depth)
     return GraphNeighborhoodOut.model_validate(result, from_attributes=True)
 
@@ -67,9 +65,9 @@ def graph_callers(
     analysis_id: int,
     symbol: str,
     db: Session = Depends(get_db),
-    _: User = Depends(get_current_user),
+    user: User = Depends(get_current_user),
 ) -> list[dict]:
-    _ensure_analysis(db, analysis_id)
+    _ensure_analysis(db, analysis_id, user)
     return graph.callers(db, analysis_id, symbol)
 
 
@@ -78,9 +76,9 @@ def graph_callees(
     analysis_id: int,
     symbol: str,
     db: Session = Depends(get_db),
-    _: User = Depends(get_current_user),
+    user: User = Depends(get_current_user),
 ) -> list[dict]:
-    _ensure_analysis(db, analysis_id)
+    _ensure_analysis(db, analysis_id, user)
     return graph.callees(db, analysis_id, symbol)
 
 
@@ -89,9 +87,9 @@ def graph_imports(
     analysis_id: int,
     module: str,
     db: Session = Depends(get_db),
-    _: User = Depends(get_current_user),
+    user: User = Depends(get_current_user),
 ) -> list[dict]:
-    _ensure_analysis(db, analysis_id)
+    _ensure_analysis(db, analysis_id, user)
     return graph.imports(db, analysis_id, module)
 
 
@@ -100,9 +98,9 @@ def graph_dependents(
     analysis_id: int,
     module: str,
     db: Session = Depends(get_db),
-    _: User = Depends(get_current_user),
+    user: User = Depends(get_current_user),
 ) -> list[dict]:
-    _ensure_analysis(db, analysis_id)
+    _ensure_analysis(db, analysis_id, user)
     return graph.dependents(db, analysis_id, module)
 
 
@@ -112,9 +110,9 @@ def graph_path(
     from_symbol: str = Query(alias="from"),
     to_symbol: str = Query(alias="to"),
     db: Session = Depends(get_db),
-    _: User = Depends(get_current_user),
+    user: User = Depends(get_current_user),
 ) -> list[SymbolOut]:
-    _ensure_analysis(db, analysis_id)
+    _ensure_analysis(db, analysis_id, user)
     return [
         SymbolOut.model_validate(item, from_attributes=True)
         for item in graph.path(db, analysis_id, from_symbol, to_symbol)

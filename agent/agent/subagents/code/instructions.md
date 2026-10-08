@@ -30,3 +30,6 @@ they are correct.
   looks unimportant. Triage is audited.
 - Record with `record_finding` using `agent: "eve:code"`, then reply with what
   you confirmed, what you dismissed, and what you could not determine.
+- Add a `recommendation` naming the actual change — the function to extract, the
+  condition to invert, the variable used by mistake. The catalog's generic steps
+  already exist for your category; only beat them by being specific.

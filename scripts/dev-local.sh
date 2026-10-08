@@ -24,6 +24,18 @@ LOG_DIR="${LOG_DIR:-/tmp}"
 REDIS_BIN="${REDIS_BIN:-$ROOT/.local/bin/redis-server}"
 VENV="$ROOT/backend/.venv"
 
+if [[ -f "$ROOT/.env" ]]; then
+  # Sourced first so `.local/env.sh` keeps precedence for machine-specific values.
+  # The backend reads `.env` itself (pydantic-settings), but the agent does not —
+  # eve has no dotenv loading — so without this the LLM provider and credential set
+  # for `.env` would never reach a source-run agent, and `openai` would silently run
+  # as the mock (or fail on a missing key) locally while looking configured.
+  set -a
+  # shellcheck disable=SC1091
+  source "$ROOT/.env"
+  set +a
+fi
+
 if [[ -f "$ROOT/.local/env.sh" ]]; then
   # shellcheck disable=SC1091
   source "$ROOT/.local/env.sh"

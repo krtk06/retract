@@ -31,3 +31,6 @@ layers, and dependencies — not about individual lines of logic.
 - Record with `record_finding` using `agent: "eve:architecture"`, then report the
   structural picture: entry points, the main dependency direction, and the
   concrete violations you confirmed.
+- Add a `recommendation` naming the module that should move where. The catalog says
+  "break the cycle"; "move `ParseResult` into `app.types`, which neither side
+  imports" is the fix.

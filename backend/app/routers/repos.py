@@ -6,8 +6,8 @@ from sqlalchemy.orm import Session
 
 from app.config import get_settings
 from app.db import get_db
-from app.deps import get_current_user
-from app.models import Analysis, AnalysisStatus, Repository, User
+from app.deps import get_current_user, get_owned_repo_or_404
+from app.models import Analysis, AnalysisStatus, Repository, User, UserRepository
 from app.schemas import AnalysisOut, RepoCreate, RepoOut
 from app.services.github import InvalidRepoUrl, canonical_url, parse_github_url
 from app.tasks.analysis import run_analysis
@@ -15,6 +15,17 @@ from app.tasks.analysis import run_analysis
 router = APIRouter(prefix="/repos", tags=["repos"])
 
 _ACTIVE_STATUSES = (AnalysisStatus.PENDING, AnalysisStatus.RUNNING)
+
+
+def _grant_access(db: Session, repo: Repository, user: User) -> None:
+    """Add the user to the repo's owners when not already associated."""
+    exists = db.scalar(
+        select(UserRepository).where(
+            UserRepository.repo_id == repo.id, UserRepository.user_id == user.id
+        )
+    )
+    if exists is None:
+        db.add(UserRepository(repo_id=repo.id, user_id=user.id))
 
 
 def _to_out(db: Session, repo: Repository) -> RepoOut:
@@ -63,15 +74,27 @@ def create_repo(
         db.add(repo)
         db.commit()
         db.refresh(repo)
+    _grant_access(db, repo, user)
+    db.commit()
     return _to_out(db, repo)
 
 
 @router.get("", response_model=list[RepoOut])
 def list_repos(
     db: Session = Depends(get_db),
-    _: User = Depends(get_current_user),
+    user: User = Depends(get_current_user),
 ) -> list[RepoOut]:
-    repos = db.scalars(select(Repository).order_by(Repository.created_at.desc())).all()
+    """Repos the caller can see: the ones they (or a same-URL user) added."""
+    repos = (
+        db.scalars(
+            select(Repository)
+            .join(UserRepository, UserRepository.repo_id == Repository.id)
+            .where(UserRepository.user_id == user.id)
+            .order_by(Repository.created_at.desc())
+        )
+        .unique()
+        .all()
+    )
     return [_to_out(db, repo) for repo in repos]
 
 
@@ -79,11 +102,10 @@ def list_repos(
 def analyze_repo(
     repo_id: int,
     db: Session = Depends(get_db),
-    _: User = Depends(get_current_user),
+    user: User = Depends(get_current_user),
 ) -> AnalysisOut:
-    repo = db.get(Repository, repo_id)
-    if repo is None:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Repository not found")
+    # Ownership gate (404 when the repo is absent or not the caller's).
+    get_owned_repo_or_404(db, repo_id, user)
 
     active = db.scalar(
         select(Analysis).where(

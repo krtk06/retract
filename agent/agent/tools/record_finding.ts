@@ -36,6 +36,14 @@ const findingSchema = z.object({
     .describe(
       'e.g. "secret", "injection", "weak-crypto", "layering", "coupling", "test-plan", "docstring-plan", "code-review"',
     ),
+  recommendation: z
+    .string()
+    .min(3)
+    .max(300)
+    .optional()
+    .describe(
+      "One imperative sentence on how to fix it. Omit unless you have a concrete change in mind; the platform has a generic catalog entry for every category already.",
+    ),
 });
 
 export default defineTool({
@@ -63,6 +71,10 @@ export default defineTool({
     summary: z.string().max(4000).default("").describe("One-paragraph summary of this pass"),
   }),
   async execute({ analysisId, agent, findings, triage, summary }, ctx) {
+    // A `recommendation` travels with the claim and the server files it as the
+    // finding's remediation. It is optional because the platform already has a
+    // deterministic catalog entry for every category; supply one only when you can
+    // name a change that is specific to the code in front of you.
     const result = await apiPost<AgentFindingsOut>(
       `/api/analyses/${analysisId}/findings`,
       {

@@ -1,9 +1,10 @@
 """Pydantic schemas for API requests/responses."""
 
 from datetime import datetime
+from types import SimpleNamespace
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from app.models import Severity
 
@@ -14,6 +15,27 @@ class UserOut(BaseModel):
     id: int
     login: str
     github_id: int | None
+    email: str | None = None
+
+
+class RegisterIn(BaseModel):
+    email: str = Field(max_length=320)
+    password: str = Field(min_length=8, max_length=128)
+
+    @model_validator(mode="after")
+    def _normalize(self) -> "RegisterIn":
+        self.email = self.email.strip().lower()
+        return self
+
+
+class LoginIn(BaseModel):
+    email: str = Field(max_length=320)
+    password: str = Field(min_length=1, max_length=128)
+
+    @model_validator(mode="after")
+    def _normalize(self) -> "LoginIn":
+        self.email = self.email.strip().lower()
+        return self
 
 
 class RepoCreate(BaseModel):
@@ -63,6 +85,10 @@ class AgentFindingIn(BaseModel):
     severity: Severity
     confidence: float = Field(default=0.5, ge=0.0, le=1.0)
     category: str = Field(default="insight", max_length=64)
+    # Optional: the deterministic catalog already has generic advice for every
+    # category, so the agent only supplies one when it can name a change specific
+    # to the code it read.
+    recommendation: str | None = Field(default=None, min_length=3, max_length=300)
 
 
 class AgentFindingsIn(BaseModel):
@@ -82,6 +108,85 @@ class AgentFindingsOut(BaseModel):
     checked: int = 0
     overall: int | None = None
     published: bool = False
+    reasons: list[str] = Field(default_factory=list)
+
+
+class RemediationTargetOut(BaseModel):
+    """One finding a work item covers."""
+
+    finding_id: int
+    title: str
+    severity: str
+    status: str
+    file_path: str | None = None
+    line_start: int | None = None
+
+
+class RemediationItemOut(BaseModel):
+    """A group of findings sharing one fix, with what that fix is worth."""
+
+    key: str
+    pillar: str
+    action: str
+    severity: str
+    effort: str
+    source: str
+    steps: list[str]
+    verify: str
+    references: list[str]
+    findings: list[RemediationTargetOut]
+    finding_count: int
+    # What this item is worth in its own pillar, against today's score. Not a share
+    # of `recoverable_points`: the overall is capped at worst_pillar + 15, so
+    # clearing a non-worst pillar barely moves the headline.
+    pillar_points: int
+    # Additive and exact: the curve's own input, and what the ranking sorts on.
+    weighted_penalty_removed: float
+    payoff: float
+
+
+class RemediationPlanOut(BaseModel):
+    analysis_id: int
+    loc: int | None = None
+    current_overall: int | None = None
+    projected_overall: int | None = None
+    recoverable_points: int | None = None
+    work_items: list[RemediationItemOut] = Field(default_factory=list)
+    findings_considered: int = 0
+    unverified_items: int = 0
+    truncated_findings: int = 0
+
+
+class RemediationBriefOut(BaseModel):
+    """The one-line fix, embedded in a findings response."""
+
+    action: str
+    effort: str
+    source: str
+
+
+class RemediationIn(BaseModel):
+    """One LLM-authored remediation, as submitted by the eve agent."""
+
+    finding_id: int = Field(ge=1)
+    action: str = Field(min_length=3, max_length=300)
+    steps: list[str] = Field(default_factory=list, max_length=10)
+    effort: str = "medium"
+    verify: str = Field(default="", max_length=500)
+    references: list[str] = Field(default_factory=list, max_length=5)
+    reasoning: str = Field(default="", max_length=1000)
+
+
+class RemediationSubmitIn(BaseModel):
+    agent: str = Field(min_length=1, max_length=64, pattern=r"^eve(:[a-z0-9-]+)?$")
+    remediations: list[RemediationIn] = Field(default_factory=list, max_length=100)
+
+
+class RemediationSubmitOut(BaseModel):
+    analysis_id: int
+    agent: str
+    recorded: int
+    rejected: int
     reasons: list[str] = Field(default_factory=list)
 
 
@@ -108,6 +213,36 @@ class FindingOut(BaseModel):
     confidence: float
     status: str
     created_at: datetime
+    # Derived, not a column: the fix for this finding, whether the catalog
+    # produced it or an LLM did. Carried on every finding so the table can show
+    # advice inline without a second request.
+    remediation: dict[str, Any] = Field(default_factory=dict)
+
+    @model_validator(mode="after")
+    def _attach_remediation(self) -> "FindingOut":
+        """Fill the derived ``remediation`` field from the finding itself.
+
+        A validator rather than a column: the fix is a function of category plus
+        evidence, so storing it would create a second source of truth that the
+        catalog could drift from.
+        """
+        if self.remediation:
+            return self
+        from app.analysis_engine.remediation import remediation_summary
+
+        try:
+            self.remediation = remediation_summary(
+                SimpleNamespace(
+                    category=self.category,
+                    title=self.title,
+                    evidence_json=self.evidence_json,
+                    file_path=self.file_path,
+                    line_start=self.line_start,
+                )
+            )
+        except Exception:  # noqa: BLE001 — advice must never break the list
+            self.remediation = {}
+        return self
 
 
 class AnalysisEvent(BaseModel):
@@ -216,6 +351,23 @@ class AnalysisHistoryOut(BaseModel):
 
     id: int
     repository_id: int
+    commit_sha: str | None
+    status: str
+    created_at: datetime
+    finished_at: datetime | None
+    loc: int | None = None
+    published: bool = False
+    finding_count: int = 0
+    overall: int | None = None
+
+
+class AnalysisSummaryOut(BaseModel):
+    """One row of the user dashboard: recent analyses across the user's repos."""
+
+    id: int
+    repository_id: int
+    repo_owner: str
+    repo_name: str
     commit_sha: str | None
     status: str
     created_at: datetime

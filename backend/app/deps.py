@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 
 from app.config import get_settings
 from app.db import get_db
-from app.models import User
+from app.models import Analysis, Repository, User, UserRepository
 from app.security import decode_access_token
 
 AGENT_TOKEN_HEADER = "X-Agent-Token"
@@ -52,7 +52,14 @@ def _agent_user(request: Request, presented: str, db: Session) -> User:
         if user is not None:
             return user
     # Evals and CI have no browser session: attribute agent activity to the
-    # first registered user rather than minting rows on demand.
+    # first registered user rather than minting rows on demand. A production
+    # deployment must keep that fallback closed — an unnamed agent call there
+    # is an error, not CI.
+    if not settings.dev_login:
+        raise HTTPException(
+            status.HTTP_401_UNAUTHORIZED,
+            detail="Unattributed agent call: X-Agent-User is required",
+        )
     user = db.scalar(select(User).order_by(User.id).limit(1))
     if user is None:
         raise HTTPException(
@@ -60,3 +67,35 @@ def _agent_user(request: Request, presented: str, db: Session) -> User:
             detail="No user exists to own agent activity; sign in once first",
         )
     return user
+
+
+def owns_repo(db: Session, user_id: int, repo_id: int) -> bool:
+    """True when the user added this repository (shared rows keep one clone)."""
+    return (
+        db.scalar(
+            select(UserRepository).where(
+                UserRepository.user_id == user_id, UserRepository.repo_id == repo_id
+            )
+        )
+        is not None
+    )
+
+
+def get_owned_repo_or_404(db: Session, repo_id: int, user: User) -> Repository:
+    """Load a repository the user may act on, without leaking which ones exist."""
+    repo = db.get(Repository, repo_id)
+    if repo is None or not owns_repo(db, user.id, repo.id):
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Repository not found")
+    return repo
+
+
+def get_owned_analysis_or_404(db: Session, analysis_id: int, user: User) -> Analysis:
+    """Load an analysis whose repository the user owns.
+
+    Forbidden and missing collapse into the same 404 so the endpoint cannot be
+    used to probe whether other users' analysis ids exist.
+    """
+    analysis = db.get(Analysis, analysis_id)
+    if analysis is None or not owns_repo(db, user.id, analysis.repository_id):
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Analysis not found")
+    return analysis

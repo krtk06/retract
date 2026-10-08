@@ -1,4 +1,4 @@
-"""Authentication: GitHub OAuth web flow + dev-bypass login + JWT cookie sessions."""
+"""Authentication: GitHub OAuth, email/password accounts, dev-bypass login, JWT cookies."""
 
 import secrets
 
@@ -13,8 +13,14 @@ from app.config import get_settings
 from app.db import get_db
 from app.deps import get_current_user
 from app.models import User
-from app.schemas import EveTokenOut, UserOut
-from app.security import EVE_TOKEN_TTL_SECONDS, create_access_token, create_eve_token
+from app.schemas import EveTokenOut, LoginIn, RegisterIn, UserOut
+from app.security import (
+    EVE_TOKEN_TTL_SECONDS,
+    create_access_token,
+    create_eve_token,
+    hash_password,
+    verify_password,
+)
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -36,6 +42,51 @@ def _set_session_cookie(response: Response, user: User) -> None:
         samesite="lax",
         secure=settings.auth_cookie_secure,
     )
+
+
+def _unique_login(db: Session, base: str) -> str:
+    """Derive a unique ``login`` from an email's local part."""
+    cleaned = "".join(c for c in base if c.isalnum() or c in "-_")[:48] or "user"
+    candidate = cleaned
+    suffix = 1
+    while db.scalar(select(User).where(User.login == candidate)) is not None:
+        candidate = f"{cleaned}-{suffix}"
+        suffix += 1
+    return candidate
+
+
+@router.post("/register", response_model=UserOut, status_code=status.HTTP_201_CREATED)
+def register(payload: RegisterIn, response: Response, db: Session = Depends(get_db)) -> User:
+    """Create an email/password account and sign the new session in immediately."""
+    user = db.scalar(select(User).where(User.email == payload.email))
+    if user is not None:
+        raise HTTPException(status.HTTP_409_CONFLICT, detail="Email already registered")
+    user = User(
+        email=payload.email,
+        login=_unique_login(db, payload.email.split("@", 1)[0]),
+        password_hash=hash_password(payload.password),
+    )
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+    _set_session_cookie(response, user)
+    return user
+
+
+@router.post("/login", response_model=UserOut)
+def login(payload: LoginIn, response: Response, db: Session = Depends(get_db)) -> User:
+    """Exchange an email/password pair for a session cookie.
+
+    The error is the same for a wrong email and a wrong password so the endpoint
+    cannot be used to enumerate registered addresses.
+    """
+    user = db.scalar(select(User).where(User.email == payload.email))
+    if user is None or not user.password_hash or not verify_password(
+        payload.password, user.password_hash
+    ):
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, detail="Invalid email or password")
+    _set_session_cookie(response, user)
+    return user
 
 
 @router.get("/github/login")

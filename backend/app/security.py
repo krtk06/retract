@@ -1,8 +1,9 @@
-"""JWT helpers for session tokens and the eve agent's scoped access token."""
+"""Password hashing plus JWT helpers for session and eve-agent tokens."""
 
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
+import bcrypt
 import jwt
 
 from app.config import get_settings
@@ -10,6 +11,18 @@ from app.config import get_settings
 EVE_TOKEN_ISSUER = "ai-intel"
 EVE_TOKEN_AUDIENCE = "eve-agent"
 EVE_TOKEN_TTL_SECONDS = 300
+
+
+def hash_password(password: str) -> str:
+    return bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("ascii")
+
+
+def verify_password(password: str, password_hash: str) -> bool:
+    """Constant-time credential check; malformed hashes simply fail closed."""
+    try:
+        return bcrypt.checkpw(password.encode("utf-8"), password_hash.encode("ascii"))
+    except (ValueError, UnicodeEncodeError):
+        return False
 
 
 def create_access_token(user_id: int) -> str:

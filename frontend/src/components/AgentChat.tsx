@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useEveAgent, type EveMessagePart } from "eve/react";
 
 import { useEveToken } from "../api/useEveToken";
@@ -111,12 +111,46 @@ function renderPart(part: EveMessagePart, index: number, role: string): ReactNod
   return null;
 }
 
-export function AgentChat({ analysisId }: { analysisId: number }) {
+export function AgentChat({
+  analysisId,
+  initialPrompt,
+}: {
+  analysisId: number;
+  // A request handed over by another surface — the fix plan's "deep fix plan"
+  // button. It is *pre-filled into the composer*, not sent automatically.
+  //
+  // Auto-sending it looks more convenient and is not. The eve hook creates a fresh
+  // session per mount and attaches/resumes on the way up, so a send issued from an
+  // effect races that lifecycle: the optimistic user message appears in the
+  // transcript while the turn never reaches the stream, leaving a request that
+  // looks sent and gets no answer — and it fails silently, which is the worst way
+  // for this to break. Handing over a draft keeps the human in the loop, which is
+  // the right default for spending a model's tokens anyway, and it cannot race.
+  initialPrompt?: string | null;
+}) {
   const { auth, error: authError } = useEveToken();
   const [draft, setDraft] = useState("");
   const [localError, setLocalError] = useState<string | null>(null);
   const logRef = useRef<HTMLDivElement>(null);
-  const agent = useEveAgent({ auth });
+  const agent = useEveAgent({
+    auth,
+    // Turn failures surface here, not in `agent.error`: a failed *model call*
+    // arrives as a `step.failed` stream event, which eve's client deliberately
+    // does not convert into a snapshot error (only `session.failed` is) and its
+    // reducer does not project into a message — so without this a turn that died
+    // on, say, an expired key left the user's message on screen with no reply and
+    // no explanation, reading exactly like a hang. Surfaced as a panel error, not
+    // a transcript entry, because nothing answered.
+    onEvent: (event) => {
+      if (event.type !== "step.failed" && event.type !== "turn.failed" && event.type !== "session.failed") {
+        return;
+      }
+      const data = event.data as { code?: string; message?: string };
+      const label =
+        event.type === "step.failed" ? "the model call failed" : `the ${event.type.replace(".", " ")}`;
+      setLocalError([label, data.message].filter(Boolean).join(": "));
+    },
+  });
 
   const messages = agent.data.messages;
   const approvals = useMemo(() => pendingApprovals(messages), [messages]);
@@ -128,24 +162,40 @@ export function AgentChat({ analysisId }: { analysisId: number }) {
     logRef.current?.scrollTo({ top: logRef.current.scrollHeight, behavior: "smooth" });
   }, [messages.length, approvals.length]);
 
-  const send = (text: string) => {
-    const message = text.trim();
-    if (message.length === 0 || busy || resuming) return;
-    setDraft("");
-    setLocalError(null);
-    // Fire-and-forget: the hook owns the durable session, and `agent.error`
-    // carries any failure back into the panel.
-    void agent
-      .send(message, {
-        clientContext: {
-          analysisId,
-          hint: `The dashboard is showing analysis ${analysisId}. Use its graph and findings tools.`,
-        },
-      })
-      .catch((cause: unknown) => {
-        setLocalError(cause instanceof Error ? cause.message : "the agent did not accept the message");
-      });
-  };
+  const send = useCallback(
+async (text: string) => {
+      const message = text.trim();
+      if (message.length === 0 || busy || resuming) return;
+      setDraft("");
+      setLocalError(null);
+      // Fire-and-forget: the hook owns the durable session, and `agent.error`
+      // carries any later failure back into the panel. Awaiting here would clear
+      // the composer's optimistic echo only after the whole turn finished.
+      void agent
+        .send(message, {
+          clientContext: {
+            analysisId,
+            hint: `The dashboard is showing analysis ${analysisId}. Use its graph and findings tools.`,
+          },
+        })
+        .catch((cause: unknown) => {
+          setLocalError(
+            cause instanceof Error ? cause.message : "the agent did not accept the message",
+          );
+        });
+    },
+    [agent, analysisId, busy, resuming],
+  );
+
+  // Adopt a handed-over prompt once. `useState` initialiser rather than an effect:
+  // seeding the draft during render means the first paint already shows the
+  // request, and switching tabs back and forth never re-seeds a draft the user has
+  // since edited.
+  const adopted = useRef(false);
+  if (initialPrompt && !adopted.current) {
+    adopted.current = true;
+    if (draft === "") setDraft(initialPrompt);
+  }
 
   if (authError && messages.length === 0) {
     return (
@@ -255,8 +305,14 @@ export function AgentChat({ analysisId }: { analysisId: number }) {
           event.preventDefault();
           send(draft);
         }}
-        className="flex items-center gap-2 border-t border-zinc-800 px-5 py-3"
+        className="flex flex-col gap-2 border-t border-zinc-800 px-5 py-3"
       >
+        {adopted.current && draft.trim().length > 0 && (
+          <p className="text-[11px] text-zinc-500">
+            Requested from the fix plan — review it, edit it, then send.
+          </p>
+        )}
+        <div className="flex items-center gap-2">
         <input
           value={draft}
           onChange={(event) => setDraft(event.target.value)}
@@ -269,8 +325,13 @@ export function AgentChat({ analysisId }: { analysisId: number }) {
           disabled={busy || resuming || draft.trim().length === 0}
           className="rounded-md bg-zinc-100 px-4 py-2 text-sm font-medium text-zinc-900 transition hover:bg-white disabled:opacity-40"
         >
-          {busy ? "Working…" : "Send"}
+          {/* "Reconnecting…" rather than a live-looking "Send": the client attaches
+              and resumes its session on mount, and a click in that window is
+              swallowed by the busy guard, so a button that looks ready but does
+              nothing is the one failure a user cannot explain. */}
+          {resuming ? "Reconnecting…" : busy ? "Working…" : "Send"}
         </button>
+        </div>
       </form>
     </section>
   );
