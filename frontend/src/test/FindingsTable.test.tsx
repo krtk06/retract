@@ -6,7 +6,10 @@ import { FindingsTable } from "../components/FindingsTable";
 import type { Finding } from "../api/types";
 
 const { copyTextMock } = vi.hoisted(() => ({
-  copyTextMock: vi.fn(async (_text: string) => true),
+  // Typed so the recorded calls carry the payload as one string argument,
+  // which is what the tests assert through mock.calls. The implementation
+  // ignores it; returning true exercises the "Copied ✓" state.
+  copyTextMock: vi.fn<(text: string) => Promise<boolean>>(async () => true),
 }));
 
 vi.mock("../lib/clipboard", () => ({ copyText: copyTextMock }));
