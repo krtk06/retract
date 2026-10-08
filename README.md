@@ -225,6 +225,39 @@ from two repositories and the trade-off between them, not from one anecdote.
 `psf/requests` has zero dependency findings and scores 100 there. Unmeasured is not
 the same as clean, and the current aggregation does not distinguish them.
 
+## Fix with your agent
+
+Every open finding has a **Fix with your agent** button. It copies a complete
+fix brief — the instruction, the finding's identity and citation, the cited
+code, and the detector's evidence — plus the install command, ready to paste
+into your own coding agent:
+
+```
+npx skills add krtk06/retract --skill retract
+```
+
+The skill (`skills/retract/` in this repository) teaches the agent the part it
+cannot guess: what Retract's verification actually re-checks, which fixes
+survive re-analysis per category, and how the score moves. The loop:
+
+1. Click the button on a finding, paste into opencode / Claude Code / Codex.
+2. The skill fixes the code, adds a regression test, and runs the repo's own
+   checks — it stops before committing.
+3. You push, then click **Re-analyze** on the repository: the pipeline
+   re-clones at the new HEAD and re-scores.
+4. Compare runs on the analysis page (History → A/B) to see the delta.
+
+Two honest notes. The overall is capped at `worst_pillar + 15`, so while the
+cap binds only fixing the worst pillar moves the headline — a fix elsewhere
+still raises its pillar. And dismissed findings have the button disabled:
+Retract already decided they are false positives, and "fixing" one would be
+wrong.
+
+Because the skill quotes the scoring constants, `scripts/verify-skill.sh`
+runs in CI and fails when `references/scoring.md` drifts from
+`backend/app/analysis_engine/scoring.py` — the curve has been retuned twice,
+and a stale skill would tell agents to optimise against a dead formula.
+
 ## Configuration
 
 | Variable | Where | Purpose |

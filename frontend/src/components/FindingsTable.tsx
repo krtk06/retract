@@ -1,7 +1,11 @@
 import { useMemo, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 
+import { copyText } from "../lib/clipboard";
+import { buildFixPrompt } from "../lib/buildFixPrompt";
+import { api } from "../api/client";
 import { useSnippet } from "../api/hooks";
-import type { Finding, Repository } from "../api/types";
+import type { Finding, Repository, SnippetResponse } from "../api/types";
 
 const SEVERITY_STYLES: Record<Finding["severity"], string> = {
   critical: "bg-red-700 text-white",
@@ -69,6 +73,78 @@ function StatusBadge({ status }: { status: Finding["status"] }) {
   }
   return (
     <span className="rounded bg-zinc-800 px-1.5 py-0.5 text-[10px] text-zinc-400">dismissed</span>
+  );
+}
+
+function FixWithAgentButton({
+  finding,
+  repository,
+  commitSha,
+  analysisId,
+  canSnippet,
+}: {
+  finding: Finding;
+  repository: Repository | null;
+  commitSha: string | null;
+  analysisId: number;
+  canSnippet: boolean;
+}) {
+  const queryClient = useQueryClient();
+  const [copied, setCopied] = useState(false);
+
+  // Retract dismissed this finding already: fixing it would be wrong, so the
+  // button says nothing rather than handing the agent a false-positive brief.
+  if (finding.status === "dismissed") {
+    return (
+      <span
+        className="cursor-not-allowed text-zinc-700"
+        title="Dismissed as a false positive — do not fix"
+      >
+        fix with your agent
+      </span>
+    );
+  }
+
+  async function handleCopy() {
+    // The snippet query is only enabled while the row is expanded, so prewarm
+    // it here: by the time the user clicks, it is usually cached and the
+    // clipboard text can include the cited region.
+    if (canSnippet && finding.file_path != null && finding.line_start != null) {
+      queryClient
+        .fetchQuery({
+          queryKey: ["snippet", analysisId, finding.file_path, finding.line_start],
+          queryFn: () =>
+            api.snippet(analysisId, finding.file_path as string, finding.line_start as number),
+        })
+        .catch(() => null);
+    }
+    const snippet =
+      queryClient.getQueryData<SnippetResponse>([
+        "snippet",
+        analysisId,
+        finding.file_path,
+        finding.line_start,
+      ]) ?? null;
+    const text = buildFixPrompt({ finding, repository, commitSha, snippet });
+    const ok = await copyText(text);
+    setCopied(ok);
+    if (ok) {
+      window.setTimeout(() => setCopied(false), 2000);
+    }
+  }
+
+  return (
+    <button
+      onClick={handleCopy}
+      className={
+        copied
+          ? "rounded-md border border-emerald-700 px-2.5 py-1 text-xs text-emerald-300"
+          : "rounded-md border border-zinc-700 px-2.5 py-1 text-xs text-zinc-300 transition hover:border-zinc-600 hover:text-zinc-100"
+      }
+      title="Copy a fix brief for your coding agent (opencode, Claude Code, Codex)"
+    >
+      {copied ? "Copied ✓" : "Fix with your agent"}
+    </button>
   );
 }
 
@@ -144,6 +220,13 @@ function FindingRow({
             {expanded ? "hide code" : "show code"}
           </button>
         )}
+        <FixWithAgentButton
+          finding={finding}
+          repository={repository}
+          commitSha={commitSha}
+          analysisId={analysisId}
+          canSnippet={canSnippet}
+        />
       </div>
       {expanded && canSnippet && (
         <div className="mt-2">
