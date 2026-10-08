@@ -23,7 +23,7 @@ export function Layout({ user, children }: { user: User; children: ReactNode }) 
               to="/"
               className="text-lg font-semibold tracking-tight text-zinc-300 hover:text-white hover:underline"
             >
-              AI Engineering Intelligence
+              Retract
             </Link>
             <nav className="flex gap-4 text-sm">
               <Link to="/" className="text-zinc-400 hover:text-zinc-200">

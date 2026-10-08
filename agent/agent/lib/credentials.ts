@@ -31,7 +31,7 @@ function looksLikeOpenAiKey(key: string): boolean {
  *
  * Provider-aware on purpose. The two credentials are not interchangeable — an
  * OpenAI key in `AI_GATEWAY_API_KEY` is rejected by the gateway and a gateway key in
- * `AI_INTEL_API_KEY` is rejected by OpenAI — and neither upstream error names the
+ * `RETRACT_API_KEY` is rejected by OpenAI — and neither upstream error names the
  * variable that was misconfigured. They sit adjacent in `.env`, so swapping them is
  * easy and was the actual cause of this check existing.
  *
@@ -46,22 +46,22 @@ export function resolveCredential(
 
   const isOpenAi = name === "openai";
   const custom = resolveBaseUrl(env);
-  // A custom endpoint brings its own key convention, so `AI_INTEL_LLM_API_KEY` is
+  // A custom endpoint brings its own key convention, so `RETRACT_LLM_API_KEY` is
   // accepted first and the `sk-` shape check is skipped. Pointing the agent at
   // opencode-go, a local vLLM, or any other OpenAI-compatible host all need this.
   const variables = isOpenAi
     ? custom
-      ? ["AI_INTEL_LLM_API_KEY", "AI_INTEL_API_KEY", "OPENAI_API_KEY"]
-      : ["AI_INTEL_API_KEY", "OPENAI_API_KEY"]
+      ? ["RETRACT_LLM_API_KEY", "RETRACT_API_KEY", "OPENAI_API_KEY"]
+      : ["RETRACT_API_KEY", "OPENAI_API_KEY"]
     : ["AI_GATEWAY_API_KEY"];
   const key = variables.map((variable) => env[variable]?.trim()).find(Boolean);
 
   if (!key) {
     throw new Error(
-      `AI_INTEL_LLM_PROVIDER=${name} requires ${variables[0]}` +
+      `RETRACT_LLM_PROVIDER=${name} requires ${variables[0]}` +
         `${variables.length > 1 ? ` (or ${variables.slice(1).join(", ")})` : ""}, ` +
         `which is not set. The two provider credentials are not interchangeable: an ` +
-        `OpenAI key in AI_GATEWAY_API_KEY, or a gateway key in AI_INTEL_API_KEY, ` +
+        `OpenAI key in AI_GATEWAY_API_KEY, or a gateway key in RETRACT_API_KEY, ` +
         `is rejected.`,
     );
   }
@@ -77,16 +77,16 @@ export function resolveCredential(
 
   if (isOpenAi && !custom && !looksLikeOpenAiKey(key)) {
     throw new Error(
-      `AI_INTEL_LLM_PROVIDER=openai but AI_INTEL_API_KEY looks like a Vercel AI ` +
+      `RETRACT_LLM_PROVIDER=openai but RETRACT_API_KEY looks like a Vercel AI ` +
         `Gateway key, not an OpenAI key. Gateway keys are "<id>_<hash>"; OpenAI keys ` +
         `start with "sk-". Only move it here if it came from platform.openai.com.`,
     );
   }
   if (!isOpenAi && looksLikeOpenAiKey(key)) {
     throw new Error(
-      `AI_INTEL_LLM_PROVIDER=gateway but AI_GATEWAY_API_KEY looks like an OpenAI key ` +
+      `RETRACT_LLM_PROVIDER=gateway but AI_GATEWAY_API_KEY looks like an OpenAI key ` +
         `(starts with "sk-"), which the gateway rejects. Either use it with ` +
-        `AI_INTEL_LLM_PROVIDER=openai and move it to AI_INTEL_API_KEY, or set a real ` +
+        `RETRACT_LLM_PROVIDER=openai and move it to RETRACT_API_KEY, or set a real ` +
         `Vercel AI Gateway key here.`,
     );
   }
@@ -106,7 +106,7 @@ function isLocalHost(hostname: string): boolean {
 /**
  * The OpenAI-compatible base URL, or `undefined` for the default OpenAI endpoint.
  *
- * `AI_INTEL_LLM_BASE_URL` re-points the `openai` provider at any compatible
+ * `RETRACT_LLM_BASE_URL` re-points the `openai` provider at any compatible
  * endpoint — opencode-go (`https://opencode.ai/zen/go/v1`), a local vLLM, Ollama,
  * any gateway — without adding a dependency or a new provider name.
  *
@@ -119,7 +119,7 @@ function isLocalHost(hostname: string): boolean {
 export function resolveBaseUrl(
   env: Record<string, string | undefined> = process.env,
 ): string | undefined {
-  const raw = env.AI_INTEL_LLM_BASE_URL?.trim();
+  const raw = env.RETRACT_LLM_BASE_URL?.trim();
   if (!raw) return undefined;
 
   let parsed: URL;
@@ -127,13 +127,13 @@ export function resolveBaseUrl(
     parsed = new URL(raw);
   } catch {
     throw new Error(
-      `AI_INTEL_LLM_BASE_URL is not a valid URL ("${raw}"). Give the origin, or the ` +
+      `RETRACT_LLM_BASE_URL is not a valid URL ("${raw}"). Give the origin, or the ` +
         `origin plus API path, e.g. https://opencode.ai/zen/go/v1.`,
     );
   }
   if (parsed.protocol !== "https:" && !isLocalHost(parsed.hostname)) {
     throw new Error(
-      `AI_INTEL_LLM_BASE_URL must use https ("${raw}"). Plain http would send your ` +
+      `RETRACT_LLM_BASE_URL must use https ("${raw}"). Plain http would send your ` +
         `key in clear text; http is allowed only for localhost.`,
     );
   }
@@ -152,11 +152,11 @@ export function resolveBaseUrl(
 export function resolveApiMode(
   env: Record<string, string | undefined> = process.env,
 ): "chat" | "responses" {
-  const raw = env.AI_INTEL_LLM_API_MODE?.trim().toLowerCase();
+  const raw = env.RETRACT_LLM_API_MODE?.trim().toLowerCase();
   if (!raw) return "chat";
   if (raw === "chat" || raw === "responses") return raw;
   throw new Error(
-    `AI_INTEL_LLM_API_MODE must be "chat" or "responses" (got "${raw}"). Most ` +
+    `RETRACT_LLM_API_MODE must be "chat" or "responses" (got "${raw}"). Most ` +
       `OpenAI-compatible endpoints serve /chat/completions; the Responses API is ` +
       `used only by some.`,
   );
@@ -165,7 +165,7 @@ export function resolveApiMode(
 /**
  * The model id for the provider, falling back when unset *or blank*.
  *
- * `??` is not enough here: `.env` writes `AI_INTEL_MODEL=` as an empty string, which
+ * `??` is not enough here: `.env` writes `RETRACT_MODEL=` as an empty string, which
  * is not nullish, so a blank value sailed past the fallback and was sent to the
  * provider as the literal model id `""` — a 404 ("The model `` does not exist") that
  * says nothing about the cause. `.env.example` promises that blank takes the
@@ -175,5 +175,5 @@ export function resolveModelId(
   env: Record<string, string | undefined> = process.env,
   fallback: string,
 ): string {
-  return env.AI_INTEL_MODEL?.trim() || fallback;
+  return env.RETRACT_MODEL?.trim() || fallback;
 }

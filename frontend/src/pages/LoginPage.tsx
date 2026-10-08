@@ -17,7 +17,7 @@ export function LoginPage() {
   const [devBusy, setDevBusy] = useState(false);
 
   // Dev login exists so local development skips OAuth entirely. The backend
-  // already refuses it when AI_INTEL_DEV_LOGIN=0; there is no reason to show a
+  // already refuses it when RETRACT_DEV_LOGIN=0; there is no reason to show a
   // button that can only 404 in a production build.
   const showDevLogin = import.meta.env.DEV;
 
@@ -69,7 +69,7 @@ export function LoginPage() {
   return (
     <div className="flex min-h-screen items-center justify-center">
       <div className="w-full max-w-sm rounded-xl border border-zinc-800 bg-zinc-900 p-8 shadow-xl">
-        <h1 className="mb-2 text-xl font-semibold">AI Engineering Intelligence</h1>
+        <h1 className="mb-2 text-xl font-semibold">Retract</h1>
         <p className="mb-6 text-sm text-zinc-400">
           Analyze a GitHub repository for quality, security, testing, and documentation
           health — then come back, re-check it after changes, and track the score.

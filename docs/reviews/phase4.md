@@ -5,11 +5,11 @@
 **LLM provider:** `mock` (deterministic offline harness — see caveat below)
 
 > **Important caveat:** no LLM credentials were available in this environment, so the
-> review ran with `AI_INTEL_LLM_PROVIDER=mock`. This is a rule-based harness that emits
+> review ran with `RETRACT_LLM_PROVIDER=mock`. This is a rule-based harness that emits
 > the same structured JSON a model would, so the pipeline, schema validation, event
 > stream, cost ledger, and UI are genuinely exercised — but the findings are **not**
 > real LLM analysis. The dashboard surfaces an explicit amber warning when mock mode is
-> active. Real usage sets `AI_INTEL_LLM_PROVIDER=openai` (+ base URL/key/model).
+> active. Real usage sets `RETRACT_LLM_PROVIDER=openai` (+ base URL/key/model).
 
 ## Flow verified (seedy benchmark repo)
 

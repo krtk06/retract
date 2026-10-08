@@ -33,7 +33,7 @@ RUN addgroup --system intel && adduser --system --ingroup intel --home /home/int
 
 USER intel
 
-ENV AI_INTEL_DATA_DIR=/data
+ENV RETRACT_DATA_DIR=/data
 
 EXPOSE 8000
 

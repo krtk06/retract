@@ -25,15 +25,15 @@ services:
     ports:
       - "6379:6379"
 
-  api:
+  retract-api:
     build: ../backend
     env_file:
       - path: ../.env
         required: false
     environment:
-      AI_INTEL_DATABASE_URL: postgresql+psycopg://postgres:postgres@postgres:5432/ai_intel
-      AI_INTEL_REDIS_URL: redis://redis:6379/0
-      AI_INTEL_DATA_DIR: /data
+      RETRACT_DATABASE_URL: postgresql+psycopg://postgres:postgres@postgres:5432/ai_intel
+      RETRACT_REDIS_URL: redis://redis:6379/0
+      RETRACT_DATA_DIR: /data
     command: >
       sh -c "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000"
     volumes:
@@ -46,15 +46,15 @@ services:
     ports:
       - "8000:8000"
 
-  worker:
+  retract-worker:
     build: ../backend
     env_file:
       - path: ../.env
         required: false
     environment:
-      AI_INTEL_DATABASE_URL: postgresql+psycopg://postgres:postgres@postgres:5432/ai_intel
-      AI_INTEL_REDIS_URL: redis://redis:6379/0
-      AI_INTEL_DATA_DIR: /data
+      RETRACT_DATABASE_URL: postgresql+psycopg://postgres:postgres@postgres:5432/ai_intel
+      RETRACT_REDIS_URL: redis://redis:6379/0
+      RETRACT_DATA_DIR: /data
     command: celery -A app.tasks.celery_app:celery_app worker --loglevel=info --concurrency=2
     volumes:
       - repo_data:/data
@@ -78,15 +78,15 @@ services:
 # Beat exists only to run the reaper that fails analyses stranded by a killed tool,
   # a crashed worker, or a host restart. It shares the worker's image and broker but
   # sends nothing to the queue, so it cannot compete with analysis work.
-  beat:
+  retract-beat:
     build: ../backend
     env_file:
       - path: ../.env
         required: false
     environment:
-      AI_INTEL_DATABASE_URL: postgresql+psycopg://postgres:postgres@postgres:5432/ai_intel
-      AI_INTEL_REDIS_URL: redis://redis:6379/0
-      AI_INTEL_DATA_DIR: /data
+      RETRACT_DATABASE_URL: postgresql+psycopg://postgres:postgres@postgres:5432/ai_intel
+      RETRACT_REDIS_URL: redis://redis:6379/0
+      RETRACT_DATA_DIR: /data
     command: celery -A app.tasks.celery_app:celery_app beat --loglevel=info
     volumes:
       - repo_data:/data
@@ -96,7 +96,7 @@ services:
       redis:
         condition: service_healthy
 
-  agent:
+  retract-agent:
     build:
       context: ../agent
     env_file:
@@ -105,30 +105,30 @@ services:
     environment:
       # Tools call the API with the shared service secret; the channel verifies
       # the browser's exchanged token with the same JWT secret the API signs.
-      AI_INTEL_API_URL: http://api:8000
-      AI_INTEL_AGENT_TOKEN: ${AI_INTEL_AGENT_TOKEN:?set AI_INTEL_AGENT_TOKEN}
-      AI_INTEL_JWT_SECRET: ${AI_INTEL_JWT_SECRET:?set AI_INTEL_JWT_SECRET}
-      AI_INTEL_LLM_PROVIDER: ${AI_INTEL_LLM_PROVIDER:-mock}
-      AI_INTEL_MODEL: ${AI_INTEL_MODEL:-}
+      RETRACT_API_URL: http://retract-api:8000
+      RETRACT_AGENT_TOKEN: ${RETRACT_AGENT_TOKEN:?set RETRACT_AGENT_TOKEN}
+      RETRACT_JWT_SECRET: ${RETRACT_JWT_SECRET:?set RETRACT_JWT_SECRET}
+      RETRACT_LLM_PROVIDER: ${RETRACT_LLM_PROVIDER:-mock}
+      RETRACT_MODEL: ${RETRACT_MODEL:-}
       PORT: "3000"
     command: npm run start
     depends_on:
-      - api
+      - retract-api
     ports:
       - "3000:3000"
 
-  frontend:
+  retract-frontend:
     build:
       context: ../frontend
       target: dev
     environment:
-      VITE_API_PROXY: http://api:8000
-      VITE_EVE_PROXY: http://agent:3000
+      VITE_API_PROXY: http://retract-api:8000
+      VITE_EVE_PROXY: http://retract-agent:3000
     ports:
       - "5173:5173"
     depends_on:
-      - api
-      - agent
+      - retract-api
+      - retract-agent
 
   # Production topology (nginx bundle, healthchecks, internal-only API, durable
   # agent state) lives in docker-compose.prod.yml.

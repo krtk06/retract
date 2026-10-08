@@ -15,11 +15,11 @@ export type EvalContext = {
 /**
  * The agent's quality evals are graded by a judge model. Left unset, eve uses the
  * shared evaluation default (the AI Gateway), which is right for CI-with-credentials
- * and wrong for a run that pinned `AI_INTEL_MODEL` to a specific provider. Set
- * `AI_INTEL_JUDGE_MODEL` to keep the two consistent.
+ * and wrong for a run that pinned `RETRACT_MODEL` to a specific provider. Set
+ * `RETRACT_JUDGE_MODEL` to keep the two consistent.
  */
-const judge = process.env.AI_INTEL_JUDGE_MODEL
-  ? ({ model: process.env.AI_INTEL_JUDGE_MODEL } as const)
+const judge = process.env.RETRACT_JUDGE_MODEL
+  ? ({ model: process.env.RETRACT_JUDGE_MODEL } as const)
   : undefined;
 
 export default defineEvalConfig<EvalContext>({
@@ -31,8 +31,8 @@ export default defineEvalConfig<EvalContext>({
   judge,
   async setup() {
     const api = await startFixtureApi();
-    process.env.AI_INTEL_API_URL = api.url;
-    process.env.AI_INTEL_AGENT_TOKEN = EXPECTED_AGENT_TOKEN;
+    process.env.RETRACT_API_URL = api.url;
+    process.env.RETRACT_AGENT_TOKEN = EXPECTED_AGENT_TOKEN;
     return { api };
   },
   async teardown(context) {

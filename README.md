@@ -1,4 +1,4 @@
-# AI Engineering Intelligence Platform
+# Retract
 
 Give it a GitHub repository — get back a **Repository Health Score** with verified,
 cited findings across code quality, security, testing, documentation, dependencies,
@@ -39,7 +39,7 @@ re-checks. The agent cannot publish a score or judge a finding by itself.
 ## Quickstart (Docker)
 
 ```bash
-cp .env.example .env      # set AI_INTEL_AGENT_TOKEN and AI_INTEL_JWT_SECRET
+cp .env.example .env      # set RETRACT_AGENT_TOKEN and RETRACT_JWT_SECRET
 docker compose --env-file .env -f infra/docker-compose.yml up --build
 ```
 
@@ -62,14 +62,14 @@ instead also works.
 docker compose --env-file .env -f infra/docker-compose.prod.yml up --build
 ```
 
-with `POSTGRES_USER`, `POSTGRES_PASSWORD`, `AI_INTEL_JWT_SECRET` and
-`AI_INTEL_AGENT_TOKEN` in `.env` (see `.env.example`). They are deliberately
+with `POSTGRES_USER`, `POSTGRES_PASSWORD`, `RETRACT_JWT_SECRET` and
+`RETRACT_AGENT_TOKEN` in `.env` (see `.env.example`). They are deliberately
 required with no defaults: refusing to start beats starting an agent that can
 reach the API unauthenticated. Note that *every* compose subcommand interpolates
 the file, so `ps` and `down` need those variables too.
 
 The LLM credential is *not* in that list, because the agent validates it itself,
-per provider: `openai` reads `AI_INTEL_API_KEY` and `gateway` reads
+per provider: `openai` reads `RETRACT_API_KEY` and `gateway` reads
 `AI_GATEWAY_API_KEY`, and a missing or placeholder one stops the agent at startup
 with a message naming the variable — which is why no dummy value is needed for a
 provider that never calls the gateway.
@@ -90,12 +90,12 @@ The frontend is the one container that is not unprivileged. nginx's master proce
 needs `CAP_NET_BIND_SERVICE` to bind port 80, so hardening it means moving to 8080
 as the `nginx` user and changing the compose port mapping. That has not been done.
 
-GitHub OAuth is required in production (`AI_INTEL_DEV_LOGIN=0` is forced), and the
+GitHub OAuth is required in production (`RETRACT_DEV_LOGIN=0` is forced), and the
 session cookie is marked `Secure`, so the frontend must be served over HTTPS —
 put a TLS-terminating proxy in front and set `PUBLIC_URL`.
 
-Set `AI_INTEL_DEV_LOGIN=1` for passwordless dev login, or configure a GitHub OAuth
-app (`AI_INTEL_GITHUB_CLIENT_ID` / `..._SECRET`).
+Set `RETRACT_DEV_LOGIN=1` for passwordless dev login, or configure a GitHub OAuth
+app (`RETRACT_GITHUB_CLIENT_ID` / `..._SECRET`).
 
 ## Local development
 
@@ -229,17 +229,17 @@ the same as clean, and the current aggregation does not distinguish them.
 
 | Variable | Where | Purpose |
 | --- | --- | --- |
-| `AI_INTEL_DATABASE_URL`, `AI_INTEL_REDIS_URL` | backend | storage and progress bus |
-| `AI_INTEL_JWT_SECRET` | backend **and** agent | signs session cookies; the agent verifies the exchanged eve token (`iss=ai-intel`, `aud=eve-agent`) |
-| `AI_INTEL_AGENT_TOKEN` | backend **and** agent | shared secret the agent presents on service calls (`X-Agent-Token`); blank disables agent API access |
-| `AI_INTEL_LLM_PROVIDER` | agent | `mock` for the deterministic fixture model (evals, CI, offline review), `openai`, or `gateway` (the default) |
-| `AI_INTEL_MODEL` | agent | model id (defaults: `gpt-5` for `openai`, `anthropic/claude-sonnet-4.5` for `gateway`); required when `AI_INTEL_LLM_BASE_URL` is set |
-| `AI_INTEL_LLM_BASE_URL` | agent | optional OpenAI-compatible endpoint (opencode-go, local vLLM, Ollama); no extra dependency |
-| `AI_INTEL_LLM_API_MODE` | agent | `chat` (default, `/chat/completions`) or `responses`; must match the endpoint |
-| `AI_INTEL_LLM_API_KEY` | agent | credential for a custom `AI_INTEL_LLM_BASE_URL` (preferred over `AI_INTEL_API_KEY`) |
-| `AI_INTEL_API_KEY` | agent | credential for `AI_INTEL_LLM_PROVIDER=openai` (falls back to `OPENAI_API_KEY`) |
-| `AI_GATEWAY_API_KEY` | agent | credential for `AI_INTEL_LLM_PROVIDER=gateway`; optional otherwise — the agent refuses to start without the credential its chosen provider reads |
-| `AI_INTEL_API_URL` | agent | base URL of the backend API (default `http://localhost:8110`) |
+| `RETRACT_DATABASE_URL`, `RETRACT_REDIS_URL` | backend | storage and progress bus |
+| `RETRACT_JWT_SECRET` | backend **and** agent | signs session cookies; the agent verifies the exchanged eve token (`iss=ai-intel`, `aud=eve-agent`) |
+| `RETRACT_AGENT_TOKEN` | backend **and** agent | shared secret the agent presents on service calls (`X-Agent-Token`); blank disables agent API access |
+| `RETRACT_LLM_PROVIDER` | agent | `mock` for the deterministic fixture model (evals, CI, offline review), `openai`, or `gateway` (the default) |
+| `RETRACT_MODEL` | agent | model id (defaults: `gpt-5` for `openai`, `anthropic/claude-sonnet-4.5` for `gateway`); required when `RETRACT_LLM_BASE_URL` is set |
+| `RETRACT_LLM_BASE_URL` | agent | optional OpenAI-compatible endpoint (opencode-go, local vLLM, Ollama); no extra dependency |
+| `RETRACT_LLM_API_MODE` | agent | `chat` (default, `/chat/completions`) or `responses`; must match the endpoint |
+| `RETRACT_LLM_API_KEY` | agent | credential for a custom `RETRACT_LLM_BASE_URL` (preferred over `RETRACT_API_KEY`) |
+| `RETRACT_API_KEY` | agent | credential for `RETRACT_LLM_PROVIDER=openai` (falls back to `OPENAI_API_KEY`) |
+| `AI_GATEWAY_API_KEY` | agent | credential for `RETRACT_LLM_PROVIDER=gateway`; optional otherwise — the agent refuses to start without the credential its chosen provider reads |
+| `RETRACT_API_URL` | agent | base URL of the backend API (default `http://localhost:8110`) |
 
 ## Checks
 
@@ -264,31 +264,31 @@ unless a provider is configured, so CI stays green while the suite stays ready:
 
 ```bash
 # via OpenAI
-AI_INTEL_LLM_PROVIDER=openai AI_INTEL_API_KEY=... npm run eval:live -- quality
+RETRACT_LLM_PROVIDER=openai RETRACT_API_KEY=... npm run eval:live -- quality
 
 # via opencode-go (any OpenAI-compatible endpoint)
-AI_INTEL_LLM_PROVIDER=openai \
-AI_INTEL_LLM_BASE_URL=https://opencode.ai/zen/go/v1 \
-AI_INTEL_LLM_API_MODE=chat \
-AI_INTEL_LLM_API_KEY=... \
-AI_INTEL_MODEL=longcat-2.5-preview-free \
+RETRACT_LLM_PROVIDER=openai \
+RETRACT_LLM_BASE_URL=https://opencode.ai/zen/go/v1 \
+RETRACT_LLM_API_MODE=chat \
+RETRACT_LLM_API_KEY=... \
+RETRACT_MODEL=longcat-2.5-preview-free \
 npm run eval:live -- quality
 
 # or via the Vercel AI Gateway
-AI_INTEL_LLM_PROVIDER=gateway \
-AI_INTEL_MODEL=anthropic/claude-sonnet-4.5 \
+RETRACT_LLM_PROVIDER=gateway \
+RETRACT_MODEL=anthropic/claude-sonnet-4.5 \
 AI_GATEWAY_API_KEY=... \
-AI_INTEL_EVAL_LIVE=1 \
+RETRACT_EVAL_LIVE=1 \
 npm run eval:live -- quality
 ```
 
-Use `eval:live`, not `eval`. `eval` pins `AI_INTEL_LLM_PROVIDER=mock` as an inline
+Use `eval:live`, not `eval`. `eval` pins `RETRACT_LLM_PROVIDER=mock` as an inline
 assignment, which overrides whatever the shell exported — so the same command with
-`eval` would silently grade the fixture model. Setting `AI_INTEL_EVAL_LIVE=1`
+`eval` would silently grade the fixture model. Setting `RETRACT_EVAL_LIVE=1`
 alongside a mocked agent is refused outright rather than skipped, because a judge
 grading a scripted transcript passes for the wrong reason.
 
-Set `AI_INTEL_JUDGE_MODEL` if the judge should use the same provider as the agent.
+Set `RETRACT_JUDGE_MODEL` if the judge should use the same provider as the agent.
 
 ## Layout
 

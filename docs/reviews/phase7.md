@@ -4,7 +4,7 @@
 **Method:** agent-browser against the live local stack (redis :6390 · API :8110 · Celery
 worker · eve agent :3000 · Vite :5175 · Postgres :5433), plus `npm run eval` for the
 agent suite.
-**Model:** `AI_INTEL_LLM_PROVIDER=mock` (deterministic fixture model — see
+**Model:** `RETRACT_LLM_PROVIDER=mock` (deterministic fixture model — see
 "Limits of this review" below).
 
 ## Flows verified

@@ -1,7 +1,6 @@
-# Implementation Plan — AI Engineering Intelligence Platform
+# Implementation Plan — Retract
 
-> **Document purpose:** This is the authoritative implementation plan for the AI Engineering
-> Intelligence Platform. It is written to be readable by both humans and AI coding agents.
+> **Document purpose:** This is the authoritative implementation plan for Retract. It is written to be readable by both humans and AI coding agents.
 > Each phase contains: goals, tasks (with acceptance criteria), technical decisions, and a
 > mandatory **browser review step** (using `agent-browser`) to catch bugs before proceeding.
 >
@@ -320,7 +319,7 @@ environment does not have — public-CVE commit pairs, or a provider credential.
   1. `addgroup -S` is rejected by the Debian trixie base behind `python:3.12-slim`
      (exit 51), so no backend image built at all.
   2. The agent healthcheck probed `/eve/v1/info`, which sits behind the channel's
-     auth walk once `AI_INTEL_JWT_SECRET` is set → permanently unhealthy. It had
+     auth walk once `RETRACT_JWT_SECRET` is set → permanently unhealthy. It had
      looked public only because local `eve start` ran with no secret set.
   3. The worker inherited the API's HTTP healthcheck from the shared image, but a
      Celery worker serves no HTTP → permanently unhealthy while working fine.
@@ -410,8 +409,8 @@ environment does not have — public-CVE commit pairs, or a provider credential.
 **Fail-closed secrets (`backend/app/config.py`)**
 
   Compose refuses to start without its five required variables, but the application
-  did not: started directly with `AI_INTEL_ENVIRONMENT=production` and no
-  `AI_INTEL_JWT_SECRET`, it booted and signed cookies and eve tokens with the literal
+  did not: started directly with `RETRACT_ENVIRONMENT=production` and no
+  `RETRACT_JWT_SECRET`, it booted and signed cookies and eve tokens with the literal
   `change-me-in-production` — a value published in this repository. It now refuses to
   construct in production on a default, published, or under-32-character secret, on a
   blank agent token, or with dev login enabled, reporting every problem at once.
@@ -419,7 +418,7 @@ environment does not have — public-CVE commit pairs, or a provider credential.
   long and so passes a length check on its own.
 
   The agent gained the matching guard for the fixture model: `.env.example` ships
-  `AI_INTEL_LLM_PROVIDER=mock` so the dev quickstart works with no credentials, which
+  `RETRACT_LLM_PROVIDER=mock` so the dev quickstart works with no credentials, which
   makes it the likeliest production misconfiguration — and it looks entirely healthy
   while answering from canned transcripts. `eve start` now refuses `mock` when
   `NODE_ENV=production`, which `docker-compose.prod.yml` sets (it also makes the
@@ -438,13 +437,13 @@ environment does not have — public-CVE commit pairs, or a provider credential.
   the provided API key". So a real key is all that stands between the current image and
   live answers.
 
-  It also exposed that `AI_INTEL_LLM_PROVIDER` and `AI_INTEL_MODEL` do nothing in the
+  It also exposed that `RETRACT_LLM_PROVIDER` and `RETRACT_MODEL` do nothing in the
   Docker image. eve compiles the agent definition — including the resolved model —
   into `.output/.eve/compile/compiled-agent-manifest.json` during `eve build`, which the
-  image runs before any `AI_INTEL_*` variable exists. The manifest therefore froze the
+  image runs before any `RETRACT_*` variable exists. The manifest therefore froze the
   provider to its `?? "gateway"` default and the model to `anthropic/claude-sonnet-4.5`.
-  Verified: a container started with `AI_INTEL_LLM_PROVIDER=openai` and a valid
-  `AI_INTEL_API_KEY` still called the AI Gateway, and the manifest contained no
+  Verified: a container started with `RETRACT_LLM_PROVIDER=openai` and a valid
+  `RETRACT_API_KEY` still called the AI Gateway, and the manifest contained no
   occurrence of `openai`. The `NODE_ENV=production` fixture-model guard is inert in the
   image for the same reason — it holds for `eve start` on a host, not in the container.
 

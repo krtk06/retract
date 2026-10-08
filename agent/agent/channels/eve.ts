@@ -7,7 +7,7 @@ import { eveChannel } from "eve/channels/eve";
  * `Authorization: Bearer`. The backend mints `iss=ai-intel`, `aud=eve-agent`,
  * so neither token can be replayed against the other service.
  */
-const secret = process.env.AI_INTEL_JWT_SECRET;
+const secret = process.env.RETRACT_JWT_SECRET;
 
 const auth = secret
   ? [

@@ -1,4 +1,4 @@
-"""Alembic environment — database URL comes from AI_INTEL_DATABASE_URL / app settings."""
+"""Alembic environment — database URL comes from RETRACT_DATABASE_URL / app settings."""
 
 from logging.config import fileConfig
 

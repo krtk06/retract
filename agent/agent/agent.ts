@@ -13,19 +13,19 @@ import { fixtureModel } from "./lib/fixture-model";
 /**
  * Model selection, driven entirely by the environment.
  *
- *   AI_INTEL_LLM_PROVIDER=mock      deterministic fixture model — no credentials,
+ *   RETRACT_LLM_PROVIDER=mock      deterministic fixture model — no credentials,
  *                                    used by CI, evals, and offline review
- *   AI_INTEL_LLM_PROVIDER=openai    an OpenAI-compatible endpoint via the AI SDK
- *   AI_INTEL_LLM_PROVIDER=gateway   anything else, by id, through the Vercel AI
+ *   RETRACT_LLM_PROVIDER=openai    an OpenAI-compatible endpoint via the AI SDK
+ *   RETRACT_LLM_PROVIDER=gateway   anything else, by id, through the Vercel AI
  *                                    Gateway (the default)
  *
  * A direct provider needs its AI SDK package installed, which is why
  * `@ai-sdk/openai` is a dependency rather than an optional peer: `eve start` must
  * not fail at import time on a host that only ever runs the mock.
  *
- * `AI_INTEL_LLM_BASE_URL` re-points the `openai` provider at any compatible
+ * `RETRACT_LLM_BASE_URL` re-points the `openai` provider at any compatible
  * endpoint — opencode-go, a local vLLM, Ollama — so those need no new dependency
- * and no new provider name. `AI_INTEL_LLM_API_MODE` selects the API shape, because
+ * and no new provider name. `RETRACT_LLM_API_MODE` selects the API shape, because
  * the SDK defaults to the Responses API while most compatible gateways serve
  * `/chat/completions`; defaulting to `chat` avoids a 404 that names no cause.
  *
@@ -37,7 +37,7 @@ import { fixtureModel } from "./lib/fixture-model";
  * compose could not be conditional on the provider, so it demanded a key the
  * `openai` provider never reads.
  */
-const provider = process.env.AI_INTEL_LLM_PROVIDER ?? "gateway";
+const provider = process.env.RETRACT_LLM_PROVIDER ?? "gateway";
 
 function resolveModel() {
   if (provider === "mock") {
@@ -47,9 +47,9 @@ function resolveModel() {
     // makes this the single most likely production misconfiguration. Refuse it.
     if (process.env.NODE_ENV === "production") {
       throw new Error(
-        "AI_INTEL_LLM_PROVIDER=mock is a deterministic fixture model and must not " +
+        "RETRACT_LLM_PROVIDER=mock is a deterministic fixture model and must not " +
           "run in production; use gateway (the default) or openai. If you copied " +
-          ".env.example unchanged, set AI_INTEL_LLM_PROVIDER=gateway.",
+          ".env.example unchanged, set RETRACT_LLM_PROVIDER=gateway.",
       );
     }
     return mockModel(fixtureModel);
@@ -63,7 +63,7 @@ function resolveModel() {
     const model = resolveModelId(process.env, baseURL ? "" : "gpt-5");
     if (!model) {
       throw new Error(
-        `AI_INTEL_MODEL is required when AI_INTEL_LLM_BASE_URL is set (${baseURL}). ` +
+        `RETRACT_MODEL is required when RETRACT_LLM_BASE_URL is set (${baseURL}). ` +
           `The endpoint chooses the model ids; list them at ${baseURL}/models.`,
       );
     }

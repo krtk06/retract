@@ -3,13 +3,13 @@
 #
 # Usage: scripts/dev-local.sh [start|stop|restart]
 # Machine-specific settings live in .local/env.sh (gitignored), e.g.:
-#   AI_INTEL_DATABASE_URL=postgresql+psycopg://user@/ai_intel?host=/var/run/postgresql&port=5433
-#   AI_INTEL_REDIS_URL=redis://localhost:6390/0
-#   AI_INTEL_DEV_LOGIN=1
-#   AI_INTEL_AGENT_TOKEN=<shared secret the eve agent presents to the API>
+#   RETRACT_DATABASE_URL=postgresql+psycopg://user@/ai_intel?host=/var/run/postgresql&port=5433
+#   RETRACT_REDIS_URL=redis://localhost:6390/0
+#   RETRACT_DEV_LOGIN=1
+#   RETRACT_AGENT_TOKEN=<shared secret the eve agent presents to the API>
 #
 # Starts: redis, api (:8110), celery worker, eve agent (:3000), vite (:5175).
-# The eve agent needs Node >= 24 and shares AI_INTEL_JWT_SECRET with the API so
+# The eve agent needs Node >= 24 and shares RETRACT_JWT_SECRET with the API so
 # the browser's exchanged eve token verifies on its routes.
 set -euo pipefail
 
@@ -66,7 +66,7 @@ start_redis() {
   if ! "$REDIS_BIN" --version >/dev/null 2>&1; then
     echo "redis-server not found at $REDIS_BIN (see README local development)"; exit 1
   fi
-  if ! "$VENV/bin/python" -c "import redis; redis.Redis.from_url('${AI_INTEL_REDIS_URL}').ping()" 2>/dev/null; then
+  if ! "$VENV/bin/python" -c "import redis; redis.Redis.from_url('${RETRACT_REDIS_URL}').ping()" 2>/dev/null; then
     "$REDIS_BIN" --port "$REDIS_PORT" --daemonize yes --save "" --appendonly no
     sleep 1
   fi
@@ -82,12 +82,12 @@ start_app() {
   (cd backend && setsid nohup "$VENV/bin/celery" -A app.tasks.celery_app:celery_app worker -l info -c 2 \
     > "$LOG_DIR/worker.log" 2>&1 < /dev/null &)
   sleep 4
-  echo "api: http://127.0.0.1:$API_PORT/api/health"
+  echo "retract-api: http://127.0.0.1:$API_PORT/api/health"
 }
 
 start_agent() {
   if [[ "${SKIP_AGENT:-0}" == "1" ]]; then
-    echo "agent: skipped (SKIP_AGENT=1)"
+    echo "retract-agent: skipped (SKIP_AGENT=1)"
     return
   fi
   load_node24
@@ -96,12 +96,12 @@ start_agent() {
   (cd agent && PORT="$EVE_PORT" setsid nohup npx eve dev --no-ui \
     > "$LOG_DIR/eve.log" 2>&1 < /dev/null &)
   sleep 6
-  echo "agent: http://127.0.0.1:$EVE_PORT/eve (log: $LOG_DIR/eve.log)"
+  echo "retract-agent: http://127.0.0.1:$EVE_PORT/eve (log: $LOG_DIR/eve.log)"
 }
 
 start_frontend() {
   if [[ "${SKIP_FRONTEND:-0}" == "1" ]]; then
-    echo "frontend: skipped (SKIP_FRONTEND=1)"
+    echo "retract-frontend: skipped (SKIP_FRONTEND=1)"
     return
   fi
   pkill -9 -f "vite --port" 2>/dev/null || true
@@ -111,7 +111,7 @@ start_frontend() {
     setsid nohup npm run dev -- --port "$FRONTEND_PORT" \
     > "$LOG_DIR/vite.log" 2>&1 < /dev/null &)
   sleep 4
-  echo "frontend: http://127.0.0.1:$FRONTEND_PORT"
+  echo "retract-frontend: http://127.0.0.1:$FRONTEND_PORT"
 }
 
 stop_all() {
