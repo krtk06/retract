@@ -24,6 +24,11 @@ jobs:
         run: cd backend && mypy
       - name: Pytest
         run: cd backend && python -m pytest
+      - name: Skill
+        # The retract skill teaches coding agents the scoring model; this fails
+        # the build when a reference doc quotes a constant scoring.py no
+        # longer has, so the skill cannot silently go stale after a retune.
+        run: bash scripts/verify-skill.sh
 
   frontend:
     runs-on: ubuntu-latest
