@@ -76,6 +76,54 @@ score) to check nothing only holds at fixture scale.
 Screenshots from this pass are not committed; the run is reproducible from the
 repo list with Re-analyze.
 
+## Dogfood: the skill fixing a live Retract finding
+
+The feature was built and its button verified, but it had not been *used*. So:
+a scratch repository (`/tmp/opencode/retract-demo`, the fixture with its planted
+defects, its own git history and a bare origin) was registered as `local://`,
+analyzed (#33), and one finding taken through the whole loop.
+
+1. **Install** — `npx skills add krtk06/retract --skill retract` from GitHub
+   reported *no skills found*: correct, the skill is on a branch and not yet on
+   `main`. Installing from the local skill folder put all four files in
+   `~/.agents/skills/retract/`.
+2. **Brief** — the button's clipboard text on analysis #33, for semgrep
+   `formatted-sql-query` at `app/db.py:10`.
+3. **Fix** — a fresh agent with *no context* except `~/.agents/skills/retract/`
+   and that clipboard text. It confirmed the claim by running the pre-fix
+   payload against SQLite (`alice' OR '1'='1` returned the row), made a two-line
+   parameterised fix, ran `py_compile`, declined to invent a test framework (no
+   suite exists; adding one would have moved the testing pillar and polluted
+   the A/B), cited `categories.md` §vulnerability and `verification.md` for why
+   the fix survives re-analysis, predicted the headline might not move, and
+   handed back without committing — the skill's exit path, honoured.
+4. **Push and re-analyze** — reviewed, committed, pushed, clicked Re-analyze.
+
+| | #33 before | #34 after |
+| --- | --- | --- |
+| Findings | 17 | **15** |
+| Security pillar | 2 (penalty 120) | **3** (penalty 90) |
+| Overall | 11 | **11** |
+| Weighted mean | 10.60 | 10.85 |
+
+Cleared: `formatted sql query` *and* `sqlalchemy execute raw query` — the same
+two semgrep rules on the same line, both matched by the construct the fix
+removed. New findings: **none**. The overall did not move, and that is the
+scoring model working rather than failing: on an 83-LOC repository the
+weighted mean (10.85) is below the worst-pillar cap (18), so a single
+medium-severity fix raises the pillar and leaves the headline alone. The
+fresh agent predicted this from `scoring.md` alone, without seeing the score.
+
+Two things this exposes for the product:
+
+1. On very small repositories no single fix can move the headline, and the UI
+   says so only implicitly (per-item "+N pts" is a pillar gain). The skill
+   explains it; the score hero does not.
+2. The install command only works after the skill is on `main` — as shipped,
+   the button's `npx skills add krtk06/retract --skill retract` reports "no
+   skills found" on an unmerged branch. Expected, but worth remembering when
+   reading "install the skill" before this merges.
+
 ## Environment-only findings (not defects)
 
 1. The eve chat model call fails with OpenAI "account is not active" — billing,
