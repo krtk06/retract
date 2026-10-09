@@ -12,8 +12,9 @@ committed, not when you notice: revoke and reissue at the provider, move the
 replacement into the environment or a secret manager, delete the literal.
 Retract verifies secrets by re-scanning the cited lines for the credential
 pattern (`AKIA…`, `password|secret|token|api_key = "…"`); a redacted string
-that still looks like a credential stays a finding. Purge the value from git
-history if the repo was ever pushed publicly.
+that still looks like a credential stays a finding. Purging the value from git
+history is worth doing for the exposure it removes, but Retract runs gitleaks
+with `--no-git`, so deleting the literal is what clears the finding.
 
 ### `injection` — the security subagent (agent-reported)
 Trace untrusted input to the sink through the caller graph, then close the

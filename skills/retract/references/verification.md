@@ -55,7 +55,11 @@ The deterministic analyzers run again from scratch on the fresh clone:
 
 - **semgrep** re-scans the whole tree — a pattern moved to another file is a
   new finding, not a fix;
-- **gitleaks** re-scans history and tree for credentials;
+- **gitleaks** re-scans the **working tree** for credentials (Retract runs it
+  with `--no-git`, so it does not see history: deleting the literal clears the
+  finding even though the value stays in past commits). Purging history is
+  still worth doing — it is real exposure, not score — but it is not what makes
+  this finding disappear.
 - **radon** re-measures every function: complexity ≥ 10 re-files immediately;
 - the **duplication** detector re-walks the tree — a copy you left behind
   re-files;
