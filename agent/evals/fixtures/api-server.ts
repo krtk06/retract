@@ -7,7 +7,7 @@
  *
  * It mirrors the parts of the real contract the agent depends on: the auth
  * service token, the D2 verdict rule (uncited claims are dropped), and the
- * approval endpoint. `AI_INTEL_API_URL` must point at the printed URL.
+ * approval endpoint. `RETRACT_API_URL` must point at the printed URL.
  */
 
 import { createServer, type Server } from "node:http";

@@ -11,10 +11,10 @@
  *
  *   npm run eval:live -- quality
  *
- * with a provider and credential exported (`AI_INTEL_LLM_PROVIDER=gateway`,
- * `AI_GATEWAY_API_KEY=...`, optionally `AI_INTEL_MODEL`). Use `eval:live`, not
+ * with a provider and credential exported (`RETRACT_LLM_PROVIDER=gateway`,
+ * `AI_GATEWAY_API_KEY=...`, optionally `RETRACT_MODEL`). Use `eval:live`, not
  * `eval`: `eval` pins the provider to `mock` inline and would override your
- * export. `AI_INTEL_EVAL_LIVE=1` forces the suite to run rather than skip.
+ * export. `RETRACT_EVAL_LIVE=1` forces the suite to run rather than skip.
  *
  * Requires a real analysis to exist for the target repository, since the judge
  * grades claims against findings the platform actually stored:

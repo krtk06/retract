@@ -10,7 +10,7 @@
 # `--env-file .env` is required from the repository root: an implicit .env is only
 # looked for beside this file, i.e. in infra/, so a root .env would be ignored and
 # every required secret below would report as missing. Passing them inline
-# (AI_INTEL_JWT_SECRET=... docker compose -f infra/docker-compose.prod.yml up)
+# (RETRACT_JWT_SECRET=... docker compose -f infra/docker-compose.prod.yml up)
 # also works.
 #
 # Those secrets have no default on purpose: refusing to start without them is
@@ -47,23 +47,23 @@ services:
     expose:
       - "6379"
 
-  api:
+  retract-api:
     build: ../backend
     restart: unless-stopped
     environment:
-      AI_INTEL_ENVIRONMENT: production
-      AI_INTEL_DATABASE_URL: postgresql+psycopg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-ai_intel}
-      AI_INTEL_REDIS_URL: redis://redis:6379/0
-      AI_INTEL_DATA_DIR: /data
-      AI_INTEL_JWT_SECRET: ${AI_INTEL_JWT_SECRET:?set AI_INTEL_JWT_SECRET}
-      AI_INTEL_AGENT_TOKEN: ${AI_INTEL_AGENT_TOKEN:?set AI_INTEL_AGENT_TOKEN}
-      AI_INTEL_DEV_LOGIN: "0"
-      AI_INTEL_AUTH_COOKIE_SECURE: "1"
-      AI_INTEL_FRONTEND_URL: ${PUBLIC_URL:-http://localhost}
-      AI_INTEL_CORS_ORIGINS: ${PUBLIC_URL:-http://localhost}
-      AI_INTEL_GITHUB_CLIENT_ID: ${AI_INTEL_GITHUB_CLIENT_ID:-}
-      AI_INTEL_GITHUB_CLIENT_SECRET: ${AI_INTEL_GITHUB_CLIENT_SECRET:-}
-      AI_INTEL_GITHUB_OAUTH_REDIRECT_URI: ${PUBLIC_URL:-http://localhost}/api/auth/github/callback
+      RETRACT_ENVIRONMENT: production
+      RETRACT_DATABASE_URL: postgresql+psycopg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-ai_intel}
+      RETRACT_REDIS_URL: redis://redis:6379/0
+      RETRACT_DATA_DIR: /data
+      RETRACT_JWT_SECRET: ${RETRACT_JWT_SECRET:?set RETRACT_JWT_SECRET}
+      RETRACT_AGENT_TOKEN: ${RETRACT_AGENT_TOKEN:?set RETRACT_AGENT_TOKEN}
+      RETRACT_DEV_LOGIN: "0"
+      RETRACT_AUTH_COOKIE_SECURE: "1"
+      RETRACT_FRONTEND_URL: ${PUBLIC_URL:-http://localhost}
+      RETRACT_CORS_ORIGINS: ${PUBLIC_URL:-http://localhost}
+      RETRACT_GITHUB_CLIENT_ID: ${RETRACT_GITHUB_CLIENT_ID:-}
+      RETRACT_GITHUB_CLIENT_SECRET: ${RETRACT_GITHUB_CLIENT_SECRET:-}
+      RETRACT_GITHUB_OAUTH_REDIRECT_URI: ${PUBLIC_URL:-http://localhost}/api/auth/github/callback
     command: >
       sh -c "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000 --proxy-headers"
     volumes:
@@ -76,21 +76,21 @@ services:
     expose:
       - "8000"
 
-  worker:
+  retract-worker:
     build: ../backend
     restart: unless-stopped
     environment:
-      AI_INTEL_ENVIRONMENT: production
-      AI_INTEL_DATABASE_URL: postgresql+psycopg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-ai_intel}
-      AI_INTEL_REDIS_URL: redis://redis:6379/0
-      AI_INTEL_DATA_DIR: /data
+      RETRACT_ENVIRONMENT: production
+      RETRACT_DATABASE_URL: postgresql+psycopg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-ai_intel}
+      RETRACT_REDIS_URL: redis://redis:6379/0
+      RETRACT_DATA_DIR: /data
       # The worker imports app.config through celery_app, so it is subject to the
       # same production guard as the api — and it was previously inheriting the
       # published default jwt secret silently, which is how the guard was noticed.
       # It signs nothing itself, but any task that mints a token needs these, and
       # same-deployment secrets should be the same secrets.
-      AI_INTEL_JWT_SECRET: ${AI_INTEL_JWT_SECRET:?set AI_INTEL_JWT_SECRET}
-      AI_INTEL_AGENT_TOKEN: ${AI_INTEL_AGENT_TOKEN:?set AI_INTEL_AGENT_TOKEN}
+      RETRACT_JWT_SECRET: ${RETRACT_JWT_SECRET:?set RETRACT_JWT_SECRET}
+      RETRACT_AGENT_TOKEN: ${RETRACT_AGENT_TOKEN:?set RETRACT_AGENT_TOKEN}
     command: celery -A app.tasks.celery_app:celery_app worker --loglevel=info --concurrency=2
     volumes:
       - repo_data:/data
@@ -126,29 +126,29 @@ services:
       redis:
         condition: service_healthy
 
-  agent:
+  retract-agent:
     build: ../agent
     restart: unless-stopped
     environment:
       # Not cosmetic: eve.ts fails the auth walk closed on NODE_ENV=production when
-      # AI_INTEL_JWT_SECRET is missing, and agent.ts refuses the fixture model. Both
+      # RETRACT_JWT_SECRET is missing, and agent.ts refuses the fixture model. Both
       # guards are inert without this.
       NODE_ENV: production
-      AI_INTEL_API_URL: http://api:8000
-      AI_INTEL_AGENT_TOKEN: ${AI_INTEL_AGENT_TOKEN:?set AI_INTEL_AGENT_TOKEN}
-      AI_INTEL_JWT_SECRET: ${AI_INTEL_JWT_SECRET:?set AI_INTEL_JWT_SECRET}
-      AI_INTEL_LLM_PROVIDER: ${AI_INTEL_LLM_PROVIDER:-gateway}
-      AI_INTEL_MODEL: ${AI_INTEL_MODEL:-anthropic/claude-sonnet-4.5}
+      RETRACT_API_URL: http://retract-api:8000
+      RETRACT_AGENT_TOKEN: ${RETRACT_AGENT_TOKEN:?set RETRACT_AGENT_TOKEN}
+      RETRACT_JWT_SECRET: ${RETRACT_JWT_SECRET:?set RETRACT_JWT_SECRET}
+      RETRACT_LLM_PROVIDER: ${RETRACT_LLM_PROVIDER:-gateway}
+      RETRACT_MODEL: ${RETRACT_MODEL:-anthropic/claude-sonnet-4.5}
       # Optional OpenAI-compatible endpoint (opencode-go, local vLLM, Ollama). The SDK
       # sends the URL and key per call and eve bakes neither into the image, so these
       # are safe to pass through and safe to leave blank.
-      AI_INTEL_LLM_BASE_URL: ${AI_INTEL_LLM_BASE_URL:-}
-      AI_INTEL_LLM_API_MODE: ${AI_INTEL_LLM_API_MODE:-chat}
-      AI_INTEL_LLM_API_KEY: ${AI_INTEL_LLM_API_KEY:-}
-      # Only read when AI_INTEL_LLM_PROVIDER=openai, which fails fast without it.
+      RETRACT_LLM_BASE_URL: ${RETRACT_LLM_BASE_URL:-}
+      RETRACT_LLM_API_MODE: ${RETRACT_LLM_API_MODE:-chat}
+      RETRACT_LLM_API_KEY: ${RETRACT_LLM_API_KEY:-}
+      # Only read when RETRACT_LLM_PROVIDER=openai, which fails fast without it.
       # Not previously passed through, so choosing `openai` here could not work at all.
-      AI_INTEL_API_KEY: ${AI_INTEL_API_KEY:-}
-      # Only read when AI_INTEL_LLM_PROVIDER=gateway. Deliberately optional
+      RETRACT_API_KEY: ${RETRACT_API_KEY:-}
+      # Only read when RETRACT_LLM_PROVIDER=gateway. Deliberately optional
       # (`:-`, not `:?`): the `:?` form cannot be conditional on the provider, so it
       # demanded a gateway key from `openai` and `mock` deployments that never call
       # the gateway, which meant every such deployment had to invent a dummy value
@@ -162,12 +162,12 @@ services:
       # discards in-flight agent sessions and quarantines their deliveries.
       - agent_state:/srv/agent/.eve
     depends_on:
-      api:
+      retract-api:
         condition: service_healthy
     expose:
       - "3000"
 
-  frontend:
+  retract-frontend:
     build:
       context: ../frontend
       # Explicit, because this compose file ships the built bundle behind nginx.
@@ -179,9 +179,9 @@ services:
     ports:
       - "${HTTP_PORT:-80}:80"
     depends_on:
-      api:
+      retract-api:
         condition: service_healthy
-      agent:
+      retract-agent:
         condition: service_healthy
 
 volumes:

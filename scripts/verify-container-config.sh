@@ -106,7 +106,7 @@ check_compose() {
 
 # The agent resolves its credential itself, per provider (agent/lib/credentials.ts),
 # so compose must not hard-require one with `${VAR:?…}`: that operator cannot be
-# conditional on AI_INTEL_LLM_PROVIDER, and it forced every deployment to invent a
+# conditional on RETRACT_LLM_PROVIDER, and it forced every deployment to invent a
 # gateway key the openai provider never reads. A regression here is invisible in the
 # app until an agent message fails, so it is checked statically.
 check_credential_not_hard_required() {
@@ -117,14 +117,14 @@ check_credential_not_hard_required() {
   else
     echo "  ok   AI_GATEWAY_API_KEY is optional (the agent validates per provider)"
   fi
-  if ! grep -qE 'AI_INTEL_API_KEY:.*\$\{AI_INTEL_API_KEY:-\}' "$file"; then
-    fail "AI_INTEL_API_KEY is not passed through to the agent container — the openai provider needs it"
+  if ! grep -qE 'RETRACT_API_KEY:.*\$\{RETRACT_API_KEY:-\}' "$file"; then
+    fail "RETRACT_API_KEY is not passed through to the agent container — the openai provider needs it"
   else
-    echo "  ok   AI_INTEL_API_KEY is passed through"
+    echo "  ok   RETRACT_API_KEY is passed through"
   fi
   # The custom-endpoint variables must reach the agent too; without them a container
-  # a containerized openai deployment silently ignores AI_INTEL_LLM_BASE_URL.
-  for v in AI_INTEL_LLM_BASE_URL AI_INTEL_LLM_API_MODE AI_INTEL_LLM_API_KEY; do
+  # a containerized openai deployment silently ignores RETRACT_LLM_BASE_URL.
+  for v in RETRACT_LLM_BASE_URL RETRACT_LLM_API_MODE RETRACT_LLM_API_KEY; do
     if ! grep -qE "$v:.*\\\$\{$v:-" "$file"; then
       fail "$v is not passed through to the agent container"
     else

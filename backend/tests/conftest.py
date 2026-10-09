@@ -9,12 +9,12 @@ import fakeredis
 import pytest
 
 _TMP = Path(tempfile.mkdtemp(prefix="ai-intel-test-"))
-os.environ["AI_INTEL_DATABASE_URL"] = f"sqlite:///{_TMP}/test.db"
-os.environ["AI_INTEL_REDIS_URL"] = "redis://localhost:6379/15"
-os.environ["AI_INTEL_DEV_LOGIN"] = "1"
-os.environ["AI_INTEL_DATA_DIR"] = str(_TMP / "data")
-os.environ["AI_INTEL_JWT_SECRET"] = "test-secret-key-that-is-at-least-32-bytes-long"
-os.environ["AI_INTEL_AGENT_TOKEN"] = "test-agent-service-token"
+os.environ["RETRACT_DATABASE_URL"] = f"sqlite:///{_TMP}/test.db"
+os.environ["RETRACT_REDIS_URL"] = "redis://localhost:6379/15"
+os.environ["RETRACT_DEV_LOGIN"] = "1"
+os.environ["RETRACT_DATA_DIR"] = str(_TMP / "data")
+os.environ["RETRACT_JWT_SECRET"] = "test-secret-key-that-is-at-least-32-bytes-long"
+os.environ["RETRACT_AGENT_TOKEN"] = "test-agent-service-token"
 
 from fastapi.testclient import TestClient  # noqa: E402
 

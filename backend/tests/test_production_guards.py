@@ -2,7 +2,7 @@
 
 Compose enforces the required variables with `${VAR:?}`, so `docker compose up`
 already fails closed. The application on its own does not: started outside Docker
-with `AI_INTEL_ENVIRONMENT=production` and no `AI_INTEL_JWT_SECRET`, it boots
+with `RETRACT_ENVIRONMENT=production` and no `RETRACT_JWT_SECRET`, it boots
 happily and signs session cookies and eve agent tokens with the literal default
 `change-me-in-production` — a value published in this repository, so anyone could
 forge them. These tests pin the fail-closed behaviour that closes that gap.
@@ -33,9 +33,7 @@ def test_production_accepts_real_secrets() -> None:
     assert _production_settings().environment == "production"
 
 
-@pytest.mark.parametrize(
-    "secret", ["change-me", "", "x" * 31, *sorted(FORBIDDEN_JWT_SECRETS)]
-)
+@pytest.mark.parametrize("secret", ["change-me", "", "x" * 31, *sorted(FORBIDDEN_JWT_SECRETS)])
 def test_production_rejects_weak_or_published_jwt_secret(secret: str) -> None:
     with pytest.raises(ValidationError, match="JWT_SECRET"):
         _production_settings(jwt_secret=secret)

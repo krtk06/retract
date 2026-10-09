@@ -98,8 +98,8 @@ jobs:
         env:
           POSTGRES_USER: postgres
           POSTGRES_PASSWORD: postgres
-          AI_INTEL_AGENT_TOKEN: ci-agent-token
-          AI_INTEL_JWT_SECRET: ci-jwt-secret-at-least-32-bytes-long
+          RETRACT_AGENT_TOKEN: ci-agent-token
+          RETRACT_JWT_SECRET: ci-jwt-secret-at-least-32-bytes-long
       - name: Start stack and wait for health
         # `--wait` gates on every service's healthcheck, which is what caught the
         # three healthcheck bugs found by running this locally (the agent probing an
@@ -108,7 +108,7 @@ jobs:
         #
         # No LLM credential is set here, and none is needed: eve bakes the provider
         # and model into its build output (see the agent Dockerfile), so this build
-        # runs with no AI_INTEL_* in the environment and resolves the gateway default
+        # runs with no RETRACT_* in the environment and resolves the gateway default
         # without a key. The credential guard only fires for a production start on a
         # host, where the runtime environment is the real one. This job asserts that
         # images build and services come up healthy; it makes no model call, so
@@ -117,8 +117,8 @@ jobs:
         env:
           POSTGRES_USER: postgres
           POSTGRES_PASSWORD: postgres
-          AI_INTEL_AGENT_TOKEN: ci-agent-token
-          AI_INTEL_JWT_SECRET: ci-jwt-secret-at-least-32-bytes-long
+          RETRACT_AGENT_TOKEN: ci-agent-token
+          RETRACT_JWT_SECRET: ci-jwt-secret-at-least-32-bytes-long
       - name: Diagnostics on failure
         if: failure()
         run: |
@@ -154,4 +154,13 @@ jobs:
         run: docker compose -f infra/docker-compose.prod.yml logs --tail=100
       - name: Tear down
         if: always()
+        # Same interpolation rules as `up`: compose resolves every `${VAR:?}`
+        # before executing any subcommand, so teardown needs the variables even
+        # though it tears nothing that uses them. Missing here is what left this
+        # job red after a fully successful run.
         run: docker compose -f infra/docker-compose.prod.yml down -v
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          RETRACT_AGENT_TOKEN: ci-agent-token
+          RETRACT_JWT_SECRET: ci-jwt-secret-at-least-32-bytes-long

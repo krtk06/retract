@@ -5,7 +5,7 @@
  * credentials, error shape, and the "no RAG" endpoint set stay in one place.
  *
  * Authentication: the agent runs server-side, so it presents the shared
- * `AI_INTEL_AGENT_TOKEN` service secret (backend: `X-Agent-Token`) and the
+ * `RETRACT_AGENT_TOKEN` service secret (backend: `X-Agent-Token`) and the
  * acting user's login (`X-Agent-User`) from the eve session's authenticated
  * principal. Tools never call `/search` — that endpoint no longer exists, and
  * retrieval is served by the symbol graph instead.
@@ -37,11 +37,11 @@ export type RequestOptions = {
  * publish it through the environment after this module is loaded.
  */
 function baseUrl(): string {
-  return (process.env.AI_INTEL_API_URL ?? DEFAULT_API_URL).replace(/\/$/, "");
+  return (process.env.RETRACT_API_URL ?? DEFAULT_API_URL).replace(/\/$/, "");
 }
 
 function agentToken(): string {
-  return process.env.AI_INTEL_AGENT_TOKEN ?? "";
+  return process.env.RETRACT_AGENT_TOKEN ?? "";
 }
 
 function buildUrl(path: string, query: RequestOptions["query"]): string {
@@ -73,7 +73,7 @@ async function request<T>(path: string, options: RequestOptions): Promise<T> {
     throw new ApiError(
       0,
       path,
-      "AI_INTEL_AGENT_TOKEN is not set; the agent cannot call the API",
+      "RETRACT_AGENT_TOKEN is not set; the agent cannot call the API",
     );
   }
   const headers: Record<string, string> = { "X-Agent-Token": token };

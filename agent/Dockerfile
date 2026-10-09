@@ -12,9 +12,9 @@ COPY . .
 #
 # KNOWN LIMITATION: eve compiles the agent definition — including the *resolved model* —
 # into .output/.eve/compile/compiled-agent-manifest.json at build time, so in this image
-# AI_INTEL_LLM_PROVIDER, AI_INTEL_MODEL and the NODE_ENV fixture-model guard are resolved
+# RETRACT_LLM_PROVIDER, RETRACT_MODEL and the NODE_ENV fixture-model guard are resolved
 # from the *build* environment and ignored at run time. Verified: a container started with
-# AI_INTEL_LLM_PROVIDER=openai and a valid AI_INTEL_API_KEY still called the AI Gateway,
+# RETRACT_LLM_PROVIDER=openai and a valid RETRACT_API_KEY still called the AI Gateway,
 # and the manifest contained no occurrence of "openai". Note the corollary — a provider
 # needing a key (openai) would have that key baked into the manifest, so it must never be
 # built with one. Build args are the supported way to select the provider; see
@@ -39,7 +39,7 @@ EXPOSE 3000
 # Liveness probe. Routes tested against a real container:
 #   /eve/v1/health -> 200, unauthenticated. This is the route to use: eve keeps it
 #                     outside the channel's auth walk.
-#   /eve/v1/info   -> 401 once AI_INTEL_JWT_SECRET is set, so it cannot be probed
+#   /eve/v1/info   -> 401 once RETRACT_JWT_SECRET is set, so it cannot be probed
 #                     blindly. (It only looked public in development, where no
 #                     secret is set and `none()` admits every caller.)
 #   /health        -> 404; /eve/health -> 404. eve does not serve either, despite

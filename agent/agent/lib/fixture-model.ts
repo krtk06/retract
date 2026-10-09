@@ -1,7 +1,7 @@
 /**
  * Deterministic fixture model for evals, local reviews, and CI.
  *
- * Only active when `AI_INTEL_LLM_PROVIDER=mock`. A real model chooses which
+ * Only active when `RETRACT_LLM_PROVIDER=mock`. A real model chooses which
  * tools to call; this one follows a script selected by a marker in the user
  * message, so an eval can assert on tool wiring, citations, and HITL gating
  * without provider credentials or nondeterminism.

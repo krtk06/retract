@@ -81,8 +81,10 @@ def login(payload: LoginIn, response: Response, db: Session = Depends(get_db)) -
     cannot be used to enumerate registered addresses.
     """
     user = db.scalar(select(User).where(User.email == payload.email))
-    if user is None or not user.password_hash or not verify_password(
-        payload.password, user.password_hash
+    if (
+        user is None
+        or not user.password_hash
+        or not verify_password(payload.password, user.password_hash)
     ):
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, detail="Invalid email or password")
     _set_session_cookie(response, user)
@@ -156,7 +158,7 @@ def dev_login(
     login: str = Query(default="dev", min_length=1, max_length=64),
     db: Session = Depends(get_db),
 ) -> Response:
-    """Dev-only login bypass (AI_INTEL_DEV_LOGIN=1). Never enable in production."""
+    """Dev-only login bypass (RETRACT_DEV_LOGIN=1). Never enable in production."""
     settings = get_settings()
     if not settings.dev_login:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Not found")

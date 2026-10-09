@@ -1,4 +1,4 @@
-"""Application settings, loaded from environment with prefix AI_INTEL_."""
+"""Application settings, loaded from environment with prefix RETRACT_."""
 
 from functools import lru_cache
 from pathlib import Path
@@ -22,7 +22,7 @@ MIN_JWT_SECRET_CHARS = 32
 
 
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_prefix="AI_INTEL_", env_file=".env", extra="ignore")
+    model_config = SettingsConfigDict(env_prefix="RETRACT_", env_file=".env", extra="ignore")
 
     environment: str = "dev"
 
@@ -81,18 +81,18 @@ class Settings(BaseSettings):
         problems: list[str] = []
         if len(self.jwt_secret) < MIN_JWT_SECRET_CHARS:
             problems.append(
-                f"AI_INTEL_JWT_SECRET must be at least {MIN_JWT_SECRET_CHARS} characters "
+                f"RETRACT_JWT_SECRET must be at least {MIN_JWT_SECRET_CHARS} characters "
                 f"(got {len(self.jwt_secret)})"
             )
         if self.jwt_secret in FORBIDDEN_JWT_SECRETS:
             problems.append(
-                "AI_INTEL_JWT_SECRET is a published placeholder value "
+                "RETRACT_JWT_SECRET is a published placeholder value "
                 "(the code default or the .env.example value); generate a real one"
             )
         if not self.agent_token:
-            problems.append("AI_INTEL_AGENT_TOKEN must be set so the agent can reach the API")
+            problems.append("RETRACT_AGENT_TOKEN must be set so the agent can reach the API")
         if self.dev_login:
-            problems.append("AI_INTEL_DEV_LOGIN must be disabled (0) in production")
+            problems.append("RETRACT_DEV_LOGIN must be disabled (0) in production")
 
         if problems:
             raise ValueError("refusing to start in production: " + "; ".join(problems))

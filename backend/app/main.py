@@ -11,7 +11,7 @@ def create_app() -> FastAPI:
     settings = get_settings()
     settings.data_dir.mkdir(parents=True, exist_ok=True)
 
-    app = FastAPI(title="AI Engineering Intelligence Platform", version="0.1.0")
+    app = FastAPI(title="Retract", version="0.1.0")
 
     app.add_middleware(
         CORSMiddleware,

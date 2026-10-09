@@ -6,7 +6,7 @@
 ## Flow verified
 
 1. Dev login → repo list (seedy + psf/requests).
-2. **Seedy repo** (`local://…/benchmark/seedy-python-app`, via `AI_INTEL_ALLOW_LOCAL_REPOS=1`):
+2. **Seedy repo** (`local://…/benchmark/seedy-python-app`, via `RETRACT_ALLOW_LOCAL_REPOS=1`):
    - Analysis #3 `done` in ~7s, 16 findings, 71 LOC.
    - Health Score: 0/100 overall — all six pillars 0 (correct for a deliberately seedy repo).
    - Progress trace shows the full pipeline: clone → inventory → symbol index (15 symbols) → 8 tool events with per-tool finding counts and durations → done.
@@ -38,7 +38,7 @@
 ## Notes
 
 - gitleaks + semgrep both flag the planted AWS key in the seedy repo (different agents, same defect) — cross-agent dedup is a Phase 4+ concern.
-- Local-repo mode (`local://…`) is a dev-only hook used by the benchmark; guarded by `AI_INTEL_ALLOW_LOCAL_REPOS`.
+- Local-repo mode (`local://…`) is a dev-only hook used by the benchmark; guarded by `RETRACT_ALLOW_LOCAL_REPOS`.
 - Docker: gitleaks installed in the backend image; semgrep/radon/tree-sitter via pip deps.
 
 ## Acceptance criteria status
