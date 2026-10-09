@@ -124,6 +124,25 @@ Two things this exposes for the product:
    skills found" on an unmerged branch. Expected, but worth remembering when
    reading "install the skill" before this merges.
 
+## The defect the dogfood run caught, and its guard
+
+Following the skill, a fresh agent concluded that clearing a secret finding
+required rewriting git history — a destructive step the brief never asked for.
+The cause was in `references/verification.md`, not the agent: it claimed
+gitleaks "re-scans history and tree". Retract runs gitleaks with `--no-git`
+(tree only, `tools/gitleaks.py`), so deleting the literal is what clears the
+finding; history remains real exposure, but not a scoring action.
+
+Fixed in both references, and closed the class, not just the instance: the
+verifier now parses the **tool runners** too, not only `scoring.py`. Radon's
+`CC_MEDIUM`/`CC_HIGH`/`MI_LOW`, the duplication window, the god-module
+`FAN_IN_FLOOR`, the docstring coverage ratio, and gitleaks' `--no-git` flag are
+each matched **in context** in the reference docs (a bare-number search matched
+unrelated prose — the first version of the check could not fail, which was
+caught by deliberately retuning `CC_MEDIUM` on a copy). Verified both failure
+modes by hand: retuning a tool constant fails the build, and removing
+`--no-git` from the source fails it.
+
 ## Environment-only findings (not defects)
 
 1. The eve chat model call fails with OpenAI "account is not active" — billing,

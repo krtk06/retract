@@ -1,23 +1,31 @@
-"""Assert the retract skill's reference docs still match the scoring source.
+"""Assert the retract skill's reference docs still match the sources they quote.
 
 Extracted from ``verify-skill.sh`` so the shell script stays readable.
 
-The skill teaches coding agents Retract's scoring model. The curve has been
-retuned twice already (250 → 100 → 30), so a stale skill would silently
-instruct agents to optimise against a dead formula. This file parses
-``scoring.py`` with ``ast`` — the source is the truth, never this script —
-and checks each constant appears in ``skills/retract/references/scoring.md``,
-and each scored category in ``categories.md``.
+The skill teaches coding agents Retract's scoring model and its analyzers. The
+curve has been retuned twice already (250 → 100 → 30), so a stale skill would
+silently instruct agents to optimise against a dead formula. This file parses
+``scoring.py`` and the tool runners with ``ast`` — the sources are the truth,
+never this script — and checks that each constant and flag the skill quotes
+still exists there, and each scored category in ``categories.md``.
+
+That second half exists because dogfooding the skill found the first defect of
+this class: ``references/verification.md`` claimed gitleaks "re-scans history
+and tree", so an agent following it advised a destructive history rewrite to
+clear a secret finding. Retract runs gitleaks with ``--no-git``. A claim about
+behaviour is as driftable as a number, so it gets the same treatment.
 
 Reports one line per check; the caller counts the ``FAIL`` lines.
 """
 
 import ast
 import pathlib
+import re
 import sys
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 SCORING = ROOT / "backend" / "app" / "analysis_engine" / "scoring.py"
+TOOLS = ROOT / "backend" / "app" / "services" / "tools"
 SKILL = ROOT / "skills" / "retract"
 
 
@@ -106,6 +114,45 @@ def main() -> int:
         "worst-pillar cap described",
     )
     check("penalty per KLOC" in scoring_md or "per KLOC" in scoring_md, "density basis described")
+
+    # Behaviour claims: thresholds and flags the skill states about the tools.
+    # Each threshold is matched *in context* — the number beside the word the
+    # doc uses for it — because a bare number search matches by accident ("15"
+    # appears in unrelated prose), which would make the check unable to fail.
+    verification_md = (SKILL / "references" / "verification.md").read_text()
+    both_refs = categories_md + verification_md
+
+    def tool_constant(module: str, name: str):
+        return ast.literal_eval(_value_of(ast.parse((TOOLS / module).read_text()), name))
+
+    # (module, constant, human label, regex with {v} for the value)
+    thresholds = [
+        ("complexity", "CC_MEDIUM", "radon complexity medium", r"complexity[^\n]*?\b{v}\b"),
+        ("complexity", "CC_HIGH", "radon complexity high", r"complexity[^\n]*?\b{v}\b = high|high[^\n]*?\b{v}\b"),
+        ("complexity", "MI_LOW", "radon maintainability floor", r"maintainability[^\n]*?\b{v}\b"),
+        ("duplication", "MIN_WINDOW_LEN", "duplication window length", r"\b{v}\b normalized"),
+        ("architecture", "FAN_IN_FLOOR", "god-module fan-in floor", r"fan-in[^\n]*?\b{v}\b"),
+    ]
+    for module, name, label, pattern in thresholds:
+        value = tool_constant(f"{module}.py", name)
+        rendered = f"{value:g}"
+        ok = re.search(pattern.format(v=rendered), both_refs, re.IGNORECASE) is not None
+        check(ok, f"{label} {rendered} quoted in context")
+
+    # The docstring rule: public-symbol docstring coverage below half.
+    docs_src = (TOOLS / "docs.py").read_text()
+    check(
+        "< 0.5" in docs_src and ("< 50%" in both_refs or "50%" in both_refs),
+        "docstring coverage threshold quoted",
+    )
+
+    # The flag claim that started this: gitleaks is run tree-only, so deleting
+    # the literal clears a secret finding without a history rewrite.
+    gitleaks_src = (TOOLS / "gitleaks.py").read_text()
+    check(
+        "--no-git" in gitleaks_src and "--no-git" in verification_md,
+        "gitleaks --no-git (tree, not history) asserted in both",
+    )
 
     print(f"{'all skill/scoring checks passed' if failures == 0 else f'{failures} FAIL lines'}")
     return 1 if failures else 0
