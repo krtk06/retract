@@ -470,6 +470,57 @@ environment does not have — public-CVE commit pairs, or a provider credential.
 
 ---
 
+## Phase 9 — the retract skill and the Fix with your agent button `[x]`
+
+The gap between "here is a markdown fix plan" and "here is a PR" was entirely
+unbuilt. This phase builds the loop: Retract finds a bug, the user's own coding
+agent fixes it, the re-run shows the score move.
+
+### Goals
+- An agent skill, installable anywhere with one command, that carries the
+  domain knowledge a fix needs: the scoring curve, the per-category fixes that
+  survive re-analysis, and the verification rules.
+- A frontend affordance that hands one finding to that agent without any
+  server-side write path: the clipboard, not an API token.
+
+### Tasks
+- [x] `skills/retract/` — `SKILL.md` plus `references/` (scoring, categories,
+      verification). Install: `npx skills add krtk06/retract --skill retract`.
+- [x] `scripts/verify-skill.sh` + `scripts/_check_skill_constants.py` — parses
+      `scoring.py` with `ast` and fails CI when the skill's quoted constants or
+      category coverage drift. The curve has been retuned twice; a stale skill
+      would silently instruct agents to optimise against a dead formula.
+- [x] `frontend/src/lib/clipboard.ts` — `copyText` with an `execCommand`
+      fallback: `navigator.clipboard` is absent in non-secure contexts (dev
+      served over a LAN IP).
+- [x] `frontend/src/lib/buildFixPrompt.ts` — the fix brief: instruction,
+      finding identity, citation, cached snippet, evidence JSON, install
+      command. Deliberately carries the `action` line only, not the plan's
+      `steps[]`: `remediation_summary()` returns `{action, effort, source}` by
+      design, and expanding it into steps is the skill's job.
+- [x] The button in `FindingsTable`'s row: disabled for `dismissed` findings
+      (Retract already decided they are false positives), snippet prewarmed on
+      hover, "Copied ✓" feedback that reverts.
+- [x] Vitest: `buildFixPrompt.test.ts` (7), `FindingsTable.test.tsx` (3).
+- [x] README section "Fix with your agent".
+- [x] Browser review: `docs/reviews/phase9.md`.
+
+### Technical decisions
+- The agent on the user's laptop has no session cookie for this app — the API
+  is httpOnly-cookie JWT only, and personal API tokens do not exist. So the
+  button embeds everything in the clipboard text instead of making the skill
+  call back to the API. Zero auth, zero network, works in every harness.
+- No slash command. `npx skills add` installs `SKILL.md` files only — a
+  `/retract` command would need a per-harness shim (`.opencode/commands/`,
+  `.claude/commands/`, `~/.codex/prompts/`) that the CLI will never install.
+  The copied text is prose; every harness triggers the skill on its
+  description.
+- The skill lives in this repository (`skills/retract/`), not a separate
+  skills repo: the constants it quotes are checked against the same commit's
+  `scoring.py`.
+
+---
+
 ## Cross-cutting rules for the implementing agent
 
 1. **Never** let LLM output bypass the verdict schema (D2). Unparseable → repair once → drop.
