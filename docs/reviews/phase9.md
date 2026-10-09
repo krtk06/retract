@@ -55,6 +55,27 @@ Cited location: app/settings.py:1-1
 Evidence: { rule, tool, calibration{samples, effective, corroborated, …} }
 ```
 
+## Large-repository pass — `encode/httpx` (17 753 LOC)
+
+The first pass used the 83-LOC fixture. A 17.7K-LOC repository was analyzed
+fresh through the whole pipeline (clone → index → 8 tools → verify → calibrate →
+score) to check nothing only holds at fixture scale.
+
+| Step | Result |
+| --- | --- |
+| Fresh run | analysis #32, commit `b5addb6`, `done` in 35 s, 157 findings |
+| Score | 59/100, `basis: density`, 17.753 KLOC, worst pillar 44 (code-quality) |
+| The cap in action | weighted mean 76.2, worst 44 → overall 59 = 44 + 15. Matches the README calibration table for httpx exactly |
+| Pillar honesty | Testing shows `—` / "not measured" — httpx produces no testing findings, and the UI refuses to call that clean |
+| Findings table | 99 rows rendered (ingestion/meta hidden by default), 99 fix buttons, grouping and filters intact |
+| Snippet on a real source file | fetched and rendered with true line numbers |
+| Fix plan | 11 work items, 156 findings, +41 projected, quickest wins ranked by payoff |
+| Fix brief on a large finding | longest brief 1 516 chars; the 4 000-char evidence cap correctly stayed dormant (a vulnerable-dependency finding carried its advisory IDs whole) |
+| Determinism | A/B of #32 against the 4-day-old #25 on the same commit: overall 59 → 59 and every pillar delta `—`. Same commit, same numbers |
+
+Screenshots from this pass are not committed; the run is reproducible from the
+repo list with Re-analyze.
+
 ## Environment-only findings (not defects)
 
 1. The eve chat model call fails with OpenAI "account is not active" — billing,
