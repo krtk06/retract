@@ -564,6 +564,56 @@ class of bug as the cached 100 score above.
 
 ---
 
+## Phase 11 — one account per human `[x]`
+
+**The defect.** Signing in with GitHub produced an **empty dashboard** next to the
+repositories the same person had registered with their email. The callback read
+only `id` and `login` from GitHub and never looked at the email, so it could not
+recognise an account that already existed — every OAuth sign-in minted a new one.
+
+The model had anticipated this from the start. `models.py:62-64`:
+
+> a user may exist with either or both credential sets (GitHub-only, email-only,
+> or GitHub + a set password)
+
+The third case was never built, and nothing noticed: no test covered linking.
+
+**The fix.** Scope `read:user user:email`, read the primary *verified* address
+from `GET /user/emails`, and resolve in order — known `github_id`, then attach by
+verified email, then create. Three refusals, each a way this could hand someone
+else's account to someone else: an unverified address never links; an account
+already carrying a different `github_id` is never claimed; a password-less
+account is never auto-adopted, because those are dev-bypass leftovers and
+silently adopting one turns a shared demo login into a real identity.
+
+krtk06 exposes **no public email**, which is why `/user` alone could never have
+worked — the `/user/emails` read is the only path.
+
+**A defect the tests found on the way.** When the address was held by an account
+that could not be adopted, the create path reused it anyway and hit the unique
+index on `users.email` — a sign-in became a 500. Refusing to adopt is correct;
+then crashing is not. The new account is created **without** the address, the
+identity is still recorded, and the reason is logged.
+
+Also fixed in passing: `User(login=login)` raised `IntegrityError` when the
+GitHub login name was already taken by another account. It now uses the existing
+`_unique_login()` helper.
+
+**Ownership repair is an operator action, not a self-service one.** The UI fuses
+"add a repository" and "analyse it" into one action, so re-adding a repository to
+a new account would re-clone it and re-run the whole pipeline. `scripts/
+link_github_account.py` moves ownership instead, dry-run by default.
+
+**Tests, eleven for this flow.** Linking by verified email, and four ways it must
+not: an unverified address, an account with another `github_id`, a password-less
+account, and a 403 from `/user/emails` (an org may forbid member emails) which
+must still complete the sign-in. Each test gets its own GitHub identity and
+address, because the test database is session-scoped and `users.email` is unique —
+a shared fixture address let an earlier case silently claim the account a later
+one was trying to register.
+
+---
+
 ## Cross-cutting rules for the implementing agent
 
 1. **Never** let LLM output bypass the verdict schema (D2). Unparseable → repair once → drop.

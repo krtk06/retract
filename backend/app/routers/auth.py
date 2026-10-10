@@ -164,9 +164,95 @@ def github_login(request: Request) -> RedirectResponse:
         f"?client_id={settings.github_client_id}"
         f"&redirect_uri={settings.github_oauth_redirect_uri}"
         f"&state={state}"
-        "&scope=read:user"
+        # user:email is what lets an existing account be recognised instead of
+        # shadowed by a duplicate — read-only, and it is the email address, no
+        # repository access.
+        "&scope=read:user%20user:email"
     )
     return RedirectResponse(url)
+
+
+def _primary_verified_email(access_token: str) -> str | None:
+    """The account's primary verified email address, or ``None``.
+
+    Only ``verified`` addresses are returned: attaching a GitHub identity to an
+    account on the strength of an unverified address would be account takeover
+    with extra steps. ``None`` is a normal outcome and never fails the sign-in —
+    an organisation may forbid reading member emails (403), and a user may have
+    none, and both simply leave the account GitHub-only as it was before.
+    """
+    try:
+        response = httpx.get(
+            "https://api.github.com/user/emails",
+            headers={"Authorization": f"Bearer {access_token}", "Accept": "application/json"},
+            timeout=15.0,
+        )
+    except httpx.HTTPError:
+        return None
+    if response.status_code != 200:
+        return None
+    entries = response.json()
+    if not isinstance(entries, list):
+        return None
+    verified = [
+        e
+        for e in entries
+        if isinstance(e, dict) and e.get("verified") and isinstance(e.get("email"), str)
+    ]
+    for entry in verified:
+        if entry.get("primary"):
+            return entry["email"].strip().lower() or None
+    return verified[0]["email"].strip().lower() or None if verified else None
+
+
+def _resolve_github_account(db: Session, github_id: int, login: str, email: str | None) -> User:
+    """The account this GitHub identity belongs to, creating one if it is new.
+
+    Three rules, each excluding a way this could hand someone else's account to
+    someone else:
+
+    1. a known ``github_id`` is the same person, by definition;
+    2. a verified email may attach, but only to an account that has **no** GitHub
+       identity of its own (a different ``github_id`` means that account already
+       belongs to somebody) and that has a password — a password-less account is
+       a dev-bypass leftover, and silently adopting one would turn a shared demo
+       login into a real person's identity;
+    3. no password and no email is never enough.
+
+    When the address is already held by an account that cannot be adopted, the
+    new user is created **without** it. Storing it would violate the unique index
+    on ``users.email`` and turn a sign-in into a 500; the GitHub identity is
+    still recorded, and the person can link the address deliberately later.
+    """
+    existing = db.scalar(select(User).where(User.github_id == github_id))
+    if existing is not None:
+        return existing
+
+    candidate = db.scalar(select(User).where(User.email == email)) if email else None
+    if candidate is not None and candidate.github_id is None and candidate.password_hash:
+        # Attaching. The login and email stay as they are: they are the account's
+        # own identity, and overwriting either would rename a record the user
+        # already knows.
+        candidate.github_id = github_id
+        db.commit()
+        return candidate
+
+    email_taken = candidate is not None
+    if email_taken:
+        logger.warning(
+            "github oauth: %s is already held by another account; "
+            "creating a GitHub-only account without the address",
+            email,
+        )
+    user = User(
+        github_id=github_id,
+        login=_unique_login(db, login),
+        email=None if email_taken else email,
+    )
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+    return user
 
 
 @router.get("/github/callback")
@@ -213,12 +299,11 @@ def github_callback(
     if not github_id or not login:
         return _auth_failure(request, AUTH_ERROR_PROFILE)
 
-    user = db.scalar(select(User).where(User.github_id == github_id))
-    if user is None:
-        user = User(github_id=github_id, login=login)
-        db.add(user)
-        db.commit()
-        db.refresh(user)
+    # The email is what lets an existing account be recognised rather than
+    # shadowed by a duplicate — the same person signing in with GitHub and with
+    # their password must land on one account, or each gets its own dashboard.
+    email = _primary_verified_email(access_token)
+    user = _resolve_github_account(db, github_id, login, email)
 
     response = RedirectResponse(settings.frontend_url)
     _set_session_cookie(response, user)
