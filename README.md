@@ -269,6 +269,7 @@ and a stale skill would tell agents to optimise against a dead formula.
 | `RETRACT_MODEL` | agent | model id (defaults: `gpt-5` for `openai`, `anthropic/claude-sonnet-4.5` for `gateway`); required when `RETRACT_LLM_BASE_URL` is set |
 | `RETRACT_LLM_BASE_URL` | agent | optional OpenAI-compatible endpoint (opencode-go, local vLLM, Ollama); no extra dependency |
 | `RETRACT_LLM_API_MODE` | agent | `chat` (default, `/chat/completions`) or `responses`; must match the endpoint |
+| `RETRACT_LLM_HEADERS` | agent | optional JSON object of extra HTTP headers for a custom endpoint; opencode-go requires `x-opencode-session` or it rejects every request. Single-quote it in `.env` |
 | `RETRACT_LLM_API_KEY` | agent | credential for a custom `RETRACT_LLM_BASE_URL` (preferred over `RETRACT_API_KEY`) |
 | `RETRACT_API_KEY` | agent | credential for `RETRACT_LLM_PROVIDER=openai` (falls back to `OPENAI_API_KEY`) |
 | `AI_GATEWAY_API_KEY` | agent | credential for `RETRACT_LLM_PROVIDER=gateway`; optional otherwise — the agent refuses to start without the credential its chosen provider reads |

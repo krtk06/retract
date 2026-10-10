@@ -163,7 +163,64 @@ export function resolveApiMode(
 }
 
 /**
- * The model id for the provider, falling back when unset *or blank*.
+ * Extra HTTP headers for the provider, or `undefined` for none.
+ *
+ * OpenAI-compatible gateways sometimes demand more than a key and a URL.
+ * opencode-go is the concrete case: it refuses requests that carry no
+ * `x-opencode-session` header ("cannot be routed efficiently") and asks clients
+ * to identify themselves with their own user agent instead of a generic SDK
+ * name. Neither is something `@ai-sdk/openai` sends on its own, so both are
+ * configuration here rather than special-cased code.
+ *
+ * `RETRACT_LLM_HEADERS` is a JSON object. In a `.env` file it must be wrapped in
+ * single quotes — `dev-local.sh` sources that file with bash, and bare
+ * `{"a":"b"}` loses its quotes on the way into the environment:
+ *
+ *   RETRACT_LLM_HEADERS='{"x-opencode-session":"retract-dev"}'
+ *
+ * A custom endpoint also gets a default user agent, since the gateways that
+ * need it are exactly the ones asking for it. The real OpenAI endpoint is left
+ * alone.
+ */
+export function resolveHeaders(
+  env: Record<string, string | undefined> = process.env,
+): Record<string, string> | undefined {
+  const defaults: Record<string, string> = {};
+  if (resolveBaseUrl(env)) defaults["user-agent"] = "retract-agent/0.1.0";
+
+  const raw = env.RETRACT_LLM_HEADERS?.trim();
+  if (!raw) return Object.keys(defaults).length > 0 ? defaults : undefined;
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    throw new Error(
+      "RETRACT_LLM_HEADERS is not valid JSON. Give a JSON object of header " +
+        'names to values, single-quoted for .env: ' +
+        `RETRACT_LLM_HEADERS='{"x-opencode-session":"retract-dev"}'.`,
+    );
+  }
+  if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
+    throw new Error(
+      "RETRACT_LLM_HEADERS must be a JSON object (a list of header names), " +
+        'e.g. RETRACT_LLM_HEADERS=\'{"x-opencode-session":"retract-dev"}\'.',
+    );
+  }
+  for (const [name, value] of Object.entries(parsed)) {
+    if (typeof value !== "string") {
+      throw new Error(
+        `RETRACT_LLM_HEADERS["${name}"] must be a string (got ${typeof value}). ` +
+          "Header values are sent verbatim, so a number or nested object would " +
+          "reach the gateway as [object Object].",
+      );
+    }
+  }
+  return { ...defaults, ...(parsed as Record<string, string>) };
+}
+
+/**
+ * The model id for the provider, falling back when unset *or* blank.
  *
  * `??` is not enough here: `.env` writes `RETRACT_MODEL=` as an empty string, which
  * is not nullish, so a blank value sailed past the fallback and was sent to the
