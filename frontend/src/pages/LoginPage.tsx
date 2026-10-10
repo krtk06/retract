@@ -1,10 +1,30 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 
 import { api, ApiError } from "../api/client";
 import { useLogin, useRegister } from "../api/hooks";
 
 type Mode = "login" | "register";
+
+// The backend sends a browser back here with one of these after a failed GitHub
+// sign-in, rather than dumping JSON at an API URL. Each says what happened and
+// what to do about it, because the alternative — "Invalid OAuth state" at
+// /api/auth/github/callback — tells the user nothing they can act on.
+const AUTH_ERRORS: Record<string, string> = {
+  expired_state:
+    "That sign-in attempt expired. Signing in with GitHub can take a couple of minutes — try again.",
+  used_state: "That sign-in link was already used. If you are signed in, go back to the dashboard.",
+  not_configured: "GitHub sign-in is not configured on this deployment.",
+  exchange_failed: "GitHub did not complete the sign-in. Try again.",
+  profile_failed: "Could not read your GitHub profile. Try again.",
+};
+
+function authErrorFromUrl(): string | null {
+  const code = new URLSearchParams(window.location.search).get("auth_error");
+  return AUTH_ERRORS[code ?? ""] ?? (code ? AUTH_FALLBACK : null);
+}
+
+const AUTH_FALLBACK = "GitHub sign-in did not complete. Try again.";
 
 export function LoginPage() {
   const queryClient = useQueryClient();
@@ -13,8 +33,24 @@ export function LoginPage() {
   const [mode, setMode] = useState<Mode>("login");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [error, setError] = useState<string | null>(null);
   const [devBusy, setDevBusy] = useState(false);
+
+  // Captured during the first render, before the URL is cleaned: reading it in
+  // an effect instead loses the message under StrictMode, which runs effects
+  // twice — the second run would find the parameter already stripped and wipe
+  // the banner that the first run had just set.
+  const [authError] = useState(() => authErrorFromUrl());
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (authError) {
+      // Drop the parameter once read, so a refresh does not re-show a stale
+      // error — the same class of bug as the cached 100 score this app once
+      // displayed.
+      window.history.replaceState({}, "", window.location.pathname);
+      setError(authError);
+    }
+  }, [authError]);
 
   // Dev login exists so local development skips OAuth entirely. The backend
   // already refuses it when RETRACT_DEV_LOGIN=0; there is no reason to show a

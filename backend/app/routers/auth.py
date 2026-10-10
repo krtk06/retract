@@ -1,10 +1,12 @@
 """Authentication: GitHub OAuth, email/password accounts, dev-bypass login, JWT cookies."""
 
+import logging
 import secrets
+from urllib.parse import urlsplit, urlunsplit
 
 import httpx
 import redis
-from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
 from fastapi.responses import JSONResponse, RedirectResponse
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -24,11 +26,70 @@ from app.security import (
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
-_STATE_TTL = 600
+logger = logging.getLogger(__name__)
+
+# How long a sign-in attempt stays valid. Ten minutes was short enough to fail a
+# real user: authorizing means finding a password manager, switching to a 2FA
+# app, and coming back — and the only symptom was `{"detail":"Invalid OAuth
+# state"}` at an API URL, naming no cause and offering no way forward. Thirty
+# minutes is the conventional upper bound and is still bounded.
+_STATE_TTL = 1800
+
+# The consumed-state marker. A delete cannot tell "expired" from "already used",
+# and those need different advice: one means start again, the other means the
+# sign-in already succeeded and the user should simply return to the app. Same TTL
+# as the state itself, so the marker outlives any plausible replay and then
+# disappears on its own — no cleanup job, and ~40 bytes per attempt.
+_USED_STATE_PREFIX = "oauth_state:used:"
+
+# Fixed codes, never user input: nothing from the request reaches the redirect
+# URL, so this cannot become an open redirect.
+AUTH_ERROR_NOT_CONFIGURED = "not_configured"
+AUTH_ERROR_EXPIRED = "expired_state"
+AUTH_ERROR_USED = "used_state"
+AUTH_ERROR_EXCHANGE = "exchange_failed"
+AUTH_ERROR_PROFILE = "profile_failed"
+
+_AUTH_ERROR_MESSAGES = {
+    AUTH_ERROR_NOT_CONFIGURED: "GitHub sign-in is not configured",
+    AUTH_ERROR_EXPIRED: "This sign-in attempt expired",
+    AUTH_ERROR_USED: "This sign-in link was already used",
+    AUTH_ERROR_EXCHANGE: "GitHub refused to complete the sign-in",
+    AUTH_ERROR_PROFILE: "Could not read the GitHub profile",
+}
 
 
 def _state_store() -> redis.Redis:
     return redis.Redis.from_url(get_settings().redis_url, decode_responses=True)
+
+
+def _wants_redirect(request: Request) -> bool:
+    """Whether this caller is a browser following the sign-in link.
+
+    The OAuth callback is only ever reached by a browser navigation, and answering
+    one with a bare JSON body dumps the user at an API URL with no way forward.
+    Anything explicitly asking for JSON — a script, a test asserting the status
+    code — still gets the 400 it gets today.
+    """
+    return "text/html" in request.headers.get("accept", "")
+
+
+def _auth_failure(request: Request, code: str) -> RedirectResponse:
+    """Report a failed sign-in: back to the app for a browser, JSON otherwise.
+
+    The JSON path raises rather than returning, so this always hands back a
+    redirect when it returns at all.
+    """
+    detail = _AUTH_ERROR_MESSAGES.get(code, "Sign-in failed")
+    logger.warning("github oauth failed: %s", detail)
+    if not _wants_redirect(request):
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, detail=code)
+    # Built with urlsplit rather than string concatenation: the configured
+    # frontend URL may or may not carry a path, a trailing slash, or an existing
+    # query, and all three have to survive.
+    parts = urlsplit(get_settings().frontend_url)
+    query = f"{parts.query}&" if parts.query else ""
+    return RedirectResponse(urlunsplit(parts._replace(query=f"{query}auth_error={code}")))
 
 
 def _set_session_cookie(response: Response, user: User) -> None:
@@ -92,10 +153,10 @@ def login(payload: LoginIn, response: Response, db: Session = Depends(get_db)) -
 
 
 @router.get("/github/login")
-def github_login() -> RedirectResponse:
+def github_login(request: Request) -> RedirectResponse:
     settings = get_settings()
     if not settings.github_client_id:
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="GitHub OAuth is not configured")
+        return _auth_failure(request, AUTH_ERROR_NOT_CONFIGURED)
     state = secrets.token_urlsafe(16)
     _state_store().setex(f"oauth_state:{state}", _STATE_TTL, "1")
     url = (
@@ -109,11 +170,22 @@ def github_login() -> RedirectResponse:
 
 
 @router.get("/github/callback")
-def github_callback(code: str, state: str, db: Session = Depends(get_db)) -> RedirectResponse:
+def github_callback(
+    request: Request,
+    code: str,
+    state: str,
+    db: Session = Depends(get_db),
+) -> RedirectResponse:
     settings = get_settings()
     store = _state_store()
     if not store.delete(f"oauth_state:{state}"):
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="Invalid OAuth state")
+        # A consumed state and a lapsed one look identical to a delete, so the
+        # marker written at consume time is what separates them — and the advice
+        # differs: "already signed in" versus "start again".
+        if store.exists(f"{_USED_STATE_PREFIX}{state}"):
+            return _auth_failure(request, AUTH_ERROR_USED)
+        return _auth_failure(request, AUTH_ERROR_EXPIRED)
+    store.setex(f"{_USED_STATE_PREFIX}{state}", _STATE_TTL, "1")
 
     token_resp = httpx.post(
         "https://github.com/login/oauth/access_token",
@@ -128,7 +200,7 @@ def github_callback(code: str, state: str, db: Session = Depends(get_db)) -> Red
     )
     access_token = token_resp.json().get("access_token")
     if not access_token:
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="GitHub token exchange failed")
+        return _auth_failure(request, AUTH_ERROR_EXCHANGE)
 
     user_resp = httpx.get(
         "https://api.github.com/user",
@@ -139,7 +211,7 @@ def github_callback(code: str, state: str, db: Session = Depends(get_db)) -> Red
     github_id = gh_user.get("id")
     login = gh_user.get("login")
     if not github_id or not login:
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="Failed to fetch GitHub profile")
+        return _auth_failure(request, AUTH_ERROR_PROFILE)
 
     user = db.scalar(select(User).where(User.github_id == github_id))
     if user is None:

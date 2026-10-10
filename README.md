@@ -97,6 +97,14 @@ put a TLS-terminating proxy in front and set `PUBLIC_URL`.
 Set `RETRACT_DEV_LOGIN=1` for passwordless dev login, or configure a GitHub OAuth
 app (`RETRACT_GITHUB_CLIENT_ID` / `..._SECRET`).
 
+`RETRACT_FRONTEND_URL` is where GitHub sends the user back to — the value must
+match the port the frontend actually serves on, or a successful sign-in lands on
+a dead page. It also carries failed sign-ins: the callback redirects a browser
+back here with `?auth_error=<code>` rather than answering an HTML navigation with
+JSON (`expired_state`, `used_state`, `not_configured`, `exchange_failed`,
+`profile_failed`). A sign-in attempt stays valid for 30 minutes — long enough to
+find a password manager and a 2FA app.
+
 ## Local development
 
 The eve agent needs **Node >= 24** and the backend needs Postgres and Redis. With
