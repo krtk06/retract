@@ -521,6 +521,49 @@ agent fixes it, the re-run shows the score move.
 
 ---
 
+## Phase 10 — GitHub sign-in failure paths `[x]`
+
+**Goal:** a failed sign-in must tell the user what happened and what to do about
+it. Found while setting up GitHub OAuth for real, not by a test.
+
+**The defect.** `/api/auth/github/callback` answered a lapsed state with
+`{"detail":"Invalid OAuth state"}` — raw JSON at an API URL, no cause, no way
+forward. And the state itself lived only **600 seconds**, which is shorter than a
+human authorizing: find a password manager, switch to a 2FA app, come back. It
+expired and the only symptom was that same opaque body. The credentials were
+never the problem; the window was, and nothing said so.
+
+**Two failures, one message.** `store.delete()` returns falsy both when the state
+expired and when it was already consumed, and those need different advice —
+"start again" versus "you are already signed in, go back". A second key,
+`oauth_state:used:{state}`, is written at consume time with the same TTL, so the
+two are separable. ~40 bytes per attempt, self-expiring, no cleanup job.
+
+**Every failure returns the user to the app.** `not_configured`,
+`expired_state`, `used_state`, `exchange_failed`, `profile_failed` redirect to
+`{RETRACT_FRONTEND_URL}?auth_error=<code>`, built with `urlsplit` because the
+configured URL may carry a path, a trailing slash, or a query. Only literals
+reach the URL — no request data is reflected, so this cannot become an open
+redirect — and the specific reason is logged server-side. Anything sending
+`Accept: application/json` still gets today's `400`, so scripted callers are
+unaffected: an OAuth callback is only ever reached by a browser navigation, and
+answering one with a JSON body is what started this.
+
+**The window is 1800 seconds**, and `tests/test_github_oauth.py` asserts the
+constant so it cannot silently shrink again.
+
+**Why it shipped.** This path had **no tests at all**, which is the actual
+finding: a security control whose failure mode is invisible until a real user
+hits it. The seven new cases cover the happy path, expiry, replay, the JSON
+contract, and unconfigured OAuth — with `fakeredis` for state and stubbed
+`httpx`, so none of them touch the network.
+
+The frontend reads `auth_error` on mount and clears it with
+`history.replaceState`, so a refresh does not re-show a stale failure — the same
+class of bug as the cached 100 score above.
+
+---
+
 ## Cross-cutting rules for the implementing agent
 
 1. **Never** let LLM output bypass the verdict schema (D2). Unparseable → repair once → drop.
