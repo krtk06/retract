@@ -97,6 +97,16 @@ put a TLS-terminating proxy in front and set `PUBLIC_URL`.
 Set `RETRACT_DEV_LOGIN=1` for passwordless dev login, or configure a GitHub OAuth
 app (`RETRACT_GITHUB_CLIENT_ID` / `..._SECRET`).
 
+**One account per person.** Sign-in asks GitHub for `read:user user:email`, and a
+verified email that already belongs to an account in this app attaches the GitHub
+identity to it, so signing in with GitHub and with a password reach the same
+repositories and the same history. Without that, each sign-in mints a separate
+account with its own empty dashboard. Three rules keep it from handing an account
+to the wrong person: only *verified* addresses link; an account already tied to a
+different GitHub identity is never claimed; and a password-less account (a
+dev-bypass leftover) is never auto-adopted. `user:email` is read-only — your email
+address, no repository access.
+
 `RETRACT_FRONTEND_URL` is where GitHub sends the user back to — the value must
 match the port the frontend actually serves on, or a successful sign-in lands on
 a dead page. It also carries failed sign-ins: the callback redirects a browser
