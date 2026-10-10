@@ -6,6 +6,7 @@ import {
   resolveApiMode,
   resolveBaseUrl,
   resolveCredential,
+  resolveHeaders,
   resolveModelId,
 } from "./lib/credentials";
 import { fixtureModel } from "./lib/fixture-model";
@@ -56,7 +57,14 @@ function resolveModel() {
   }
   if (provider === "openai") {
     const baseURL = resolveBaseUrl();
-    const client = createOpenAI({ apiKey: resolveCredential("openai"), baseURL });
+    const client = createOpenAI({
+      apiKey: resolveCredential("openai"),
+      baseURL,
+      // Some compatible gateways require more than a URL and a key — opencode-go
+      // rejects a request without `x-opencode-session`, and asks clients to send
+      // their own user agent. See `resolveHeaders`.
+      headers: resolveHeaders(),
+    });
     // With a custom endpoint the host decides the model ids, and `gpt-5` is a guess
     // it is unlikely to serve — so an unset model id becomes an explicit error rather
     // than a confusing "model not found" from the gateway.

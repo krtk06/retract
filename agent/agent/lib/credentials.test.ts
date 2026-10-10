@@ -1,7 +1,13 @@
 import { strict as assert } from "node:assert";
 import { describe, it } from "node:test";
 
-import { resolveApiMode, resolveBaseUrl, resolveCredential, resolveModelId } from "./credentials.ts";
+import {
+  resolveApiMode,
+  resolveBaseUrl,
+  resolveCredential,
+  resolveHeaders,
+  resolveModelId,
+} from "./credentials.ts";
 
 // The throw cases matter more than the nested pass cases: a wrong credential is
 // silent until the first message is sent, so this function's value is entirely in
@@ -191,6 +197,70 @@ describe("openai against a custom endpoint", () => {
           RETRACT_LLM_BASE_URL: "https://api.experientiallabs.ai/v1",
         }),
       /requires RETRACT_LLM_API_KEY/,
+    );
+  });
+});
+
+// opencode-go refuses a request with no `x-opencode-session` header, so a
+// missing one is not cosmetic: it fails every model call with an upstream error
+// that names no variable. This exists to make that header a first-class,
+// validated setting rather than a comment in a dotenv file.
+describe("resolveHeaders", () => {
+  const CUSTOM = { RETRACT_LLM_BASE_URL: "https://opencode.ai/zen/go/v1" };
+
+  it("returns undefined for plain OpenAI, so the real endpoint is untouched", () => {
+    assert.equal(resolveHeaders({}), undefined);
+  });
+
+  it("gives a custom endpoint a self-identifying user agent", () => {
+    assert.deepEqual(resolveHeaders(CUSTOM), { "user-agent": "retract-agent/0.1.0" });
+  });
+
+  it("passes the opencode session header through", () => {
+    assert.deepEqual(
+      resolveHeaders({
+        ...CUSTOM,
+        RETRACT_LLM_HEADERS: '{"x-opencode-session":"retract-dev"}',
+      }),
+      { "user-agent": "retract-agent/0.1.0", "x-opencode-session": "retract-dev" },
+    );
+  });
+
+  it("lets an explicit user agent win over the default", () => {
+    const headers = resolveHeaders({
+      ...CUSTOM,
+      RETRACT_LLM_HEADERS: '{"user-agent":"my-agent/1.0"}',
+    });
+    assert.ok(headers, "headers should resolve for a custom endpoint");
+    assert.equal(headers["user-agent"], "my-agent/1.0");
+  });
+
+  it("survives the .env round trip, where bash strips bare quotes", () => {
+    // What `set -a; source .env` actually produces for the single-quoted form.
+    const sourced = { ...CUSTOM, RETRACT_LLM_HEADERS: '{"x-opencode-session":"retract-dev"}' };
+    const headers = resolveHeaders(sourced);
+    assert.ok(headers, "headers should resolve for a custom endpoint");
+    assert.equal(headers["x-opencode-session"], "retract-dev");
+  });
+
+  it("rejects malformed JSON, naming the shape", () => {
+    assert.throws(
+      () => resolveHeaders({ ...CUSTOM, RETRACT_LLM_HEADERS: "{x-opencode-session:retract-dev}" }),
+      /not valid JSON/,
+    );
+  });
+
+  it("rejects a list, which would send a header named 0", () => {
+    assert.throws(
+      () => resolveHeaders({ ...CUSTOM, RETRACT_LLM_HEADERS: '["x-opencode-session"]' }),
+      /must be a JSON object/,
+    );
+  });
+
+  it("rejects a non-string value rather than sending [object Object]", () => {
+    assert.throws(
+      () => resolveHeaders({ ...CUSTOM, RETRACT_LLM_HEADERS: '{"x-retry":3}' }),
+      /must be a string/,
     );
   });
 });
