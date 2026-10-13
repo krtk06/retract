@@ -28,7 +28,9 @@ LOOPBACK_HOSTS = frozenset({"localhost", "127.0.0.1", "::1"})
 
 def is_loopback(hostname: str | None) -> bool:
     """Whether a hostname can only ever refer to the machine it is used on."""
-    return bool(hostname) and hostname.strip("[]") in LOOPBACK_HOSTS
+    if not hostname:
+        return False
+    return hostname.strip("[]") in LOOPBACK_HOSTS
 
 
 class Settings(BaseSettings):
