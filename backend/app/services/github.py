@@ -23,4 +23,13 @@ def parse_github_url(url: str) -> tuple[str, str]:
 
 
 def canonical_url(owner: str, name: str) -> str:
-    return f"https://github.com/{owner}/{name}"
+    """The URL a repository is identified by, with its case folded.
+
+    GitHub treats owner and repository names case-insensitively —
+    ``https://github.com/krtk06/RETRACT`` resolves to the same repository as the
+    lower-case form (checked with ``git ls-remote``). Without folding, the same
+    repository submitted twice with different casing becomes two rows, two clones,
+    and two analyses of identical code. The row keeps the case it was given, so the
+    display is untouched; only the identity is normalized.
+    """
+    return f"https://github.com/{owner.lower()}/{name.lower()}"

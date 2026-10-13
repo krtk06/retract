@@ -35,6 +35,16 @@ def test_canonical_url() -> None:
     assert canonical_url("psf", "requests") == "https://github.com/psf/requests"
 
 
+def test_canonical_url_folds_case() -> None:
+    """GitHub resolves owner and name case-insensitively, so the identity must too.
+
+    Otherwise `psf/Requests` and `psf/requests` are two repositories here, each
+    cloned and analyzed separately, for one repository on GitHub.
+    """
+    assert canonical_url("PSF", "Requests") == "https://github.com/psf/requests"
+    assert canonical_url("psf", "requests") == canonical_url("PSF", "Requests")
+
+
 def test_detect_languages() -> None:
     files = [
         FileEntry("a.py", 10, ".py"),
