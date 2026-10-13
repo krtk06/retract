@@ -43,15 +43,18 @@ fi
 
 # Publish this run's frontend URL, overriding any value in `.env` or `.local/env.sh`.
 #
-# The backend reads `.env` itself, so a stale `RETRACT_FRONTEND_URL` there survives
-# this override and wins — the API is started with an explicit environment that
-# puts the port this script actually serves in front of it.
-#
-# Without this the sign-in callback returns the user to whatever URL `.env` names.
-# That URL is invisible in the failure: a redirect to the wrong port gives a dead
-# page, and one to the wrong *host* (127.0.0.1 vs localhost) drops the
-# host-scoped session cookie, so a login that worked reads as one that failed.
-FRONTEND_URL="${FRONTEND_URL:-http://127.0.0.1:$FRONTEND_PORT}"
+# The host comes from the GitHub callback URI, not from a guess. That is not
+# cosmetic: the session cookie carries no `Domain`, so it is scoped to the host
+# that issued it, and for a GitHub sign-in that host is the callback's. A
+# frontend on a different spelling of loopback (127.0.0.1 against a `localhost`
+# callback) therefore completes the sign-in, sets the cookie for `localhost`, and
+# then reads the app without it — every request 401s and the user is returned to
+# the login page by a login that worked.
+FRONTEND_HOST="${FRONTEND_HOST:-}"
+if [[ -z "$FRONTEND_HOST" && "${RETRACT_GITHUB_OAUTH_REDIRECT_URI:-}" =~ ^https?://([^/:]+) ]]; then
+  FRONTEND_HOST="${BASH_REMATCH[1]}"
+fi
+FRONTEND_URL="${FRONTEND_URL:-http://${FRONTEND_HOST:-localhost}:$FRONTEND_PORT}"
 export RETRACT_FRONTEND_URL="$FRONTEND_URL"
 export RETRACT_CORS_ORIGINS="${RETRACT_CORS_ORIGINS:-$FRONTEND_URL,http://localhost:$FRONTEND_PORT}"
 
@@ -96,7 +99,7 @@ start_app() {
   (cd backend && setsid nohup "$VENV/bin/celery" -A app.tasks.celery_app:celery_app worker -l info -c 2 \
     > "$LOG_DIR/worker.log" 2>&1 < /dev/null &)
   sleep 4
-  echo "retract-api: http://127.0.0.1:$API_PORT/api/health"
+  echo "retract-api: http://${FRONTEND_HOST:-localhost}:$API_PORT/api/health"
 }
 
 start_agent() {

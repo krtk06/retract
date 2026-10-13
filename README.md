@@ -111,12 +111,20 @@ address, no repository access.
 name the **same host and port** the browser is on. It is the fallback rather than
 the only source: a sign-in records the origin that started it and returns the user
 there, so a developer on `127.0.0.1:5175` is not bounced to a configured
-`localhost:5177`. That matters because a redirect to a different host drops the
-host-scoped session cookie, so a sign-in that worked would read as one that
-failed. Only a configured origin is honoured (`RETRACT_FRONTEND_URL` or a
+`localhost:5177`. Only a configured origin is honoured (`RETRACT_FRONTEND_URL` or a
 `RETRACT_CORS_ORIGINS` entry), plus loopback outside production — so a sign-in
-cannot be steered to a third-party site. `scripts/dev-local.sh` sets both values
-to the port it starts, so they cannot drift.
+cannot be steered to a third-party site. `scripts/dev-local.sh` derives both values
+from the callback URL and the port it starts, so they cannot drift.
+
+**The hosts must match, not just be reachable.** The session cookie carries no
+`Domain` attribute, so it belongs to the host that issued it — and for a GitHub
+sign-in that host is the one in `RETRACT_GITHUB_OAUTH_REDIRECT_URI`. `localhost`
+and `127.0.0.1` are the same machine but different hosts to a browser, so pairing
+a `localhost` callback with a `127.0.0.1` frontend completes the sign-in, sets the
+cookie for `localhost`, and then reads the app without it: every request 401s and
+the user is returned to the login page by a login that worked. The backend refuses
+to start on that pair outside production; `scripts/dev-local.sh` prints the URL to
+open, which is the one whose host matches the callback.
 
 The fallback also carries failed sign-ins: the callback redirects a browser back
 with `?auth_error=<code>` rather than answering an HTML navigation with JSON
