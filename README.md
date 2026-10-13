@@ -107,6 +107,16 @@ different GitHub identity is never claimed; and a password-less account (a
 dev-bypass leftover) is never auto-adopted. `user:email` is read-only — your email
 address, no repository access.
 
+**Repositories are private.** A repository row belongs to the account that added it,
+and each real account that adds the same URL gets its own copy — its own clone, its
+own analyses, findings, and file contents. Being able to *name* a repository URL is
+not access to it, which is the property that was missing: the row used to be global
+and any caller was granted it by submitting the URL, so registering someone else's
+repository URL handed over their analysis and the file contents of their snapshot.
+Development-bypass accounts (`RETRACT_DEV_LOGIN=1`) are the deliberate exception:
+they share one row per URL so a dev machine does not clone the same repository once
+per test account, and a real account never sees that pool.
+
 `RETRACT_FRONTEND_URL` is where GitHub sends the user back to, and the value must
 name the **same host and port** the browser is on. It is the fallback rather than
 the only source: a sign-in records the origin that started it and returns the user

@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 from app import rate_limit
 from app.config import get_settings
 from app.db import get_db
-from app.deps import get_current_user, get_owned_repo_or_404
+from app.deps import get_current_user, get_owned_repo_or_404, visible_repository_ids
 from app.models import Analysis, AnalysisStatus, Repository, User, UserRepository
 from app.schemas import AnalysisOut, RepoCreate, RepoOut
 from app.services.github import InvalidRepoUrl, canonical_url, parse_github_url
@@ -69,12 +69,33 @@ def create_repo(
             raise HTTPException(
                 status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(github_error)
             ) from github_error
-    repo = db.scalar(select(Repository).where(Repository.url == url))
-    if repo is None:
-        repo = Repository(owner=owner, name=name, url=url, added_by=user.id)
-        db.add(repo)
-        db.commit()
-        db.refresh(repo)
+    # A private copy per creator. The previous version looked the URL up globally and
+    # granted the caller access to whatever row it found, so registering someone
+    # else's repository URL handed over their analyses and file contents. Nothing had
+    # verified the caller could reach that repository, so the URL was the whole check.
+    #
+    # Development accounts are the deliberate exception: they share one row per URL,
+    # so a dev machine does not clone the same repository once per test account.
+    if user.is_dev:
+        repo = db.scalar(select(Repository).where(Repository.url == url, Repository.is_shared))
+        if repo is None:
+            repo = Repository(owner=owner, name=name, url=url, added_by=user.id, is_shared=True)
+            db.add(repo)
+            db.commit()
+            db.refresh(repo)
+    else:
+        repo = db.scalar(
+            select(Repository).where(
+                Repository.url == url,
+                Repository.added_by == user.id,
+                Repository.is_shared.is_(False),
+            )
+        )
+        if repo is None:
+            repo = Repository(owner=owner, name=name, url=url, added_by=user.id)
+            db.add(repo)
+            db.commit()
+            db.refresh(repo)
     _grant_access(db, repo, user)
     db.commit()
     return _to_out(db, repo)
@@ -85,12 +106,11 @@ def list_repos(
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ) -> list[RepoOut]:
-    """Repos the caller can see: the ones they (or a same-URL user) added."""
+    """Repos the caller can see: their own, plus the shared pool for dev accounts."""
     repos = (
         db.scalars(
             select(Repository)
-            .join(UserRepository, UserRepository.repo_id == Repository.id)
-            .where(UserRepository.user_id == user.id)
+            .where(Repository.id.in_(visible_repository_ids(user)))
             .order_by(Repository.created_at.desc())
         )
         .unique()

@@ -108,19 +108,55 @@ def test_cross_user_isolation(client: TestClient) -> None:
     assert client.get("/api/analyses").json() == []
 
 
-def test_shared_repo_url_grants_second_owner_access(client: TestClient) -> None:
+def test_a_second_real_account_gets_a_private_copy(client: TestClient) -> None:
+    """Registering someone else's repository URL must not reach their analysis.
+
+    It did: the row was global and access was granted by naming the URL, so the URL
+    was the entire authorization, and any account could read another's analyses,
+    findings, and file contents. Real accounts now get their own copy of the row.
+    """
     owner = _register(client, "sharer@example.com").json()
     repo_id, analysis_id = _make_repo_and_analysis(get_session_factory(), owner["login"])
-    repo = next(rep for rep in client.get("/api/repos").json() if rep["id"] == repo_id)
+    url = next(rep for rep in client.get("/api/repos").json() if rep["id"] == repo_id)["url"]
 
     client.post("/api/auth/logout")
     _register(client, "peer@example.com")
-    # The peer registers the same URL and becomes a co-owner of the shared row.
-    again = client.post("/api/repos", json={"url": repo["url"]})
+    again = client.post("/api/repos", json={"url": url})
     assert again.status_code == 201
-    assert again.json()["id"] == repo_id
-    assert client.get(f"/api/analyses/{analysis_id}").status_code == 200
-    assert any(rep["id"] == repo_id for rep in client.get("/api/repos").json())
+    assert again.json()["id"] != repo_id, "the peer must not be handed the owner's row"
+
+    # The owner's analysis is not reachable, by id or by its file contents.
+    assert client.get(f"/api/analyses/{analysis_id}").status_code == 404
+    assert client.get(f"/api/analyses/{analysis_id}/findings").status_code == 404
+    snippet = client.get(f"/api/analyses/{analysis_id}/snippet", params={"path": "README.md"})
+    assert snippet.status_code == 404
+    assert [rep["id"] for rep in client.get("/api/repos").json()] == [again.json()["id"]]
+
+
+def test_development_accounts_share_one_repository_row(client: TestClient) -> None:
+    """The bypass keeps its shared pool, which is the only reason it exists here.
+
+    A dev machine should not clone the same repository once per test account.
+    """
+    assert client.get("/api/auth/dev/login", params={"login": "dev-a"}).status_code == 200
+    created = client.post("/api/repos", json={"url": "https://github.com/o/shared"}).json()
+
+    client.post("/api/auth/logout")
+    assert client.get("/api/auth/dev/login", params={"login": "dev-b"}).status_code == 200
+    again = client.post("/api/repos", json={"url": "https://github.com/o/shared"})
+    assert again.status_code == 201
+    assert again.json()["id"] == created["id"]
+
+
+def test_a_real_account_cannot_see_the_development_pool(client: TestClient) -> None:
+    """The shared pool is for bypass accounts only — "public" is not "everyone"."""
+    assert client.get("/api/auth/dev/login", params={"login": "dev-c"}).status_code == 200
+    shared = client.post("/api/repos", json={"url": "https://github.com/o/pool"}).json()
+
+    client.post("/api/auth/logout")
+    _register(client, "outsider@example.com")
+    assert shared["id"] not in [rep["id"] for rep in client.get("/api/repos").json()]
+    assert client.post(f"/api/repos/{shared['id']}/analyze").status_code == 404
 
 
 def test_dashboard_lists_analyses_newest_first(client: TestClient) -> None:

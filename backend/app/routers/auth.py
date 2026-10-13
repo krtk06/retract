@@ -433,7 +433,9 @@ def dev_login(
 
     user = db.scalar(select(User).where(User.login == login))
     if user is None:
-        user = User(github_id=None, login=login)
+        # Marked as a development account: these are the only users that share the
+        # repository pool (see Repository.is_shared).
+        user = User(github_id=None, login=login, is_dev=True)
         db.add(user)
         db.commit()
         db.refresh(user)

@@ -14,7 +14,7 @@ from app.analysis_engine import remediation, trust
 from app.analysis_engine.scoring import compute_score
 from app.config import get_settings
 from app.db import get_db
-from app.deps import get_current_user, get_owned_analysis_or_404
+from app.deps import get_current_user, get_owned_analysis_or_404, visible_repository_ids
 from app.events import get_bus
 from app.models import (
     Analysis,
@@ -24,7 +24,6 @@ from app.models import (
     Repository,
     Severity,
     User,
-    UserRepository,
 )
 from app.schemas import (
     AgentFindingsIn,
@@ -68,9 +67,8 @@ def list_analyses(
     rows = db.execute(
         select(Analysis, Repository, counts.c.finding_count)
         .join(Repository, Repository.id == Analysis.repository_id)
-        .join(UserRepository, UserRepository.repo_id == Repository.id)
         .outerjoin(counts, counts.c.analysis_id == Analysis.id)
-        .where(UserRepository.user_id == user.id)
+        .where(Repository.id.in_(visible_repository_ids(user)))
         .order_by(Analysis.created_at.desc(), Analysis.id.desc())
         .limit(limit)
     ).all()
