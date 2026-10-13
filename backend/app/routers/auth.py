@@ -201,11 +201,16 @@ def _unique_login(db: Session, base: str) -> str:
     return candidate
 
 
-def _send_verification_email(db: Session, user: User) -> None:
+def _send_verification_email(db: Session, user: User, request: Request) -> None:
     """Issue a fresh verification link for this account and email it.
 
     Only the SHA-256 of the token is stored, so a database leak does not yield a
     set of working links. Delivery is best-effort (see app/mailer.py).
+
+    The link is built from the origin the request came from rather than from a
+    configured constant, for the same reason the OAuth redirect is: a constant
+    drifts from reality, and the failure is invisible until someone clicks a link
+    that goes nowhere. A registration made through the app knows where the app is.
     """
     settings = get_settings()
     raw = secrets.token_urlsafe(32)
@@ -219,10 +224,10 @@ def _send_verification_email(db: Session, user: User) -> None:
     )
     db.commit()
     if user.email:
-        # The link points at the API through the frontend's own origin: the dev server
-        # and the production nginx both proxy /api, so one URL works in both and the
+        # The link points at the API through the app's own origin: the dev server and
+        # the production nginx both proxy /api, so one URL works in both and the
         # verification request stays same-origin with the app.
-        link = _with_query(f"{settings.frontend_url}/api/auth/verify-email", token=raw)
+        link = _with_query(f"{_return_origin(request)}/api/auth/verify-email", token=raw)
         mailer.send_verification(
             user.email, link, max(settings.email_verification_ttl_seconds // 3600, 1)
         )
@@ -263,7 +268,7 @@ def register(
     # Issued after the account exists, and never allowed to fail the sign-up: an
     # unavailable mail server must not cost someone their registration. The banner
     # offers a resend.
-    _send_verification_email(db, user)
+    _send_verification_email(db, user, request)
     return user
 
 
@@ -594,7 +599,7 @@ def resend_verification(
         )
     if user.email_verified:
         return JSONResponse({"ok": True, "already_verified": True})
-    _send_verification_email(db, user)
+    _send_verification_email(db, user, request)
     return JSONResponse({"ok": True, "already_verified": False})
 
 
