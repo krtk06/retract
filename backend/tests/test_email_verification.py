@@ -134,3 +134,22 @@ def test_resend_is_a_no_op_once_verified(client: TestClient, sent_links: list[st
     assert response.status_code == 200
     assert response.json()["already_verified"] is True
     assert len(sent_links) == 1
+
+
+def test_the_link_follows_the_origin_the_app_was_reached_on(
+    client: TestClient, sent_links: list[str]
+) -> None:
+    """The link must point at the host the app is actually served from.
+
+    A configured constant drifts — a stale one here pointed the link at a port
+    nothing was listening on, and the failure is invisible until someone clicks it.
+    The request that registers knows the real origin, so the link uses it, exactly
+    as the OAuth redirect does.
+    """
+    client.post(
+        "/api/auth/register",
+        json={"email": "origin@example.com", "password": "correct-horse-battery"},
+        headers={"origin": "http://localhost:5175"},
+    )
+    assert len(sent_links) == 1
+    assert urlsplit(sent_links[0]).netloc == "localhost:5175"
