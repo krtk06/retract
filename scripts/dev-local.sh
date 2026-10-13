@@ -41,6 +41,20 @@ if [[ -f "$ROOT/.local/env.sh" ]]; then
   source "$ROOT/.local/env.sh"
 fi
 
+# Publish this run's frontend URL, overriding any value in `.env` or `.local/env.sh`.
+#
+# The backend reads `.env` itself, so a stale `RETRACT_FRONTEND_URL` there survives
+# this override and wins — the API is started with an explicit environment that
+# puts the port this script actually serves in front of it.
+#
+# Without this the sign-in callback returns the user to whatever URL `.env` names.
+# That URL is invisible in the failure: a redirect to the wrong port gives a dead
+# page, and one to the wrong *host* (127.0.0.1 vs localhost) drops the
+# host-scoped session cookie, so a login that worked reads as one that failed.
+FRONTEND_URL="${FRONTEND_URL:-http://127.0.0.1:$FRONTEND_PORT}"
+export RETRACT_FRONTEND_URL="$FRONTEND_URL"
+export RETRACT_CORS_ORIGINS="${RETRACT_CORS_ORIGINS:-$FRONTEND_URL,http://localhost:$FRONTEND_PORT}"
+
 # eve requires Node 24; use the caller's PATH when it already satisfies that.
 node_major() {
   node --version 2>/dev/null | sed 's/^v\([0-9]*\).*/\1/'
@@ -111,7 +125,7 @@ start_frontend() {
     setsid nohup npm run dev -- --port "$FRONTEND_PORT" \
     > "$LOG_DIR/vite.log" 2>&1 < /dev/null &)
   sleep 4
-  echo "retract-frontend: http://127.0.0.1:$FRONTEND_PORT"
+  echo "retract-frontend: $FRONTEND_URL"
 }
 
 stop_all() {

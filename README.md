@@ -107,11 +107,20 @@ different GitHub identity is never claimed; and a password-less account (a
 dev-bypass leftover) is never auto-adopted. `user:email` is read-only — your email
 address, no repository access.
 
-`RETRACT_FRONTEND_URL` is where GitHub sends the user back to — the value must
-match the port the frontend actually serves on, or a successful sign-in lands on
-a dead page. It also carries failed sign-ins: the callback redirects a browser
-back here with `?auth_error=<code>` rather than answering an HTML navigation with
-JSON (`expired_state`, `used_state`, `not_configured`, `exchange_failed`,
+`RETRACT_FRONTEND_URL` is where GitHub sends the user back to, and the value must
+name the **same host and port** the browser is on. It is the fallback rather than
+the only source: a sign-in records the origin that started it and returns the user
+there, so a developer on `127.0.0.1:5175` is not bounced to a configured
+`localhost:5177`. That matters because a redirect to a different host drops the
+host-scoped session cookie, so a sign-in that worked would read as one that
+failed. Only a configured origin is honoured (`RETRACT_FRONTEND_URL` or a
+`RETRACT_CORS_ORIGINS` entry), plus loopback outside production — so a sign-in
+cannot be steered to a third-party site. `scripts/dev-local.sh` sets both values
+to the port it starts, so they cannot drift.
+
+The fallback also carries failed sign-ins: the callback redirects a browser back
+with `?auth_error=<code>` rather than answering an HTML navigation with JSON
+(`expired_state`, `used_state`, `not_configured`, `exchange_failed`,
 `profile_failed`). A sign-in attempt stays valid for 30 minutes — long enough to
 find a password manager and a 2FA app.
 
