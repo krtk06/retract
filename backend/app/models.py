@@ -9,10 +9,12 @@ from sqlalchemy import (
     Enum,
     Float,
     ForeignKey,
+    Index,
     Integer,
     String,
     Text,
     UniqueConstraint,
+    text,
 )
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -67,6 +69,11 @@ class User(Base):
     # the version they were minted with; a mismatch means the token is revoked. A
     # self-contained JWT cannot otherwise be invalidated before it expires.
     token_version: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    # Accounts created by the development bypass (`/api/auth/dev/login`) rather than
+    # by a real sign-in. They exist only to make development convenient, and they are
+    # the one kind of user that shares the repository pool — everyone else's analyses
+    # are private (see Repository.is_shared).
+    is_dev: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     created_at: Mapped[datetime] = mapped_column(default=utcnow)
 
     repositories: Mapped[list["Repository"]] = relationship(back_populates="added_by_user")
@@ -78,9 +85,9 @@ class User(Base):
 class UserRepository(Base):
     """Ownership table: which users may see (and analyze) which repositories.
 
-    Deliberately many-to-many rather than a per-user repo duplicate: several users
-    adding the same GitHub URL share one clone and one analysis history, while the
-    association keeps visibility private to people who actually added it.
+    Still the grant record for a private repository, but no longer a way to *reach*
+    someone else's. A repository is private to the user who added it, and the grant
+    is written when they add it — see ``Repository.is_shared`` for the one exception.
     """
 
     __tablename__ = "user_repositories"
@@ -93,14 +100,48 @@ class UserRepository(Base):
 
 
 class Repository(Base):
+    """A repository someone has asked us to analyze.
+
+    One row per (creator, url), not one row per url. It used to be the latter — a
+    single shared row that any caller was granted access to by submitting the same
+    url — which meant registering someone else's repository URL handed over their
+    analyses, findings, and file contents. Since nothing verified that a caller could
+    actually reach the repository on GitHub, the url was enough.
+
+    ``is_shared`` keeps the old convenience for development bypass accounts only:
+    they share one row per url, so a dev machine does not clone the same repository
+    once per test account. Real accounts never see a shared row.
+    """
+
     __tablename__ = "repositories"
+    # Two partial unique indexes rather than one unique `url`: a private repository is
+    # unique per creator, a shared one is unique across the pool. Written dialect-
+    # agnostically — SQLite runs `create_all` in tests, Postgres runs the migrations.
+    __table_args__ = (
+        Index(
+            "uq_repositories_shared_url",
+            "url",
+            unique=True,
+            sqlite_where=text("is_shared"),
+            postgresql_where=text("is_shared"),
+        ),
+        Index(
+            "uq_repositories_owner_url",
+            "added_by",
+            "url",
+            unique=True,
+            sqlite_where=text("NOT is_shared"),
+            postgresql_where=text("NOT is_shared"),
+        ),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True)
     owner: Mapped[str]
     name: Mapped[str]
-    url: Mapped[str] = mapped_column(unique=True)
+    url: Mapped[str]
     default_branch: Mapped[str] = mapped_column(default="main")
     added_by: Mapped[int] = mapped_column(ForeignKey("users.id"))
+    is_shared: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     created_at: Mapped[datetime] = mapped_column(default=utcnow)
 
     added_by_user: Mapped[User] = relationship(back_populates="repositories")

@@ -3,7 +3,7 @@
 import secrets
 
 from fastapi import Depends, HTTPException, Request, status
-from sqlalchemy import select
+from sqlalchemy import Select, or_, select
 from sqlalchemy.orm import Session
 
 from app.config import get_settings
@@ -82,12 +82,40 @@ def _agent_user(request: Request, presented: str, db: Session) -> User:
     return user
 
 
-def owns_repo(db: Session, user_id: int, repo_id: int) -> bool:
-    """True when the user added this repository (shared rows keep one clone)."""
+def visible_repository_ids(user: User) -> Select:
+    """A sub-select of the repository ids this user may see, for list queries.
+
+    Private repositories are those the user was granted (their own additions), and
+    the shared pool is visible only to development-bypass accounts. Kept as one
+    expression so the repository list and the analysis feed cannot disagree about
+    what a user can see — they were two separate joins before, which is how the
+    shared-by-url behaviour spread.
+    """
+    granted = select(UserRepository.repo_id).where(UserRepository.user_id == user.id)
+    if not user.is_dev:
+        return granted
+    return select(Repository.id).where(
+        or_(Repository.is_shared.is_(True), Repository.id.in_(granted))
+    )
+
+
+def owns_repo(db: Session, user: User, repo_id: int) -> bool:
+    """Whether this user may act on this repository.
+
+    A shared repository belongs to every development-bypass account and to no real
+    one; a private repository belongs to whoever holds the grant. The grant is the
+    only thing that decides it — being able to *name* a repository is not access,
+    which was the previous rule and the defect.
+    """
+    repo = db.get(Repository, repo_id)
+    if repo is None:
+        return False
+    if repo.is_shared:
+        return user.is_dev
     return (
         db.scalar(
             select(UserRepository).where(
-                UserRepository.user_id == user_id, UserRepository.repo_id == repo_id
+                UserRepository.user_id == user.id, UserRepository.repo_id == repo.id
             )
         )
         is not None
@@ -97,7 +125,7 @@ def owns_repo(db: Session, user_id: int, repo_id: int) -> bool:
 def get_owned_repo_or_404(db: Session, repo_id: int, user: User) -> Repository:
     """Load a repository the user may act on, without leaking which ones exist."""
     repo = db.get(Repository, repo_id)
-    if repo is None or not owns_repo(db, user.id, repo.id):
+    if repo is None or not owns_repo(db, user, repo.id):
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Repository not found")
     return repo
 
@@ -109,6 +137,6 @@ def get_owned_analysis_or_404(db: Session, analysis_id: int, user: User) -> Anal
     used to probe whether other users' analysis ids exist.
     """
     analysis = db.get(Analysis, analysis_id)
-    if analysis is None or not owns_repo(db, user.id, analysis.repository_id):
+    if analysis is None or not owns_repo(db, user, analysis.repository_id):
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Analysis not found")
     return analysis
