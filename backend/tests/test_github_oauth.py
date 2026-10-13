@@ -15,7 +15,7 @@ from fastapi.testclient import TestClient
 from app.routers import auth
 from app.routers.auth import _STATE_TTL
 
-FRONTEND = "http://localhost:5177"
+FRONTEND = "http://127.0.0.1:5175"
 BROWSER = {"accept": "text/html,application/xhtml+xml"}
 JSON = {"accept": "application/json"}
 
@@ -55,6 +55,8 @@ def oauth(monkeypatch: pytest.MonkeyPatch):
         "RETRACT_GITHUB_OAUTH_REDIRECT_URI", "http://localhost:8110/api/auth/github/callback"
     )
     monkeypatch.setenv("RETRACT_FRONTEND_URL", FRONTEND)
+    monkeypatch.setenv("RETRACT_CORS_ORIGINS", FRONTEND)
+    monkeypatch.setenv("RETRACT_ENVIRONMENT", "dev")
     # `get_settings` is lru_cached, so the first call in the process freezes the
     # settings and later env changes are invisible to it. Clear it on the way in
     # and on the way out, or these tests would read whatever the previous test left.
@@ -120,15 +122,21 @@ def _state_from(url: str) -> str:
 def _error_code_in(location: str) -> str | None:
     """The auth_error carried by a redirect, or None.
 
-    Asserted on the parsed URL rather than the exact string: what matters is
-    where the user lands and what the app is told, not whether the configured
-    frontend URL happened to carry a trailing slash.
+    Read off the parsed URL rather than the exact string: what matters is where
+    the user lands and what the app is told, not whether the configured frontend
+    URL happened to carry a trailing slash.
     """
     from urllib.parse import parse_qs, urlparse
 
+    return parse_qs(urlparse(location).query).get("auth_error", [None])[0]
+
+
+def _origin_of(location: str) -> str:
+    """Just the scheme and host of a redirect, ignoring its path and query."""
+    from urllib.parse import urlparse
+
     parts = urlparse(location)
-    assert f"{parts.scheme}://{parts.netloc}" == FRONTEND
-    return parse_qs(parts.query).get("auth_error", [None])[0]
+    return f"{parts.scheme}://{parts.netloc}"
 
 
 def test_login_redirects_to_github_with_a_state(client: TestClient, oauth) -> None:
@@ -362,3 +370,124 @@ def test_a_forbidden_emails_endpoint_still_completes_the_sign_in(client: TestCli
 def test_the_authorize_url_asks_for_the_email_scope(client: TestClient, oauth) -> None:
     """Without user:email the callback cannot see an address to link on."""
     assert "user%3Aemail" in _authorize_url(client) or "user:email" in _authorize_url(client)
+
+
+# --- Where the sign-in sends the user back to -------------------------------
+#
+# A redirect to a host other than the one the browser is on drops the session
+# cookie, because that cookie is host-scoped. The failure therefore looks like a
+# rejected login rather than a misdirected one, which is why these cases pin the
+# host and not merely the fact of a redirect.
+
+
+def test_a_sign_in_returns_to_the_host_that_started_it(client: TestClient, oauth) -> None:
+    """The cookie is only sent back to the host that received it."""
+    url = _authorize_url(client, {**BROWSER, "referer": "http://127.0.0.1:5175/"})
+    response = _sign_in_again(
+        client,
+        {**BROWSER, "referer": "https://github.com/login/oauth/authorize"},
+        {"code": "c", "state": _state_from(url)},
+    )
+    assert response.status_code in (302, 307), response.text
+    assert _origin_of(response.headers["location"]) == "http://127.0.0.1:5175"
+
+
+def test_a_localhost_and_loopback_port_mismatch_is_followed(client: TestClient, oauth) -> None:
+    """`localhost:5175` and `127.0.0.1:5175` are one machine and two cookies."""
+    url = _authorize_url(client, {**BROWSER, "origin": "http://localhost:5175"})
+    response = _sign_in_again(client, BROWSER, {"code": "c", "state": _state_from(url)})
+    assert _origin_of(response.headers["location"]) == "http://localhost:5175"
+
+
+def test_a_foreign_origin_cannot_steer_the_return_redirect(client: TestClient, oauth) -> None:
+    """An unconfigured origin falls back to the configured one, never to itself."""
+    url = _authorize_url(client, {**BROWSER, "referer": "https://evil.example/steal"})
+    response = _sign_in_again(client, BROWSER, {"code": "c", "state": _state_from(url)})
+    assert _origin_of(response.headers["location"]) == FRONTEND
+
+
+def test_a_configured_cors_origin_is_honoured(client: TestClient, oauth, monkeypatch) -> None:
+    """In production the allowed list, not loopback, is what the return path uses."""
+    monkeypatch.setenv("RETRACT_ENVIRONMENT", "production")
+    # conftest enables dev login; production refuses to start with it on.
+    monkeypatch.setenv("RETRACT_DEV_LOGIN", "0")
+    monkeypatch.setenv("RETRACT_CORS_ORIGINS", "https://app.example.com")
+    from app.config import get_settings
+
+    get_settings.cache_clear()
+    url = _authorize_url(client, {**BROWSER, "referer": "https://app.example.com/login"})
+    response = _sign_in_again(client, BROWSER, {"code": "c", "state": _state_from(url)})
+    assert _origin_of(response.headers["location"]) == "https://app.example.com"
+
+
+def test_production_refuses_a_loopback_return_origin(
+    client: TestClient, oauth, monkeypatch
+) -> None:
+    """Loopback is a development affordance; in production it is a dead end."""
+    monkeypatch.setenv("RETRACT_ENVIRONMENT", "production")
+    # conftest enables dev login; production refuses to start with it on.
+    monkeypatch.setenv("RETRACT_DEV_LOGIN", "0")
+    from app.config import get_settings
+
+    get_settings.cache_clear()
+    url = _authorize_url(client, {**BROWSER, "referer": "http://127.0.0.1:5175/"})
+    response = _sign_in_again(client, BROWSER, {"code": "c", "state": _state_from(url)})
+    assert _origin_of(response.headers["location"]) == FRONTEND
+
+
+def test_a_failed_sign_in_returns_to_the_originating_host(
+    client: TestClient, oauth, monkeypatch
+) -> None:
+    """The failure path has to agree with the success path about where to land.
+
+    The failure is a rejected token exchange, which happens *after* the state was
+    found and consumed — the one moment where the stored origin is still in hand
+    and still worth honouring.
+    """
+
+    class _NoToken:
+        def json(self) -> dict:
+            return {"error": "bad_verification_code"}
+
+    monkeypatch.setattr(auth.httpx, "post", lambda url, **kwargs: _NoToken())
+
+    url = _authorize_url(client, {**BROWSER, "referer": "http://127.0.0.1:5175/"})
+    response = _sign_in_again(
+        client,
+        {**BROWSER, "referer": "https://github.com/login/oauth/authorize"},
+        {"code": "c", "state": _state_from(url)},
+    )
+    assert response.status_code in (302, 307), response.text
+    assert _origin_of(response.headers["location"]) == "http://127.0.0.1:5175"
+    assert _error_code_in(response.headers["location"]) == "exchange_failed"
+
+
+def test_an_unissued_state_falls_back_to_the_configured_url(client: TestClient, oauth) -> None:
+    """Nothing was stored, so there is nothing to honour but the configured URL.
+
+    The callback arrives from github.com, whose origin is neither configured nor
+    loopback — if it were ever honoured, anyone could aim a sign-in anywhere.
+    """
+    response = client.get(
+        "/api/auth/github/callback",
+        params={"code": "c", "state": "never-issued"},
+        headers={**BROWSER, "referer": "https://github.com/login/oauth/authorize"},
+        follow_redirects=False,
+    )
+    assert response.status_code in (302, 307), response.text
+    assert _origin_of(response.headers["location"]) == FRONTEND
+    assert _error_code_in(response.headers["location"]) == "expired_state"
+
+
+def test_the_stored_origin_is_not_tamperable(client: TestClient, oauth) -> None:
+    """The callback reads the origin from server-side state, not from the query."""
+    url = _authorize_url(client, {**BROWSER, "referer": "http://127.0.0.1:5175/"})
+    state = _state_from(url)
+    client.post("/api/auth/logout")
+    response = client.get(
+        "/api/auth/github/callback",
+        params={"code": "c", "state": state, "return_to": "https://evil.example"},
+        headers={**BROWSER, "referer": "https://evil.example/callback"},
+        follow_redirects=False,
+    )
+    assert _origin_of(response.headers["location"]) == "http://127.0.0.1:5175"

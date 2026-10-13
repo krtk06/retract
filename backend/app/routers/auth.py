@@ -74,22 +74,84 @@ def _wants_redirect(request: Request) -> bool:
     return "text/html" in request.headers.get("accept", "")
 
 
-def _auth_failure(request: Request, code: str) -> RedirectResponse:
+def _origin_of(value: str | None) -> str | None:
+    """The scheme+host of an Origin or Referer header, if it has one."""
+    if not value:
+        return None
+    parts = urlsplit(value)
+    if parts.scheme not in ("http", "https") or not parts.netloc:
+        return None
+    return f"{parts.scheme}://{parts.netloc}"
+
+
+def _return_origin(request: Request) -> str:
+    """Where to send the user once the sign-in finishes.
+
+    ``RETRACT_FRONTEND_URL`` alone is not enough, and getting it wrong is
+    invisible until a real login: a redirect that names a different **host** than
+    the one the browser is on drops the session cookie (it is host-scoped), so a
+    successful sign-in lands on a login page as if it had failed. A developer
+    running on ``127.0.0.1:5175`` against a configured ``localhost:5177`` gets a
+    dead port or a silent logout, neither of which names its cause.
+
+    So the return target follows the request that started the sign-in, with two
+    limits that keep it from becoming an open redirect:
+
+    * only a configured origin — ``RETRACT_FRONTEND_URL`` or a ``RETRACT_CORS_ORIGINS``
+      entry — is honoured anywhere;
+    * outside production, a **loopback** origin is honoured too, since it can only
+      ever point back at the developer's own machine, and that is precisely the
+      case a single configured constant cannot express.
+
+    Anything else falls back to the configured URL.
+    """
+    settings = get_settings()
+    configured = _origin_of(settings.frontend_url)
+    candidates = [
+        _origin_of(request.headers.get("origin")),
+        _origin_of(request.headers.get("referer")),
+    ]
+    allowed = {configured} | {_origin_of(o) for o in settings.cors_origin_list}
+    for candidate in candidates:
+        if candidate is None:
+            continue
+        if candidate in allowed:
+            return candidate
+        if settings.environment != "production" and _is_loopback(candidate):
+            return candidate
+    return settings.frontend_url
+
+
+def _is_loopback(origin: str) -> bool:
+    host = urlsplit(origin).hostname or ""
+    return host in ("localhost", "127.0.0.1", "::1", "[::1]")
+
+
+def _with_error(frontend_url: str, code: str) -> str:
+    """A frontend URL carrying an auth_error code.
+
+    Built with urlsplit rather than string concatenation: the URL may or may not
+    carry a path, a trailing slash, or an existing query, and all three have to
+    survive.
+    """
+    parts = urlsplit(frontend_url)
+    query = f"{parts.query}&" if parts.query else ""
+    return urlunsplit(parts._replace(query=f"{query}auth_error={code}"))
+
+
+def _auth_failure(request: Request, code: str, return_to: str | None = None) -> RedirectResponse:
     """Report a failed sign-in: back to the app for a browser, JSON otherwise.
 
     The JSON path raises rather than returning, so this always hands back a
-    redirect when it returns at all.
+    redirect when it returns at all. ``return_to`` is the origin the sign-in
+    started from, so the user is put back where they were rather than wherever a
+    configured constant happens to point.
     """
     detail = _AUTH_ERROR_MESSAGES.get(code, "Sign-in failed")
     logger.warning("github oauth failed: %s", detail)
     if not _wants_redirect(request):
         raise HTTPException(status.HTTP_400_BAD_REQUEST, detail=code)
-    # Built with urlsplit rather than string concatenation: the configured
-    # frontend URL may or may not carry a path, a trailing slash, or an existing
-    # query, and all three have to survive.
-    parts = urlsplit(get_settings().frontend_url)
-    query = f"{parts.query}&" if parts.query else ""
-    return RedirectResponse(urlunsplit(parts._replace(query=f"{query}auth_error={code}")))
+    return RedirectResponse(_with_error(return_to or _return_origin(request), code))
 
 
 def _set_session_cookie(response: Response, user: User) -> None:
@@ -158,7 +220,9 @@ def github_login(request: Request) -> RedirectResponse:
     if not settings.github_client_id:
         return _auth_failure(request, AUTH_ERROR_NOT_CONFIGURED)
     state = secrets.token_urlsafe(16)
-    _state_store().setex(f"oauth_state:{state}", _STATE_TTL, "1")
+    # The origin is stored beside the nonce rather than trusted from the callback,
+    # so the return target cannot be tampered with on the way back from GitHub.
+    _state_store().setex(f"oauth_state:{state}", _STATE_TTL, _return_origin(request))
     url = (
         "https://github.com/login/oauth/authorize"
         f"?client_id={settings.github_client_id}"
@@ -264,13 +328,14 @@ def github_callback(
 ) -> RedirectResponse:
     settings = get_settings()
     store = _state_store()
+    return_to = store.get(f"oauth_state:{state}")
     if not store.delete(f"oauth_state:{state}"):
         # A consumed state and a lapsed one look identical to a delete, so the
         # marker written at consume time is what separates them — and the advice
         # differs: "already signed in" versus "start again".
         if store.exists(f"{_USED_STATE_PREFIX}{state}"):
-            return _auth_failure(request, AUTH_ERROR_USED)
-        return _auth_failure(request, AUTH_ERROR_EXPIRED)
+            return _auth_failure(request, AUTH_ERROR_USED, return_to)
+        return _auth_failure(request, AUTH_ERROR_EXPIRED, return_to)
     store.setex(f"{_USED_STATE_PREFIX}{state}", _STATE_TTL, "1")
 
     token_resp = httpx.post(
@@ -286,7 +351,7 @@ def github_callback(
     )
     access_token = token_resp.json().get("access_token")
     if not access_token:
-        return _auth_failure(request, AUTH_ERROR_EXCHANGE)
+        return _auth_failure(request, AUTH_ERROR_EXCHANGE, return_to)
 
     user_resp = httpx.get(
         "https://api.github.com/user",
@@ -297,7 +362,7 @@ def github_callback(
     github_id = gh_user.get("id")
     login = gh_user.get("login")
     if not github_id or not login:
-        return _auth_failure(request, AUTH_ERROR_PROFILE)
+        return _auth_failure(request, AUTH_ERROR_PROFILE, return_to)
 
     # The email is what lets an existing account be recognised rather than
     # shadowed by a duplicate — the same person signing in with GitHub and with
@@ -305,7 +370,9 @@ def github_callback(
     email = _primary_verified_email(access_token)
     user = _resolve_github_account(db, github_id, login, email)
 
-    response = RedirectResponse(settings.frontend_url)
+    # Back to the host the sign-in started on, not a configured constant that
+    # may name a different one — see _return_origin.
+    response = RedirectResponse(return_to or settings.frontend_url)
     _set_session_cookie(response, user)
     return response
 
