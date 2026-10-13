@@ -3,6 +3,7 @@ export interface User {
   login: string;
   github_id: number | null;
   email?: string | null;
+  email_verified?: boolean;
 }
 
 export interface Repository {

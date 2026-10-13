@@ -33,6 +33,14 @@ export function useLogin() {
   });
 }
 
+export function useResendVerification() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: api.resendVerification,
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["me"] }),
+  });
+}
+
 export function useRepos(enabled: boolean) {
   return useQuery({ queryKey: ["repos"], queryFn: api.listRepos, enabled });
 }

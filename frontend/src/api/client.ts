@@ -60,6 +60,10 @@ export const api = {
       body: JSON.stringify({ email, password }),
     }),
   logout: () => request<{ ok: boolean }>("/api/auth/logout", { method: "POST" }),
+  resendVerification: () =>
+    request<{ ok: boolean; already_verified: boolean }>("/api/auth/resend-verification", {
+      method: "POST",
+    }),
   listRepos: () => request<Repository[]>("/api/repos"),
   listAnalyses: () => request<AnalysisSummary[]>("/api/analyses"),
   createRepo: (url: string) =>

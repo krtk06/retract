@@ -17,11 +17,24 @@ const AUTH_ERRORS: Record<string, string> = {
   not_configured: "GitHub sign-in is not configured on this deployment.",
   exchange_failed: "GitHub did not complete the sign-in. Try again.",
   profile_failed: "Could not read your GitHub profile. Try again.",
+  verification_failed:
+    "That verification link is invalid, used, or expired. Sign in and send yourself a new one.",
 };
 
 function authErrorFromUrl(): string | null {
   const code = new URLSearchParams(window.location.search).get("auth_error");
   return AUTH_ERRORS[code ?? ""] ?? (code ? AUTH_FALLBACK : null);
+}
+
+/**
+ * Whether this load is the landing from a verification link.
+ *
+ * The link arrives from a mail client, in whatever browser the user reads mail in —
+ * often not one with a session. So the outcome is acknowledged here as well as in
+ * the app, or a successful verification looks like nothing happened.
+ */
+function verifiedFromUrl(): boolean {
+  return new URLSearchParams(window.location.search).get("email_verified") === "1";
 }
 
 const AUTH_FALLBACK = "GitHub sign-in did not complete. Try again.";
@@ -40,17 +53,18 @@ export function LoginPage() {
   // twice — the second run would find the parameter already stripped and wipe
   // the banner that the first run had just set.
   const [authError] = useState(() => authErrorFromUrl());
+  const [emailVerified] = useState(() => verifiedFromUrl());
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (authError) {
+    if (authError || emailVerified) {
       // Drop the parameter once read, so a refresh does not re-show a stale
-      // error — the same class of bug as the cached 100 score this app once
+      // message — the same class of bug as the cached 100 score this app once
       // displayed.
       window.history.replaceState({}, "", window.location.pathname);
-      setError(authError);
     }
-  }, [authError]);
+    if (authError) setError(authError);
+  }, [authError, emailVerified]);
 
   // Dev login exists so local development skips OAuth entirely. The backend
   // already refuses it when RETRACT_DEV_LOGIN=0; there is no reason to show a
@@ -110,6 +124,11 @@ export function LoginPage() {
           Analyze a GitHub repository for quality, security, testing, and documentation
           health — then come back, re-check it after changes, and track the score.
         </p>
+        {emailVerified && !error && (
+          <p className="mb-4 rounded-md bg-emerald-950 px-3 py-2 text-sm text-emerald-300">
+            Your email is verified. Sign in — GitHub will now reach the same account.
+          </p>
+        )}
         {error && (
           <p className="mb-4 rounded-md bg-red-950 px-3 py-2 text-sm text-red-300">{error}</p>
         )}

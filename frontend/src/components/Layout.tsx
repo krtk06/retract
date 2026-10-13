@@ -4,6 +4,7 @@ import { Link } from "react-router-dom";
 
 import { api } from "../api/client";
 import type { User } from "../api/types";
+import { VerifyEmailBanner } from "./VerifyEmailBanner";
 
 export function Layout({ user, children }: { user: User; children: ReactNode }) {
   const queryClient = useQueryClient();
@@ -45,7 +46,10 @@ export function Layout({ user, children }: { user: User; children: ReactNode }) 
           </div>
         </div>
       </header>
-      <main className="mx-auto max-w-5xl px-6 py-8">{children}</main>
+      <main className="mx-auto max-w-5xl px-6 py-8">
+        <VerifyEmailBanner />
+        {children}
+      </main>
     </div>
   );
 }
