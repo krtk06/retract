@@ -24,6 +24,7 @@ def _production_settings(**overrides) -> Settings:
         "jwt_secret": GOOD_SECRET,
         "agent_token": "agent-service-token",
         "dev_login": False,
+        "auth_cookie_secure": True,
     }
     base.update(overrides)
     return Settings(**base)
@@ -145,6 +146,7 @@ def test_production_is_exempt() -> None:
         github_oauth_redirect_uri="https://app.example.com/api/auth/github/callback",
         frontend_url="https://frontend.example.com",
         dev_login=False,
+        auth_cookie_secure=True,
     )
     assert settings.frontend_url == "https://frontend.example.com"
 
@@ -156,3 +158,75 @@ def test_a_real_host_mismatch_is_not_this_guard() -> None:
         frontend_url="http://127.0.0.1:5175",
     )
     assert settings.frontend_url == "http://127.0.0.1:5175"
+
+
+# --- The guards that were missing, and the spelling that used to bypass them ---
+
+
+@pytest.mark.parametrize(
+    "env", ["dev", "development", "local", "test", "testing", "ci", "DEV", " Dev "]
+)
+def test_development_environments_are_not_guarded(env: str) -> None:
+    """The relaxed set is explicit and matched case-insensitively."""
+    settings = Settings(
+        environment=env,
+        jwt_secret=PLACEHOLDER_SECRET,
+        agent_token="",
+        dev_login=True,
+        auth_cookie_secure=False,
+    )
+    assert settings.is_development
+
+
+@pytest.mark.parametrize(
+    "env", ["prod", "staging", "production", "Production", "PRODUCTION", "production "]
+)
+def test_anything_that_is_not_a_known_dev_environment_is_guarded(env: str) -> None:
+    """`prod` and `PRODUCTION ` used to sail past every check, because one exact
+    spelling was the entire lock. Now the guard is the default and development is
+    the opt-in."""
+    with pytest.raises(ValidationError, match="JWT_SECRET"):
+        _production_settings(environment=env, jwt_secret=PLACEHOLDER_SECRET)
+
+
+def test_production_rejects_an_insecure_session_cookie() -> None:
+    """Without `Secure`, the cookie is sent over plaintext HTTP to the same host."""
+    with pytest.raises(ValidationError, match="AUTH_COOKIE_SECURE"):
+        _production_settings(auth_cookie_secure=False)
+
+
+def test_production_rejects_a_wildcard_cors_origin() -> None:
+    """`*` with credentials makes Starlette reflect any origin, so every site can
+    call the API as the signed-in user."""
+    with pytest.raises(ValidationError, match="CORS_ORIGINS"):
+        _production_settings(cors_origins="*")
+
+
+def test_production_rejects_a_wildcard_among_listed_origins() -> None:
+    with pytest.raises(ValidationError, match="CORS_ORIGINS"):
+        _production_settings(cors_origins="https://app.example.com,*")
+
+
+def test_production_rejects_local_repo_reading() -> None:
+    """`local://` reads arbitrary host paths; it must not be reachable in production."""
+    with pytest.raises(ValidationError, match="ALLOW_LOCAL_REPOS"):
+        _production_settings(allow_local_repos=True)
+
+
+def test_the_new_problems_are_reported_together() -> None:
+    with pytest.raises(ValidationError) as excinfo:
+        _production_settings(auth_cookie_secure=False, cors_origins="*", allow_local_repos=True)
+    message = str(excinfo.value)
+    assert "AUTH_COOKIE_SECURE" in message
+    assert "CORS_ORIGINS" in message
+    assert "ALLOW_LOCAL_REPOS" in message
+
+
+def test_production_accepts_the_full_correct_configuration() -> None:
+    """The guards must not reject a properly configured deployment."""
+    settings = _production_settings(
+        cors_origins="https://app.example.com",
+        allow_local_repos=False,
+    )
+    assert settings.is_production
+    assert settings.auth_cookie_secure

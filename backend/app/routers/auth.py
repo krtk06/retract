@@ -9,8 +9,10 @@ import redis
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
 from fastapi.responses import JSONResponse, RedirectResponse
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from app import rate_limit
 from app.config import get_settings, is_loopback
 from app.db import get_db
 from app.deps import get_current_user
@@ -20,6 +22,7 @@ from app.security import (
     EVE_TOKEN_TTL_SECONDS,
     create_access_token,
     create_eve_token,
+    decode_access_token,
     hash_password,
     verify_password,
 )
@@ -27,6 +30,11 @@ from app.security import (
 router = APIRouter(prefix="/auth", tags=["auth"])
 
 logger = logging.getLogger(__name__)
+
+# A real bcrypt hash of a throwaway value, verified against on the "no such account"
+# path so a login costs the same whether or not the address exists (see `login`).
+# Hashed once at import: ~0.25s of startup, not per request.
+_DUMMY_PASSWORD_HASH = hash_password(secrets.token_urlsafe(24))
 
 # How long a sign-in attempt stays valid. Ten minutes was short enough to fail a
 # real user: authorizing means finding a password manager, switching to a 2FA
@@ -117,7 +125,7 @@ def _return_origin(request: Request) -> str:
             continue
         if candidate in allowed:
             return candidate
-        if settings.environment != "production" and is_loopback(urlsplit(candidate).hostname):
+        if not settings.is_production and is_loopback(urlsplit(candidate).hostname):
             return candidate
     return settings.frontend_url
 
@@ -151,7 +159,7 @@ def _auth_failure(request: Request, code: str, return_to: str | None = None) -> 
 
 def _set_session_cookie(response: Response, user: User) -> None:
     settings = get_settings()
-    token = create_access_token(user.id)
+    token = create_access_token(user.id, user.token_version)
     response.set_cookie(
         settings.auth_cookie_name,
         token,
@@ -174,8 +182,17 @@ def _unique_login(db: Session, base: str) -> str:
 
 
 @router.post("/register", response_model=UserOut, status_code=status.HTTP_201_CREATED)
-def register(payload: RegisterIn, response: Response, db: Session = Depends(get_db)) -> User:
+def register(
+    payload: RegisterIn,
+    request: Request,
+    response: Response,
+    db: Session = Depends(get_db),
+) -> User:
     """Create an email/password account and sign the new session in immediately."""
+    # Registration is unauthenticated and reveals whether an address is taken (409,
+    # by necessity: the user must be told). A limit is what keeps that from becoming
+    # a bulk enumeration tool.
+    rate_limit.enforce(request, "register", limit=10, window_seconds=3600)
     user = db.scalar(select(User).where(User.email == payload.email))
     if user is not None:
         raise HTTPException(status.HTTP_409_CONFLICT, detail="Email already registered")
@@ -185,25 +202,41 @@ def register(payload: RegisterIn, response: Response, db: Session = Depends(get_
         password_hash=hash_password(payload.password),
     )
     db.add(user)
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError:
+        # The check above and this insert are not atomic, so two concurrent requests
+        # for one address both pass the check and one violates the unique index. That
+        # is the same "already registered" outcome, not a server fault — and the
+        # codebase already answers this constraint deliberately elsewhere.
+        db.rollback()
+        raise HTTPException(status.HTTP_409_CONFLICT, detail="Email already registered") from None
     db.refresh(user)
     _set_session_cookie(response, user)
     return user
 
 
 @router.post("/login", response_model=UserOut)
-def login(payload: LoginIn, response: Response, db: Session = Depends(get_db)) -> User:
+def login(
+    payload: LoginIn,
+    request: Request,
+    response: Response,
+    db: Session = Depends(get_db),
+) -> User:
     """Exchange an email/password pair for a session cookie.
 
     The error is the same for a wrong email and a wrong password so the endpoint
     cannot be used to enumerate registered addresses.
     """
+    rate_limit.enforce(request, "login", limit=20, window_seconds=900)
     user = db.scalar(select(User).where(User.email == payload.email))
-    if (
-        user is None
-        or not user.password_hash
-        or not verify_password(payload.password, user.password_hash)
-    ):
+    if user is None or not user.password_hash:
+        # Hash anyway. Returning before bcrypt made an unknown address answer in
+        # ~2ms against ~0.3s for a known one, which is a better enumeration oracle
+        # than the message the code was carefully keeping uniform.
+        verify_password(payload.password, _DUMMY_PASSWORD_HASH)
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, detail="Invalid email or password")
+    if not verify_password(payload.password, user.password_hash):
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, detail="Invalid email or password")
     _set_session_cookie(response, user)
     return user
@@ -239,6 +272,12 @@ def _primary_verified_email(access_token: str) -> str | None:
     with extra steps. ``None`` is a normal outcome and never fails the sign-in —
     an organisation may forbid reading member emails (403), and a user may have
     none, and both simply leave the account GitHub-only as it was before.
+
+    A refusal is logged, though, and deliberately not swallowed. ``None`` also
+    results from a misconfigured OAuth app (a GitHub App without the Email
+    addresses permission answers 403), and that failure is invisible in the
+    product: sign-in succeeds and merely fails to reach the email account, which
+    looks exactly like the "two empty dashboards" bug it was meant to fix.
     """
     try:
         response = httpx.get(
@@ -247,10 +286,20 @@ def _primary_verified_email(access_token: str) -> str | None:
             timeout=15.0,
         )
     except httpx.HTTPError:
+        logger.warning("github oauth: could not reach /user/emails; signing in without email")
         return None
     if response.status_code != 200:
+        logger.warning(
+            "github oauth: /user/emails returned %s; account linking is disabled for this "
+            "sign-in. If this is every sign-in, the OAuth app lacks the email scope/permission.",
+            response.status_code,
+        )
         return None
-    entries = response.json()
+    try:
+        entries = response.json()
+    except ValueError:
+        logger.warning("github oauth: /user/emails returned a non-JSON body; ignoring it")
+        return None
     if not isinstance(entries, list):
         return None
     verified = [
@@ -395,8 +444,23 @@ def dev_login(
 
 
 @router.post("/logout")
-def logout() -> Response:
+def logout(request: Request, db: Session = Depends(get_db)) -> Response:
+    """End the session on the server, not only in the browser.
+
+    Clearing the cookie stops *this* browser, but a JWT is valid until it expires
+    and may already be copied — from a shared machine, a proxy log, a backup. So
+    logout also bumps the user's token version, which revokes every token minted
+    before this point. An absent or invalid cookie still gets a clean response:
+    logging out twice, or from a stale tab, must not error.
+    """
     settings = get_settings()
+    token = request.cookies.get(settings.auth_cookie_name)
+    claims = decode_access_token(token) if token else None
+    if claims is not None:
+        user = db.get(User, claims.user_id)
+        if user is not None and user.token_version == claims.token_version:
+            user.token_version += 1
+            db.commit()
     response = JSONResponse({"ok": True})
     response.delete_cookie(settings.auth_cookie_name)
     return response

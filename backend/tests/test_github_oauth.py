@@ -414,6 +414,7 @@ def test_a_configured_cors_origin_is_honoured(client: TestClient, oauth, monkeyp
     monkeypatch.setenv("RETRACT_ENVIRONMENT", "production")
     # conftest enables dev login; production refuses to start with it on.
     monkeypatch.setenv("RETRACT_DEV_LOGIN", "0")
+    monkeypatch.setenv("RETRACT_AUTH_COOKIE_SECURE", "1")
     monkeypatch.setenv("RETRACT_CORS_ORIGINS", "https://app.example.com")
     from app.config import get_settings
 
@@ -430,6 +431,7 @@ def test_production_refuses_a_loopback_return_origin(
     monkeypatch.setenv("RETRACT_ENVIRONMENT", "production")
     # conftest enables dev login; production refuses to start with it on.
     monkeypatch.setenv("RETRACT_DEV_LOGIN", "0")
+    monkeypatch.setenv("RETRACT_AUTH_COOKIE_SECURE", "1")
     from app.config import get_settings
 
     get_settings.cache_clear()
@@ -494,3 +496,18 @@ def test_the_stored_origin_is_not_tamperable(client: TestClient, oauth) -> None:
         follow_redirects=False,
     )
     assert _origin_of(response.headers["location"]) == "http://127.0.0.1:5175"
+
+
+def test_a_refused_email_lookup_is_logged_not_silent(client: TestClient, oauth, caplog) -> None:
+    """A 403 from /user/emails is the fingerprint of a misconfigured OAuth app.
+
+    The sign-in still succeeds, and that is the danger: it merely fails to reach
+    the email account, which looks exactly like the "two empty dashboards" bug
+    this linking exists to prevent. It must not be invisible in the logs.
+    """
+    oauth["emails"]["status"] = 403
+    url = _authorize_url(client)
+    with caplog.at_level("WARNING", logger="app.routers.auth"):
+        response = _sign_in_again(client, BROWSER, {"code": "c", "state": _state_from(url)})
+    assert response.status_code in (302, 307), response.text
+    assert any("account linking is disabled" in record.message for record in caplog.records)

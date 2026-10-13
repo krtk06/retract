@@ -116,7 +116,15 @@ def apply_triage(session: Session, analysis_id: int, triage: list[dict[str, Any]
         decision = str(verdict.get("verdict", "")).lower()
         if not finding_id or decision not in ("false-positive", "false_positive", "dismiss"):
             continue
-        finding = session.get(Finding, int(finding_id))
+        # The id arrives in a client-supplied list, so it can be anything: a dict, a
+        # string like "abc", a float. `int()` on those raises, and this runs inside a
+        # request — an unhandled ValueError would be a 500 for a malformed verdict
+        # that should simply be ignored.
+        try:
+            resolved_id = int(finding_id)
+        except (TypeError, ValueError):
+            continue
+        finding = session.get(Finding, resolved_id)
         if finding is None or finding.analysis_id != analysis_id:
             continue
         finding.status = FindingStatus.DISMISSED

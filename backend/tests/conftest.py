@@ -15,6 +15,10 @@ os.environ["RETRACT_DEV_LOGIN"] = "1"
 os.environ["RETRACT_DATA_DIR"] = str(_TMP / "data")
 os.environ["RETRACT_JWT_SECRET"] = "test-secret-key-that-is-at-least-32-bytes-long"
 os.environ["RETRACT_AGENT_TOKEN"] = "test-agent-service-token"
+# The suite makes far more login/register calls than a person would; the limiter
+# would reject the tests themselves. Rate limiting has its own tests, which turn it
+# back on with an injected store.
+os.environ["RETRACT_RATE_LIMIT_ENABLED"] = "0"
 
 from fastapi.testclient import TestClient  # noqa: E402
 

@@ -21,6 +21,15 @@ FORBIDDEN_JWT_SECRETS = frozenset(
 # Short enough to be brute-forced or, worse, guessed. HS256 keys want >=256 bits.
 MIN_JWT_SECRET_CHARS = 32
 
+# Environments that relax the production guards. Membership is opt-in on purpose:
+# anything not listed here — including a value nobody anticipated, like `prod` or
+# `staging` — is treated as production and must satisfy every guard below. The
+# inverse (guarding only when `environment == "production"`) is what let `prod`
+# and `PRODUCTION ` sail past every check, since one exact spelling was the whole
+# lock. Failing closed on an unrecognised name costs a developer a boot error and
+# costs a misconfigured deployment nothing.
+DEVELOPMENT_ENVIRONMENTS = frozenset({"dev", "development", "local", "test", "testing", "ci"})
+
 # The two spellings of this machine. They are the same host to a program and
 # different hosts to a browser: a cookie set on one is never sent to the other.
 LOOPBACK_HOSTS = frozenset({"localhost", "127.0.0.1", "::1"})
@@ -59,6 +68,10 @@ class Settings(BaseSettings):
 
     dev_login: bool = False
 
+    # Fixed-window limiter on login/register/analyze (see app/rate_limit.py).
+    # On by default; tests turn it off so they are not limited by their own volume.
+    rate_limit_enabled: bool = True
+
     # Dev-only: allow local:// path URLs (for the seedy benchmark repo).
     allow_local_repos: bool = False
 
@@ -75,6 +88,22 @@ class Settings(BaseSettings):
     def cors_origin_list(self) -> list[str]:
         return [o.strip() for o in self.cors_origins.split(",") if o.strip()]
 
+    @property
+    def is_development(self) -> bool:
+        """Whether the guards are relaxed for this environment.
+
+        Case- and whitespace-insensitive, and the single definition every caller
+        uses — the OAuth loopback allowance in ``routers/auth.py`` compared the raw
+        string to ``"production"`` and so treated ``Production`` as development,
+        which is the drift this property exists to stop.
+        """
+        return self.environment.strip().lower() in DEVELOPMENT_ENVIRONMENTS
+
+    @property
+    def is_production(self) -> bool:
+        """Everything that is not an explicit development environment (fail closed)."""
+        return not self.is_development
+
     @model_validator(mode="after")
     def _refuse_insecure_production(self) -> "Settings":
         """Fail closed in production rather than boot on placeholder secrets.
@@ -87,7 +116,7 @@ class Settings(BaseSettings):
 
         Development is untouched, so a fresh clone still runs with zero config.
         """
-        if self.environment.strip().lower() != "production":
+        if not self.is_production:
             return self
 
         problems: list[str] = []
@@ -105,6 +134,25 @@ class Settings(BaseSettings):
             problems.append("RETRACT_AGENT_TOKEN must be set so the agent can reach the API")
         if self.dev_login:
             problems.append("RETRACT_DEV_LOGIN must be disabled (0) in production")
+        # Not merely hygiene: without `Secure`, the session cookie is sent over
+        # plaintext HTTP to the same host, so any downgrade leaks it. The prod
+        # compose sets it, but the guard is what protects the deployment that does
+        # not use that file.
+        if not self.auth_cookie_secure:
+            problems.append(
+                "RETRACT_AUTH_COOKIE_SECURE must be 1 so the session cookie is HTTPS-only"
+            )
+        # `*` with credentials makes Starlette reflect any origin, so every site can
+        # read authenticated responses as a signed-in user.
+        if "*" in self.cors_origin_list:
+            problems.append(
+                "RETRACT_CORS_ORIGINS must list explicit origins, not '*': "
+                "with credentials allowed, '*' lets any site call the API as the user"
+            )
+        # Reading arbitrary host paths is a development convenience; in production it
+        # is a filesystem-disclosure primitive, and nothing else here would object.
+        if self.allow_local_repos:
+            problems.append("RETRACT_ALLOW_LOCAL_REPOS must be 0 in production")
 
         if problems:
             raise ValueError("refusing to start in production: " + "; ".join(problems))
@@ -130,11 +178,11 @@ class Settings(BaseSettings):
         """
         if not self.github_client_id or not self.github_oauth_redirect_uri:
             return self
+        if self.is_production:
+            return self
         callback_host = urlsplit(self.github_oauth_redirect_uri).hostname
         frontend_host = urlsplit(self.frontend_url).hostname
         if not callback_host or not frontend_host or callback_host == frontend_host:
-            return self
-        if self.environment.strip().lower() == "production":
             return self
         if not (is_loopback(callback_host) and is_loopback(frontend_host)):
             return self
