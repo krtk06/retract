@@ -51,8 +51,11 @@ def oauth(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setattr(auth, "_state_store", lambda: store)
     monkeypatch.setenv("RETRACT_GITHUB_CLIENT_ID", "Iv1.0123456789abcdef")
     monkeypatch.setenv("RETRACT_GITHUB_CLIENT_SECRET", "0123456789abcdef" * 2 + "01234567")
+    # Same host as FRONTEND, deliberately: the callback issues the session cookie,
+    # so a callback on a different spelling of loopback than the frontend cannot
+    # hand it back. Settings refuses that pair, which is what caught it.
     monkeypatch.setenv(
-        "RETRACT_GITHUB_OAUTH_REDIRECT_URI", "http://localhost:8110/api/auth/github/callback"
+        "RETRACT_GITHUB_OAUTH_REDIRECT_URI", "http://127.0.0.1:8110/api/auth/github/callback"
     )
     monkeypatch.setenv("RETRACT_FRONTEND_URL", FRONTEND)
     monkeypatch.setenv("RETRACT_CORS_ORIGINS", FRONTEND)

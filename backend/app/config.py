@@ -2,6 +2,7 @@
 
 from functools import lru_cache
 from pathlib import Path
+from urllib.parse import urlsplit
 
 from pydantic import model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -19,6 +20,15 @@ FORBIDDEN_JWT_SECRETS = frozenset(
 
 # Short enough to be brute-forced or, worse, guessed. HS256 keys want >=256 bits.
 MIN_JWT_SECRET_CHARS = 32
+
+# The two spellings of this machine. They are the same host to a program and
+# different hosts to a browser: a cookie set on one is never sent to the other.
+LOOPBACK_HOSTS = frozenset({"localhost", "127.0.0.1", "::1"})
+
+
+def is_loopback(hostname: str | None) -> bool:
+    """Whether a hostname can only ever refer to the machine it is used on."""
+    return bool(hostname) and hostname.strip("[]") in LOOPBACK_HOSTS
 
 
 class Settings(BaseSettings):
@@ -97,6 +107,44 @@ class Settings(BaseSettings):
         if problems:
             raise ValueError("refusing to start in production: " + "; ".join(problems))
         return self
+
+    @model_validator(mode="after")
+    def _refuse_a_mismatched_oauth_host(self) -> "Settings":
+        """Refuse a GitHub callback that cannot hand its cookie back.
+
+        The session cookie carries no ``Domain`` attribute, so it is scoped to the
+        host that issued it — and for a GitHub sign-in that host is the one in
+        ``RETRACT_GITHUB_OAUTH_REDIRECT_URI``, not the frontend. A mismatch is
+        therefore not a cosmetic one: the callback succeeds, sets the cookie for
+        ``localhost``, and every later request from ``127.0.0.1`` arrives without
+        it. The user is bounced back to the login page by a sign-in that worked,
+        which reads as "GitHub sign-in is broken" and sends you looking at GitHub
+        rather than at the hostnames.
+
+        Production is exempt only because there the two are the same origin by
+        construction (one nginx serves both); the check below is a development
+        guard for the loopback spelling trap, which is the one case that differs
+        between the callback and the page by accident.
+        """
+        if not self.github_client_id or not self.github_oauth_redirect_uri:
+            return self
+        callback_host = urlsplit(self.github_oauth_redirect_uri).hostname
+        frontend_host = urlsplit(self.frontend_url).hostname
+        if not callback_host or not frontend_host or callback_host == frontend_host:
+            return self
+        if self.environment.strip().lower() == "production":
+            return self
+        if not (is_loopback(callback_host) and is_loopback(frontend_host)):
+            return self
+
+        raise ValueError(
+            f"the GitHub callback host ({callback_host}) does not match the frontend host "
+            f"({frontend_host}), so the session cookie set by the callback is never sent "
+            f"back and every GitHub sign-in silently fails. Open the app on "
+            f"http://{callback_host}:<frontend port>, or set "
+            f"RETRACT_GITHUB_OAUTH_REDIRECT_URI to a URL on {frontend_host} and register "
+            f"that same URL as the callback URL on the GitHub OAuth app."
+        )
 
 
 @lru_cache

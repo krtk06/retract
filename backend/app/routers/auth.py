@@ -11,7 +11,7 @@ from fastapi.responses import JSONResponse, RedirectResponse
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.config import get_settings
+from app.config import get_settings, is_loopback
 from app.db import get_db
 from app.deps import get_current_user
 from app.models import User
@@ -117,14 +117,9 @@ def _return_origin(request: Request) -> str:
             continue
         if candidate in allowed:
             return candidate
-        if settings.environment != "production" and _is_loopback(candidate):
+        if settings.environment != "production" and is_loopback(urlsplit(candidate).hostname):
             return candidate
     return settings.frontend_url
-
-
-def _is_loopback(origin: str) -> bool:
-    host = urlsplit(origin).hostname or ""
-    return host in ("localhost", "127.0.0.1", "::1", "[::1]")
 
 
 def _with_error(frontend_url: str, code: str) -> str:

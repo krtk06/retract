@@ -80,3 +80,79 @@ def test_development_tolerates_defaults() -> None:
 def test_environment_match_is_case_insensitive() -> None:
     with pytest.raises(ValidationError, match="JWT_SECRET"):
         _production_settings(environment="Production", jwt_secret=PLACEHOLDER_SECRET)
+
+
+# --- A GitHub callback whose host cannot hand the cookie back -----------------
+#
+# The session cookie has no `Domain`, so it belongs to the host that issued it,
+# and for a GitHub sign-in that host is the callback's — not the frontend's.
+# `localhost` and `127.0.0.1` are the same machine and different hosts to a
+# browser, so this pair boots fine and fails at every login instead: the callback
+# succeeds, sets the cookie for `localhost`, and the app then reads every request
+# without it. It is worth a boot-time refusal because the symptom points at GitHub.
+
+
+def _dev_oauth_settings(**overrides) -> Settings:
+    base = {
+        "environment": "dev",
+        "jwt_secret": GOOD_SECRET,
+        "github_client_id": "Iv1.0123456789abcdef",
+        "github_client_secret": "0123456789abcdef" * 2 + "01234567",
+        "github_oauth_redirect_uri": "http://localhost:8110/api/auth/github/callback",
+        "frontend_url": "http://localhost:5175",
+    }
+    return Settings(**{**base, **overrides})
+
+
+def test_a_loopback_host_mismatch_is_refused() -> None:
+    with pytest.raises(ValidationError, match="never sent back"):
+        _dev_oauth_settings(frontend_url="http://127.0.0.1:5175")
+
+
+def test_the_refusal_names_both_hosts() -> None:
+    """The message has to say which way round to fix it."""
+    with pytest.raises(ValidationError) as excinfo:
+        _dev_oauth_settings(frontend_url="http://127.0.0.1:5175")
+    message = str(excinfo.value)
+    assert "localhost" in message
+    assert "127.0.0.1" in message
+
+
+def test_matching_loopback_hosts_boot() -> None:
+    """The common case — both on localhost — must not be caught by this."""
+    assert _dev_oauth_settings().frontend_url == "http://localhost:5175"
+
+
+def test_the_check_is_skipped_without_an_oauth_app() -> None:
+    """A dev machine with no OAuth configured cannot trip this."""
+    settings = Settings(
+        environment="dev",
+        jwt_secret=GOOD_SECRET,
+        frontend_url="http://127.0.0.1:5175",
+        github_client_id="",
+        github_oauth_redirect_uri="",
+    )
+    assert settings.frontend_url == "http://127.0.0.1:5175"
+
+
+def test_production_is_exempt() -> None:
+    """One nginx serves both in production, so the two hosts are one by design."""
+    settings = Settings(
+        environment="production",
+        jwt_secret=GOOD_SECRET,
+        agent_token="agent-service-token",
+        github_client_id="Iv1.0123456789abcdef",
+        github_oauth_redirect_uri="https://app.example.com/api/auth/github/callback",
+        frontend_url="https://frontend.example.com",
+        dev_login=False,
+    )
+    assert settings.frontend_url == "https://frontend.example.com"
+
+
+def test_a_real_host_mismatch_is_not_this_guard() -> None:
+    """Only the loopback trap is ours to catch; a split deployment is not."""
+    settings = _dev_oauth_settings(
+        github_oauth_redirect_uri="https://api.example.com/api/auth/github/callback",
+        frontend_url="http://127.0.0.1:5175",
+    )
+    assert settings.frontend_url == "http://127.0.0.1:5175"
