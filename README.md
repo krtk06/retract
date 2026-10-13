@@ -62,6 +62,12 @@ instead also works.
 docker compose --env-file .env -f infra/docker-compose.prod.yml up --build
 ```
 
+For a step-by-step deployment on a real HTTPS hostname — Oracle Cloud's Always Free
+tier, a free DuckDNS name, and Caddy for TLS — see
+[`docs/deploy-oracle-cloud.md`](docs/deploy-oracle-cloud.md). It also covers the two
+firewalls Oracle puts in front of a new instance, which is where a first deployment
+most often stalls.
+
 with `POSTGRES_USER`, `POSTGRES_PASSWORD`, `RETRACT_JWT_SECRET` and
 `RETRACT_AGENT_TOKEN` in `.env` (see `.env.example`). They are deliberately
 required with no defaults: refusing to start beats starting an agent that can
