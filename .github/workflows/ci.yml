@@ -81,6 +81,33 @@ jobs:
         # hermetic: no provider credentials, no database, no containers.
         run: npm run eval
 
+  # Source-level dependency auditing, on its own job so a vulnerable dependency
+  # fails the build even when every test passes — which is exactly how a PyJWT with
+  # 14 advisories, including an unauthenticated 500 reachable from a crafted cookie,
+  # sat on the session path with nothing watching. It found nothing to fix the day
+  # it was added to a repaired tree; its value is the next bad pin.
+  dependencies:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Backend dependencies
+        run: pip install -e "backend[dev]"
+      - name: Audit Python dependencies
+        run: pip-audit
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+      - name: Audit frontend production dependencies
+        # `--omit=dev`: the build/test toolchain (vite, vitest, esbuild) is not
+        # served, and failing on it is noise that teaches people to skip the job.
+        run: node scripts/audit-npm.mjs frontend high --omit=dev
+      - name: Audit agent dependencies
+        run: node scripts/audit-npm.mjs agent high
+
   # The only place the container images are actually built and run. Everything
   # else in this workflow tests source; this job tests the deployment artifacts:
   # that the images build, that compose comes up healthy, and that the nginx

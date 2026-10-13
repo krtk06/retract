@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 from app.analysis_engine import graph
 from app.db import get_db
 from app.deps import get_current_user, get_owned_analysis_or_404
-from app.models import Analysis, User
+from app.models import Analysis, SymbolKind, User
 from app.schemas import (
     GraphNeighborhoodOut,
     GraphSummaryOut,
@@ -35,7 +35,7 @@ def graph_summary(
 def graph_symbols(
     analysis_id: int,
     q: str | None = None,
-    kind: str | None = None,
+    kind: SymbolKind | None = None,
     limit: int = Query(default=100, le=500),
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),

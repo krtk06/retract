@@ -22,6 +22,7 @@ from app.models import (
     Finding,
     FindingStatus,
     Repository,
+    Severity,
     User,
     UserRepository,
 )
@@ -191,10 +192,13 @@ def get_score(
 def list_findings(
     analysis_id: int,
     agent: str | None = None,
-    severity: str | None = None,
-    finding_status: str | None = Query(default=None, alias="status"),
+    # Typed as the enums, not `str`: an unknown value like `?severity=bogus` used to
+    # reach the column and raise a LookupError deep in the driver — a 500 for what is
+    # plainly a bad request. FastAPI now rejects it as a 422 before any query runs.
+    severity: Severity | None = None,
+    finding_status: FindingStatus | None = Query(default=None, alias="status"),
     limit: int = Query(default=100, le=500),
-    offset: int = 0,
+    offset: int = Query(default=0, ge=0),
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ) -> list[FindingOut]:

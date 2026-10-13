@@ -30,23 +30,36 @@ def get_current_user(request: Request, db: Session = Depends(get_db)) -> User:
     token = request.cookies.get(settings.auth_cookie_name)
     if not token:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, detail="Not authenticated")
-    user_id = decode_access_token(token)
-    if user_id is None:
+    claims = decode_access_token(token)
+    if claims is None:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, detail="Invalid or expired token")
-    user = db.get(User, user_id)
+    user = db.get(User, claims.user_id)
     if user is None:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, detail="User not found")
+    # The token names the session generation it was minted in; a bump (logout,
+    # "sign out everywhere") revokes every token that carries an older one.
+    if user.token_version != claims.token_version:
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, detail="Session has ended")
     return user
 
 
 def _agent_user(request: Request, presented: str, db: Session) -> User:
     settings = get_settings()
-    if not settings.agent_token or not secrets.compare_digest(presented, settings.agent_token):
+    # Compared as bytes: `compare_digest` refuses non-ASCII `str` operands with a
+    # TypeError, so a header like `tëst` used to escape as an unhandled 500 from an
+    # unauthenticated request instead of a plain 401. Bytes compare cleanly and the
+    # mismatch simply fails closed.
+    if not settings.agent_token or not secrets.compare_digest(
+        presented.encode("utf-8"), settings.agent_token.encode("utf-8")
+    ):
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, detail="Invalid agent token")
     login = request.headers.get(AGENT_USER_HEADER)
     if login:
         user = db.scalar(select(User).where(User.login == login))
-        if user is None and login.isdigit():
+        # `isdigit()` is true for non-ASCII digits too, and `int()` rejects those
+        # right back — so the ASCII check is what keeps this a lookup miss (`user`
+        # stays None → 401 below) rather than a 500.
+        if user is None and login.isascii() and login.isdigit():
             # The eve session's principal is the token subject: the user id.
             user = db.get(User, int(login))
         if user is not None:

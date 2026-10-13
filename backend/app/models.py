@@ -63,6 +63,10 @@ class User(Base):
     # both credential sets (GitHub-only, email-only, or GitHub + a set password).
     email: Mapped[str | None] = mapped_column(String(320), unique=True, nullable=True)
     password_hash: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    # Bumped on logout and on any future "sign out everywhere". Session tokens carry
+    # the version they were minted with; a mismatch means the token is revoked. A
+    # self-contained JWT cannot otherwise be invalidated before it expires.
+    token_version: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     created_at: Mapped[datetime] = mapped_column(default=utcnow)
 
     repositories: Mapped[list["Repository"]] = relationship(back_populates="added_by_user")

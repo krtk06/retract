@@ -1,9 +1,10 @@
 """Repository registration and analysis triggering."""
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app import rate_limit
 from app.config import get_settings
 from app.db import get_db
 from app.deps import get_current_user, get_owned_repo_or_404
@@ -101,11 +102,17 @@ def list_repos(
 @router.post("/{repo_id}/analyze", response_model=AnalysisOut, status_code=status.HTTP_201_CREATED)
 def analyze_repo(
     repo_id: int,
+    request: Request,
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ) -> AnalysisOut:
     # Ownership gate (404 when the repo is absent or not the caller's).
     get_owned_repo_or_404(db, repo_id, user)
+
+    # Every run clones the repository and fans out to six tools on the Celery
+    # workers. Re-running a finished analysis is legitimate, but unbounded it lets
+    # one account occupy the shared queue indefinitely — so the budget is per user.
+    rate_limit.enforce(request, "analyze", limit=30, window_seconds=3600, who=str(user.id))
 
     active = db.scalar(
         select(Analysis).where(

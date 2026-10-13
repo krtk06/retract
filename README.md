@@ -297,6 +297,7 @@ and a stale skill would tell agents to optimise against a dead formula.
 
 | Variable | Where | Purpose |
 | --- | --- | --- |
+| `RETRACT_ENVIRONMENT` | backend | `dev`/`test`/`local`/`ci` relax the production guards; **anything else is treated as production** (fail closed). The prod compose sets `production`. |
 | `RETRACT_DATABASE_URL`, `RETRACT_REDIS_URL` | backend | storage and progress bus |
 | `RETRACT_JWT_SECRET` | backend **and** agent | signs session cookies; the agent verifies the exchanged eve token (`iss=ai-intel`, `aud=eve-agent`) |
 | `RETRACT_AGENT_TOKEN` | backend **and** agent | shared secret the agent presents on service calls (`X-Agent-Token`); blank disables agent API access |
@@ -309,6 +310,27 @@ and a stale skill would tell agents to optimise against a dead formula.
 | `RETRACT_API_KEY` | agent | credential for `RETRACT_LLM_PROVIDER=openai` (falls back to `OPENAI_API_KEY`) |
 | `AI_GATEWAY_API_KEY` | agent | credential for `RETRACT_LLM_PROVIDER=gateway`; optional otherwise — the agent refuses to start without the credential its chosen provider reads |
 | `RETRACT_API_URL` | agent | base URL of the backend API (default `http://localhost:8110`) |
+
+### Production guards
+
+In production the backend **refuses to start** on any of these, rather than booting
+into a quietly unsafe state:
+
+- `RETRACT_JWT_SECRET` shorter than 32 chars, or the published placeholder value
+  (the code default or the `.env.example` value — either would let anyone forge a
+  session, since both are visible in the repository);
+- `RETRACT_AGENT_TOKEN` unset, or `RETRACT_DEV_LOGIN=1`;
+- `RETRACT_AUTH_COOKIE_SECURE` not `1` (without it the session cookie is sent over
+  plaintext HTTP to the same host);
+- `RETRACT_CORS_ORIGINS` containing `*` (with credentials, that reflects any origin);
+- `RETRACT_ALLOW_LOCAL_REPOS=1` (reads arbitrary host paths).
+
+`RETRACT_ENVIRONMENT` decides which mode applies, and the test for it is
+case-insensitive and **fail-closed**: the relaxed set is an explicit list, so an
+unanticipated value like `prod`, `staging`, or `PRODUCTION ` is guarded rather than
+trusted. `RETRACT_RATE_LIMIT_ENABLED` (default on) throttles login, registration,
+and analysis; it uses the same Redis, and fails open with a warning if Redis is
+unreachable, so a cache outage cannot lock everyone out.
 
 ## Checks
 

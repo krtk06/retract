@@ -91,6 +91,13 @@ services:
       # same-deployment secrets should be the same secrets.
       RETRACT_JWT_SECRET: ${RETRACT_JWT_SECRET:?set RETRACT_JWT_SECRET}
       RETRACT_AGENT_TOKEN: ${RETRACT_AGENT_TOKEN:?set RETRACT_AGENT_TOKEN}
+      # The worker serves no HTTP and sets no cookies, but it constructs the same
+      # `Settings`, so it is held to the same production guards — and one of those is
+      # that the session cookie must be `Secure`. Setting it here rather than
+      # teaching the guard which processes are "really" production: one configuration
+      # and one set of rules, with no service booting under a laxer view of the
+      # deployment than its neighbours.
+      RETRACT_AUTH_COOKIE_SECURE: "1"
     command: celery -A app.tasks.celery_app:celery_app worker --loglevel=info --concurrency=2
     volumes:
       - repo_data:/data
