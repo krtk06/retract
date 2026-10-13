@@ -74,6 +74,16 @@ describe("LoginPage", () => {
     expect(screen.queryByText(/expired/)).not.toBeInTheDocument();
   });
 
+  it("acknowledges a completed email verification", () => {
+    // The link is followed from a mail client, in whatever browser the user reads
+    // mail in — often one without a session, so this is where they land. Silence
+    // here would make a successful verification look like it did nothing.
+    withSearch("?email_verified=1");
+    renderLogin();
+    expect(screen.getByText(/Your email is verified/)).toBeInTheDocument();
+    expect(window.location.search).toBe("");
+  });
+
   it("keeps the message under StrictMode double-effects", () => {
     // The browser caught this: an effect that read the parameter and then
     // stripped it lost the message on StrictMode's second run, because the

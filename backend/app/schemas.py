@@ -16,6 +16,9 @@ class UserOut(BaseModel):
     login: str
     github_id: int | None
     email: str | None = None
+    # Lets the app prompt for verification, and says whether a GitHub sign-in will
+    # link to this account.
+    email_verified: bool = False
 
 
 class RegisterIn(BaseModel):

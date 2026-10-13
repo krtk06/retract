@@ -65,6 +65,11 @@ class User(Base):
     # both credential sets (GitHub-only, email-only, or GitHub + a set password).
     email: Mapped[str | None] = mapped_column(String(320), unique=True, nullable=True)
     password_hash: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    # Whether the address has been proven. This is the gate on GitHub account
+    # *linking*: an address alone is not ownership, and registering one requires no
+    # proof, so linking on an unverified address let anyone pre-register a victim's
+    # email and have the victim's GitHub identity attached to it.
+    email_verified: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     # Bumped on logout and on any future "sign out everywhere". Session tokens carry
     # the version they were minted with; a mismatch means the token is revoked. A
     # self-contained JWT cannot otherwise be invalidated before it expires.
@@ -240,6 +245,23 @@ class CalibrationStat(Base):
     accepted: Mapped[int] = mapped_column(Integer, default=0)
     dismissed: Mapped[int] = mapped_column(Integer, default=0)
     updated_at: Mapped[datetime] = mapped_column(default=utcnow, onupdate=utcnow)
+
+
+class EmailVerificationToken(Base):
+    """A one-time link proving control of an email address.
+
+    Only the SHA-256 of the token is stored, so the table is not a set of usable
+    links if it leaks: the value in the email cannot be recovered from the row.
+    """
+
+    __tablename__ = "email_verification_tokens"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    token_hash: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+    expires_at: Mapped[datetime]
+    consumed_at: Mapped[datetime | None] = mapped_column(nullable=True)
+    created_at: Mapped[datetime] = mapped_column(default=utcnow)
 
 
 class Symbol(Base):

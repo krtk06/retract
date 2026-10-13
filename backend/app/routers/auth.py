@@ -1,8 +1,10 @@
 """Authentication: GitHub OAuth, email/password accounts, dev-bypass login, JWT cookies."""
 
+import hashlib
 import logging
 import secrets
-from urllib.parse import urlsplit, urlunsplit
+from datetime import UTC, datetime, timedelta
+from urllib.parse import urlencode, urlsplit, urlunsplit
 
 import httpx
 import redis
@@ -12,11 +14,11 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app import rate_limit
+from app import mailer, rate_limit
 from app.config import get_settings, is_loopback
 from app.db import get_db
 from app.deps import get_current_user
-from app.models import User
+from app.models import EmailVerificationToken, User
 from app.schemas import EveTokenOut, LoginIn, RegisterIn, UserOut
 from app.security import (
     EVE_TOKEN_TTL_SECONDS,
@@ -57,6 +59,7 @@ AUTH_ERROR_EXPIRED = "expired_state"
 AUTH_ERROR_USED = "used_state"
 AUTH_ERROR_EXCHANGE = "exchange_failed"
 AUTH_ERROR_PROFILE = "profile_failed"
+AUTH_ERROR_VERIFICATION = "verification_failed"
 
 _AUTH_ERROR_MESSAGES = {
     AUTH_ERROR_NOT_CONFIGURED: "GitHub sign-in is not configured",
@@ -64,6 +67,7 @@ _AUTH_ERROR_MESSAGES = {
     AUTH_ERROR_USED: "This sign-in link was already used",
     AUTH_ERROR_EXCHANGE: "GitHub refused to complete the sign-in",
     AUTH_ERROR_PROFILE: "Could not read the GitHub profile",
+    AUTH_ERROR_VERIFICATION: "This verification link is invalid or has expired",
 }
 
 
@@ -130,16 +134,32 @@ def _return_origin(request: Request) -> str:
     return settings.frontend_url
 
 
-def _with_error(frontend_url: str, code: str) -> str:
-    """A frontend URL carrying an auth_error code.
+def _aware(value: datetime) -> datetime:
+    """Read a stored timestamp as UTC.
 
-    Built with urlsplit rather than string concatenation: the URL may or may not
-    carry a path, a trailing slash, or an existing query, and all three have to
-    survive.
+    The datetime columns are timezone-naive, so a value read back has no tzinfo and
+    cannot be compared to an aware `utcnow()` — which raises rather than returning a
+    wrong answer, but only once a real value exists to compare.
     """
-    parts = urlsplit(frontend_url)
-    query = f"{parts.query}&" if parts.query else ""
-    return urlunsplit(parts._replace(query=f"{query}auth_error={code}"))
+    return value if value.tzinfo is not None else value.replace(tzinfo=UTC)
+
+
+def _with_query(base_url: str, **params: str) -> str:
+    """A URL with query parameters added, preserving any it already carries.
+
+    Built with urlsplit rather than string concatenation: the configured frontend
+    URL may or may not carry a path, a trailing slash, or an existing query, and all
+    three have to survive.
+    """
+    parts = urlsplit(base_url)
+    added = urlencode(params)
+    query = f"{parts.query}&{added}" if parts.query else added
+    return urlunsplit(parts._replace(query=query))
+
+
+def _with_error(frontend_url: str, code: str) -> str:
+    """A frontend URL carrying an auth_error code."""
+    return _with_query(frontend_url, auth_error=code)
 
 
 def _auth_failure(request: Request, code: str, return_to: str | None = None) -> RedirectResponse:
@@ -181,6 +201,33 @@ def _unique_login(db: Session, base: str) -> str:
     return candidate
 
 
+def _send_verification_email(db: Session, user: User) -> None:
+    """Issue a fresh verification link for this account and email it.
+
+    Only the SHA-256 of the token is stored, so a database leak does not yield a
+    set of working links. Delivery is best-effort (see app/mailer.py).
+    """
+    settings = get_settings()
+    raw = secrets.token_urlsafe(32)
+    db.add(
+        EmailVerificationToken(
+            user_id=user.id,
+            token_hash=hashlib.sha256(raw.encode()).hexdigest(),
+            expires_at=datetime.now(UTC)
+            + timedelta(seconds=settings.email_verification_ttl_seconds),
+        )
+    )
+    db.commit()
+    if user.email:
+        # The link points at the API through the frontend's own origin: the dev server
+        # and the production nginx both proxy /api, so one URL works in both and the
+        # verification request stays same-origin with the app.
+        link = _with_query(f"{settings.frontend_url}/api/auth/verify-email", token=raw)
+        mailer.send_verification(
+            user.email, link, max(settings.email_verification_ttl_seconds // 3600, 1)
+        )
+
+
 @router.post("/register", response_model=UserOut, status_code=status.HTTP_201_CREATED)
 def register(
     payload: RegisterIn,
@@ -213,6 +260,10 @@ def register(
         raise HTTPException(status.HTTP_409_CONFLICT, detail="Email already registered") from None
     db.refresh(user)
     _set_session_cookie(response, user)
+    # Issued after the account exists, and never allowed to fail the sign-up: an
+    # unavailable mail server must not cost someone their registration. The banner
+    # offers a resend.
+    _send_verification_email(db, user)
     return user
 
 
@@ -320,12 +371,19 @@ def _resolve_github_account(db: Session, github_id: int, login: str, email: str 
     someone else:
 
     1. a known ``github_id`` is the same person, by definition;
-    2. a verified email may attach, but only to an account that has **no** GitHub
-       identity of its own (a different ``github_id`` means that account already
-       belongs to somebody) and that has a password — a password-less account is
-       a dev-bypass leftover, and silently adopting one would turn a shared demo
-       login into a real person's identity;
+    2. a verified email may attach, but only to an account whose **own** address was
+       verified, that has **no** GitHub identity of its own (a different
+       ``github_id`` means that account already belongs to somebody) and that has a
+       password — a password-less account is a dev-bypass leftover, and silently
+       adopting one would turn a shared demo login into a real person's identity;
     3. no password and no email is never enough.
+
+    Rule 2's verification requirement is the one that took a second pass. GitHub
+    reporting the address as verified says the *GitHub* account controls it; it says
+    nothing about whether the local account does. Registering an address needs no
+    proof at all, so anyone could pre-register a victim's email and then have the
+    victim's GitHub identity attached to the attacker's password-bearing row. An
+    account may only be claimed by an address it has itself proven.
 
     When the address is already held by an account that cannot be adopted, the
     new user is created **without** it. Storing it would violate the unique index
@@ -337,7 +395,12 @@ def _resolve_github_account(db: Session, github_id: int, login: str, email: str 
         return existing
 
     candidate = db.scalar(select(User).where(User.email == email)) if email else None
-    if candidate is not None and candidate.github_id is None and candidate.password_hash:
+    if (
+        candidate is not None
+        and candidate.email_verified
+        and candidate.github_id is None
+        and candidate.password_hash
+    ):
         # Attaching. The login and email stay as they are: they are the account's
         # own identity, and overwriting either would rename a record the user
         # already knows.
@@ -471,6 +534,68 @@ def logout(request: Request, db: Session = Depends(get_db)) -> Response:
 @router.get("/me", response_model=UserOut)
 def me(user: User = Depends(get_current_user)) -> User:
     return user
+
+
+@router.get("/verify-email")
+def verify_email(
+    request: Request,
+    token: str = Query(min_length=1, max_length=128),
+    db: Session = Depends(get_db),
+) -> RedirectResponse:
+    """Confirm an address from the link in the email, then return to the app.
+
+    A GET because it is a link in an email and a browser follows it; it redirects
+    rather than answering with JSON so the user lands in the app, exactly as the
+    GitHub callback does.
+
+    One failure code for "no such token", "already used", and "expired": they are
+    indistinguishable to a link-follower, and separating them would let someone
+    probe which tokens exist.
+    """
+    settings = get_settings()
+    digest = hashlib.sha256(token.encode()).hexdigest()
+    row = db.scalar(
+        select(EmailVerificationToken).where(EmailVerificationToken.token_hash == digest)
+    )
+    now = datetime.now(UTC)
+    if row is None or row.consumed_at is not None or _aware(row.expires_at) < now:
+        return _auth_failure(request, AUTH_ERROR_VERIFICATION)
+
+    user = db.get(User, row.user_id)
+    if user is None:
+        return _auth_failure(request, AUTH_ERROR_VERIFICATION)
+
+    user.email_verified = True
+    row.consumed_at = now
+    db.commit()
+    logger.info("email verified for user %s", user.id)
+    return RedirectResponse(_with_query(settings.frontend_url, email_verified="1"))
+
+
+@router.post("/resend-verification")
+def resend_verification(
+    request: Request,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+) -> JSONResponse:
+    """Send another verification link to the signed-in account.
+
+    Authenticated on purpose: the sender must be the account holder, or this is a
+    way to mail arbitrary addresses from the deployment's domain. Rate-limited
+    because it is, even then, a way to send mail.
+    """
+    rate_limit.enforce(
+        request, "resend-verification", limit=5, window_seconds=3600, who=str(user.id)
+    )
+    if not user.email:
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            detail="This account has no email address to verify",
+        )
+    if user.email_verified:
+        return JSONResponse({"ok": True, "already_verified": True})
+    _send_verification_email(db, user)
+    return JSONResponse({"ok": True, "already_verified": False})
 
 
 @router.post("/eve-token", response_model=EveTokenOut)

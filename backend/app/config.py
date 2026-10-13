@@ -68,6 +68,14 @@ class Settings(BaseSettings):
 
     dev_login: bool = False
 
+    # Outbound email, used only for address verification. Blank means "no transport":
+    # development and tests log the link instead of sending it.
+    #   smtp://user%40gmail.com:app-password@smtp.gmail.com:587   (STARTTLS)
+    #   smtps://user%40gmail.com:app-password@smtp.gmail.com:465  (implicit TLS)
+    smtp_url: str = ""
+    mail_from: str = "Retract <no-reply@localhost>"
+    email_verification_ttl_seconds: int = 24 * 3600
+
     # Fixed-window limiter on login/register/analyze (see app/rate_limit.py).
     # On by default; tests turn it off so they are not limited by their own volume.
     rate_limit_enabled: bool = True

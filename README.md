@@ -107,11 +107,21 @@ app (`RETRACT_GITHUB_CLIENT_ID` / `..._SECRET`).
 verified email that already belongs to an account in this app attaches the GitHub
 identity to it, so signing in with GitHub and with a password reach the same
 repositories and the same history. Without that, each sign-in mints a separate
-account with its own empty dashboard. Three rules keep it from handing an account
-to the wrong person: only *verified* addresses link; an account already tied to a
-different GitHub identity is never claimed; and a password-less account (a
-dev-bypass leftover) is never auto-adopted. `user:email` is read-only — your email
-address, no repository access.
+account with its own empty dashboard. Four rules keep it from handing an account to
+the wrong person: the address must be verified **by GitHub and by the local
+account**; an account already tied to a different GitHub identity is never claimed;
+and a password-less account (a dev-bypass leftover) is never auto-adopted.
+`user:email` is read-only — your email address, no repository access.
+
+The local half of that matters and is easy to miss. Registering an address requires
+no proof at all, so linking on GitHub's word alone let anyone pre-register a
+victim's email and then have the victim's GitHub sign-in attached to the attacker's
+password-bearing account. Registration now sends a verification link, and an
+account links only once it has followed one. Until then the app prompts to verify;
+the account works, it just will not connect to GitHub yet. Set `RETRACT_SMTP_URL`
+and `RETRACT_MAIL_FROM` so those emails can be sent (see [Configuration](#configuration)) — with no
+transport configured the link is logged in development, and in production the
+service logs that the email could not be sent rather than failing silently.
 
 **Repositories are private.** A repository row belongs to the account that added it,
 and each real account that adds the same URL gets its own copy — its own clone, its
@@ -326,6 +336,8 @@ and a stale skill would tell agents to optimise against a dead formula.
 | `RETRACT_API_KEY` | agent | credential for `RETRACT_LLM_PROVIDER=openai` (falls back to `OPENAI_API_KEY`) |
 | `AI_GATEWAY_API_KEY` | agent | credential for `RETRACT_LLM_PROVIDER=gateway`; optional otherwise — the agent refuses to start without the credential its chosen provider reads |
 | `RETRACT_API_URL` | agent | base URL of the backend API (default `http://localhost:8110`) |
+| `RETRACT_SMTP_URL` | backend | mail submission for verification links, e.g. `smtps://user%40gmail.com:app-password@smtp.gmail.com:465`. Blank in development logs the link instead of sending |
+| `RETRACT_MAIL_FROM` | backend | `From:` address on those messages |
 
 ### Production guards
 

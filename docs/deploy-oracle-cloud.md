@@ -158,6 +158,15 @@ RETRACT_GITHUB_CLIENT_ID=<from the OAuth app>
 RETRACT_GITHUB_CLIENT_SECRET=<from the OAuth app>
 RETRACT_GITHUB_OAUTH_REDIRECT_URI=https://retract-demo.duckdns.org/api/auth/github/callback
 
+# --- Email verification (Gmail app password) ---
+# Without this, verification links cannot be sent, so a GitHub sign-in can never
+# link to an email account — and the only symptom is that signing in with GitHub
+# creates a second account, which reads as a bug rather than a misconfiguration.
+# The account needs 2FA enabled, then an "App password" from
+# https://myaccount.google.com/apppasswords. Note the `%40` for `@`.
+RETRACT_SMTP_URL=smtps://you%40gmail.com:your-app-password@smtp.gmail.com:465
+RETRACT_MAIL_FROM=Retract <you@gmail.com>
+
 # --- The model: opencode-go is an OpenAI-compatible endpoint ---
 RETRACT_LLM_PROVIDER=openai
 RETRACT_LLM_BASE_URL=https://opencode.ai/zen/go/v1

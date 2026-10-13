@@ -237,6 +237,21 @@ def _register_email_account(client: TestClient, email: str) -> dict:
     return response.json()
 
 
+def _mark_email_verified(email: str) -> None:
+    """Skip the mailbox. The verification flow itself is covered in
+    test_email_verification.py; these tests are about what linking then does."""
+    from app.db import get_session_factory
+    from app.models import User
+
+    session = get_session_factory()()
+    try:
+        user = session.query(User).filter(User.email == email).one()
+        user.email_verified = True
+        session.commit()
+    finally:
+        session.close()
+
+
 def _sign_in_again(client: TestClient, headers: dict, params: dict) -> object:
     client.post("/api/auth/logout")
     return client.get(
@@ -252,6 +267,7 @@ def test_links_a_github_identity_to_the_matching_email_account(client: TestClien
     had registered with their email.
     """
     owner = _register_email_account(client, "link-owner@example.com")
+    _mark_email_verified("link-owner@example.com")
     state = _state_from(_authorize_url(client))
 
     _monkey_emails(oauth, ["link-owner@example.com"])
@@ -285,6 +301,35 @@ def test_an_unverified_email_does_not_link(client: TestClient, oauth) -> None:
 
     me = client.get("/api/auth/me").json()
     assert me["id"] != owner["id"], "an unverified email must not attach to an account"
+    assert me["email"] is None
+
+
+def test_an_account_that_has_not_verified_its_email_is_not_linked(
+    client: TestClient, oauth
+) -> None:
+    """GitHub saying the address is verified is not the same as *this* account
+    having proven it.
+
+    Registering an address requires no proof, so linking on GitHub's word alone let
+    anyone pre-register a victim's email and have the victim's GitHub identity
+    attached to the attacker's password-bearing row — after which the attacker keeps
+    the keys. The local account must have proven the address itself.
+    """
+    attacker = _register_email_account(client, "pre-registered@example.com")
+    state = _state_from(_authorize_url(client))
+
+    # GitHub reports the address verified — which is exactly what an attacker's own
+    # GitHub account would report for an address they control.
+    _monkey_emails(oauth, ["pre-registered@example.com"])
+    client.get(
+        "/api/auth/github/callback",
+        params={"code": "abc", "state": state},
+        headers=BROWSER,
+        follow_redirects=False,
+    )
+
+    me = client.get("/api/auth/me").json()
+    assert me["id"] != attacker["id"], "an unverified local account must not be claimed"
     assert me["email"] is None
 
 
