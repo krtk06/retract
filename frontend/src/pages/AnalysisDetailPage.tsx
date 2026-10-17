@@ -5,6 +5,7 @@ import { Link, useParams } from "react-router-dom";
 import { useAnalysis, useFindings, useScore } from "../api/hooks";
 import type { Analysis, AnalysisEvent } from "../api/types";
 import { ApprovalQueue } from "../components/ApprovalQueue";
+import { Loading } from "../components/EmptyState";
 import { ExploreTab } from "../components/ExploreTab";
 import { FindingsTable } from "../components/FindingsTable";
 import { HistoryCompare } from "../components/HistoryCompare";
@@ -64,8 +65,8 @@ function agentEventText(payload: Record<string, unknown>): string {
 
 function Stat({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <div className="border border-line bg-surface-2 px-3.5 py-2.5">
-      <dt className="text-[10px] font-semibold uppercase tracking-[0.18em] text-faint">{label}</dt>
+    <div className="px-well px-3 py-2">
+      <dt className="px-eyebrow">{label}</dt>
       <dd className="mt-1 truncate text-sm text-ink">{children}</dd>
     </div>
   );
@@ -83,15 +84,12 @@ function AnalysisHeader({
   onSelectTab: (tab: TabName) => void;
 }) {
   return (
-    <section className="px-panel p-5 sm:p-6">
-      <Link
-        to="/"
-        className="mb-3 inline-flex items-center gap-1.5 text-sm text-muted transition-colors duration-300 hover:text-ink"
-      >
+    <section className="px-panel p-5">
+      <Link to="/" className="px-btn px-btn--quiet px-tab mb-3">
         ← Back
       </Link>
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-2xl font-bold tracking-tight text-ink text-balance">{title}</h1>
+        <h1 className="font-ui text-[20px] font-bold text-ink text-balance">{title}</h1>
         <div className="flex items-center gap-2">
           {data.status === "done" && !data.published && data.pending_approvals > 0 && (
             <span className="px-badge border border-warn/30 bg-warn-soft text-warn">
@@ -124,16 +122,16 @@ function AnalysisHeader({
       )}
 
       {data.status === "done" && (
-        <div className="px-tabs mt-5 grid-cols-4">
-          {TABS.map((name) => (
+        <div role="tablist" aria-label="Analysis views" className="px-tabs mt-5 grid-cols-4">
+          {TABS.map((value) => (
             <button
-              key={name}
-              onClick={() => onSelectTab(name)}
-              className={`px-tab capitalize ${
-                tab === name ? "px-tab-active" : ""
-              }`}
+              key={value}
+              role="tab"
+              aria-selected={tab === value}
+              onClick={() => onSelectTab(value)}
+              className="px-tab capitalize"
             >
-              {name}
+              {value}
             </button>
           ))}
         </div>
@@ -166,10 +164,14 @@ function ProgressFeed({ events, isActive }: { events: AnalysisEvent[]; isActive:
       {events.length === 0 && !isActive && (
         <p className="text-sm text-faint">No events recorded.</p>
       )}
-      <ul className="space-y-1 font-mono text-xs">
+      <ul className="px-scroll max-h-96 space-y-1 overflow-y-auto font-mono text-xs">
         {events.map((event, index) => (
-          <li key={index} className="anim-step-in flex items-start gap-3" style={{ animationDuration: "0.4s" }}>
-            <span aria-hidden="true" className={`mt-1.5 h-1.5 w-1.5 shrink-0 ${eventTone(event.type)}`} />
+          <li
+            key={index}
+            className="px-well anim-step-in flex items-start gap-3 px-2 py-1"
+            style={{ animationDuration: "0.4s" }}
+          >
+            <span aria-hidden="true" className={`mt-1 h-[8px] w-[8px] shrink-0 ${eventTone(event.type)}`} />
             <span className="shrink-0 text-faint">{formatTime(event.ts)}</span>
             <span className="w-24 shrink-0 text-ink/80">
               {event.type === "tool"
@@ -246,7 +248,7 @@ export function AnalysisDetailPage() {
   }, [analysisId]);
 
   if (analysis.isLoading) {
-    return <p className="text-sm text-muted">Loading analysis…</p>;
+    return <Loading label="Loading analysis…" />;
   }
   if (analysis.isError || !analysis.data) {
     return <p className="text-sm text-danger">Analysis not found.</p>;
@@ -296,7 +298,7 @@ export function AnalysisDetailPage() {
       {tab === "explore" && data.status === "done" && <ExploreTab analysisId={analysisId} />}
 
       {tab === "fixes" && data.status === "done" && (
-        <Suspense fallback={<p className="text-sm text-faint">Building the fix plan…</p>}>
+        <Suspense fallback={<Loading label="Building the fix plan…" />}>
           <RemediationPlanPanel
             analysisId={analysisId}
             repository={repo}
@@ -315,7 +317,7 @@ export function AnalysisDetailPage() {
       )}
 
       {tab === "agent" && data.status === "done" && (
-        <Suspense fallback={<p className="text-sm text-faint">Loading the agent…</p>}>
+        <Suspense fallback={<Loading label="Loading the agent…" />}>
           <AgentChat analysisId={analysisId} initialPrompt={agentPrompt} />
         </Suspense>
       )}

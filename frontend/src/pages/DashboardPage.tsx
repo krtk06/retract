@@ -3,8 +3,17 @@ import { Link, useNavigate } from "react-router-dom";
 
 import { ApiError } from "../api/client";
 import { useAnalyzeRepo, useRecentAnalyses, useRepos } from "../api/hooks";
+import { EmptyState } from "../components/EmptyState";
 import { StatusPill } from "../components/StatusPill";
+import { scoreTone, type Tone } from "../lib/palette";
 import type { AnalysisSummary } from "../api/types";
+
+const TONE_CLASS: Record<Tone, string> = {
+  ok: "text-ok",
+  info: "text-info",
+  warn: "text-warn",
+  danger: "text-danger",
+};
 
 function timeAgo(iso: string): string {
   const seconds = Math.floor((Date.now() - new Date(iso).getTime()) / 1000);
@@ -16,26 +25,19 @@ function timeAgo(iso: string): string {
   return `${Math.floor(hours / 24)}d ago`;
 }
 
-function scoreTone(score: number): string {
-  if (score >= 80) return "text-ok";
-  if (score >= 60) return "text-info";
-  if (score >= 50) return "text-warn";
-  return "text-danger";
-}
-
 function Row({ analysis, onReanalyze, busy, active }: AnalysisRowProps) {
   const navigate = useNavigate();
   return (
-    <li className="px-card px-card-hover flex items-center gap-4 px-4 py-3.5">
+    <li className="px-card-hover flex items-center gap-4 p-3">
       <button
         onClick={() => navigate(`/analyses/${analysis.id}`)}
         className="min-w-0 flex-1 text-left"
         title="Open analysis"
       >
-        <p className="truncate text-sm font-semibold text-ink">
+        <p className="truncate font-ui text-[11px] text-ink">
           {analysis.repo_owner}/{analysis.repo_name}
         </p>
-        <p className="mt-0.5 truncate text-xs text-faint">
+        <p className="mt-0.5 truncate font-mono text-[10px] text-faint">
           {analysis.commit_sha ? analysis.commit_sha.slice(0, 7) : "not cloned"} ·{" "}
           {analysis.finding_count} findings
           {analysis.loc != null && ` · ${analysis.loc.toLocaleString()} loc`} ·{" "}
@@ -44,11 +46,12 @@ function Row({ analysis, onReanalyze, busy, active }: AnalysisRowProps) {
       </button>
       <div className="flex shrink-0 items-center gap-3">
         {analysis.overall != null && (
-          <span
-            className={`text-2xl font-extrabold tabular-nums tracking-tight ${scoreTone(analysis.overall)}`}
-            title="Overall repository health score"
-          >
-            {analysis.overall}
+          <span className="px-well px-3 py-1" title="Overall repository health score">
+            <span
+              className={`font-ui text-[28px] tabular-nums ${TONE_CLASS[scoreTone(analysis.overall)]}`}
+            >
+              {analysis.overall}
+            </span>
           </span>
         )}
         <button
@@ -118,24 +121,11 @@ export function DashboardPage() {
         {recent.isLoading && <p className="text-sm text-muted">Loading…</p>}
 
         {recent.data?.length === 0 && (
-          <div className="px-panel flex flex-col items-center gap-2 px-6 py-14 text-center">
-            <span
-              aria-hidden="true"
-              className="mb-1 h-10 w-10"
-              style={{
-                background: "radial-gradient(circle at 35% 30%, var(--accent-strong), var(--accent))",
-                boxShadow: "0 0 28px var(--accent-glow)",
-              }}
-            />
-            <p className="text-sm font-semibold text-ink">No analyses yet</p>
-            <p className="max-w-sm text-sm text-muted text-pretty">
-              Add a repository on the{" "}
-              <Link to="/repos" className="px-link">
-                repositories page
-              </Link>{" "}
-              to get a health score.
-            </p>
-          </div>
+          <EmptyState
+            title="No analyses yet"
+            detail="Point Retract at a GitHub repository and it will score it."
+            action={{ label: "Add a repository", to: "/repos" }}
+          />
         )}
 
         {recent.data && recent.data.length > 0 && (
@@ -153,9 +143,11 @@ export function DashboardPage() {
         )}
 
         {recent.isError && (
-          <p className="border border-danger/25 bg-danger-soft px-4 py-2.5 text-sm text-danger">
-            Could not load your analyses. Is the API running?
-          </p>
+          <EmptyState
+            title="Could not load your analyses"
+            detail="Is the API running?"
+            icon="cross"
+          />
         )}
       </section>
 
@@ -174,9 +166,9 @@ export function DashboardPage() {
           </p>
         )}
         {repos.data && repos.data.length > 0 && (
-          <div className="px-panel flex flex-wrap items-center justify-between gap-3 px-5 py-4">
+          <div className="px-panel flex flex-wrap items-center justify-between gap-3 p-5">
             <p className="text-sm text-muted">
-              <span className="text-lg font-bold text-ink tabular-nums">{repos.data.length}</span>{" "}
+              <span className="font-ui text-[28px] text-ink tabular-nums">{repos.data.length}</span>{" "}
               repositor{repos.data.length === 1 ? "y" : "ies"} tracked
             </p>
             <Link to="/repos" className="px-btn px-btn--ghost">

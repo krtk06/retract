@@ -45,14 +45,14 @@ export function ReposPage() {
           <p className="px-eyebrow">New analysis</p>
           <h2 className="mt-1 text-2xl font-bold tracking-tight">Analyze a repository</h2>
         </div>
-        <form onSubmit={handleSubmit} className="px-frame">
-          <div className="px-frame flex flex-col gap-3 p-3 sm:flex-row sm:items-center">
+        <form onSubmit={handleSubmit} className="px-frame p-4">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
             <input
               type="text"
               value={url}
               onChange={(event) => setUrl(event.target.value)}
               placeholder="https://github.com/owner/repo"
-              className="px-input flex-1"
+              className="px-input flex-1 font-mono"
               required
             />
             <button
@@ -89,9 +89,9 @@ export function ReposPage() {
 
         <ul className="space-y-2.5">
           {repos.data?.map((repo) => (
-            <li key={repo.id} className="px-card px-card-hover flex items-center gap-4 px-4 py-3.5">
+            <li key={repo.id} className="px-card-hover flex items-center gap-4 p-3">
               <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-semibold text-ink">
+                <p className="truncate font-ui text-[11px] text-ink">
                   {repo.owner}/{repo.name}
                 </p>
                 <p className="mt-0.5 font-mono text-xs text-faint">{repo.default_branch}</p>
@@ -102,6 +102,7 @@ export function ReposPage() {
                     onClick={() => navigate(`/analyses/${repo.latest_analysis_id}`)}
                     className="transition-transform duration-300 ease-step hover:-translate-y-0.5"
                     title="View latest analysis"
+                    aria-label="View latest analysis"
                   >
                     <StatusPill status={repo.latest_analysis_status} />
                   </button>

@@ -3,6 +3,7 @@ import { useQueryClient } from "@tanstack/react-query";
 
 import { api, ApiError } from "../api/client";
 import { useLogin, useRegister } from "../api/hooks";
+import { PixelIcon } from "../components/PixelIcon";
 import { ThemeToggle } from "../components/ThemeToggle";
 
 type Mode = "login" | "register";
@@ -39,34 +40,6 @@ function verifiedFromUrl(): boolean {
 }
 
 const AUTH_FALLBACK = "GitHub sign-in did not complete. Try again.";
-
-function GitHubMark() {
-  return (
-    <svg viewBox="0 0 24 24" fill="currentColor" className="h-4 w-4" aria-hidden="true">
-      <path d="M12 .5C5.73.5.5 5.73.5 12c0 5.08 3.29 9.39 7.86 10.91.58.11.79-.25.79-.56 0-.28-.01-1.02-.02-2-3.2.7-3.88-1.54-3.88-1.54-.52-1.33-1.28-1.68-1.28-1.68-1.05-.72.08-.7.08-.7 1.16.08 1.77 1.19 1.77 1.19 1.03 1.77 2.7 1.26 3.36.96.1-.75.4-1.26.73-1.55-2.56-.29-5.25-1.28-5.25-5.7 0-1.26.45-2.29 1.19-3.1-.12-.29-.52-1.46.11-3.05 0 0 .97-.31 3.18 1.18a11 11 0 0 1 5.8 0c2.2-1.49 3.17-1.18 3.17-1.18.63 1.59.23 2.76.11 3.05.74.81 1.19 1.84 1.19 3.1 0 4.43-2.69 5.41-5.26 5.69.41.36.78 1.06.78 2.14 0 1.55-.01 2.8-.01 3.18 0 .31.21.68.8.56A11.5 11.5 0 0 0 23.5 12C23.5 5.73 18.27.5 12 .5Z" />
-    </svg>
-  );
-}
-
-function ModeTab({
-  active,
-  onSelect,
-  children,
-}: {
-  active: boolean;
-  onSelect: () => void;
-  children: React.ReactNode;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onSelect}
-      className={`px-tab ${active ? "px-tab-active" : ""}`}
-    >
-      {children}
-    </button>
-  );
-}
 
 function EmailAuthForm({
   mode,
@@ -201,79 +174,110 @@ export function LoginPage() {
   const pending = register.isPending || login.isPending;
 
   return (
-    <div className="relative grid min-h-[100dvh] place-items-center px-4 py-16">
+    <div className="relative grid min-h-[100dvh] place-items-center bg-canvas p-6">
+      {/* Dithered sky behind the frame — a 2px checkerboard, not a gradient. */}
+      <div
+        aria-hidden="true"
+        className="px-dither pointer-events-none fixed inset-0 opacity-30"
+      />
+
       <div className="absolute right-4 top-4 sm:right-6 sm:top-5">
         <ThemeToggle />
       </div>
 
-      <div className="anim-step-in w-full max-w-[26rem]">
+      <div className="anim-step-in relative w-full max-w-[30rem]">
         <div className="px-frame">
-          <div className="px-frame p-7 sm:p-8">
-            <div className="mb-6 flex items-center gap-3">
-              <span
-                aria-hidden="true"
-                className="h-9 w-9"
-                style={{
-                  background:
-                    "radial-gradient(circle at 35% 30%, var(--accent-strong), var(--accent))",
-                  boxShadow: "0 0 26px var(--accent-glow)",
-                }}
-              />
+          <div className="px-titlebar">
+            <span className="flex items-center gap-2">
+              <PixelIcon name="logo" size={10} className="text-accent" />
+              RETRACT.EXE
+            </span>
+            <span className="ml-auto flex gap-1" aria-hidden="true">
+              <span className="block h-[8px] w-[8px] bg-danger" />
+              <span className="block h-[8px] w-[8px] bg-warn" />
+              <span className="block h-[8px] w-[8px] bg-ok" />
+            </span>
+          </div>
+
+          <div className="flex flex-col gap-4 p-5">
+            <div className="flex items-center gap-4">
+              <span aria-hidden="true" className="anim-blink block text-accent">
+                <PixelIcon name="robot-open" size={48} />
+              </span>
               <div>
-                <h1 className="text-xl font-extrabold tracking-tight">Retract</h1>
-                <p className="px-eyebrow mt-0.5">Repository health</p>
+                <p className="px-eyebrow">Repository health</p>
+                <h1 className="font-ui text-[20px] font-bold tracking-[0.18em] text-ink">
+                  RETRACT
+                </h1>
               </div>
             </div>
 
-            <p className="mb-6 text-sm leading-relaxed text-muted text-pretty">
-              Analyze a GitHub repository for quality, security, testing, and documentation
-              health — then come back, re-check it after changes, and track the score.
+            <div>
+              <p className="px-eyebrow mb-1">System health</p>
+              <span className="anim-slide-up flex gap-[2px] border-2 border-line bg-canvas p-[2px]">
+                {Array.from({ length: 20 }, (_, index) => (
+                  <span
+                    key={index}
+                    className="block h-[8px] w-[8px]"
+                    style={{
+                      background: index < 13 ? "var(--ok)" : "var(--line-strong)",
+                      opacity: index < 13 ? 1 : 0.35,
+                    }}
+                  />
+                ))}
+              </span>
+            </div>
+
+            <p className="text-[13px] leading-relaxed text-muted">
+              Give it a GitHub repository. Get back a health score with verified, cited
+              findings.
             </p>
 
             {emailVerified && !error && (
-              <p className="mb-4 border border-ok/25 bg-ok-soft px-3.5 py-2.5 text-sm text-ok">
+              <p className="border border-ok/25 bg-ok-soft px-3.5 py-2.5 text-sm text-ok">
                 Your email is verified. Sign in — GitHub will now reach the same account.
               </p>
             )}
             {error && (
-              <p className="mb-4 border border-danger/25 bg-danger-soft px-3.5 py-2.5 text-sm text-danger">
+              <p className="border border-danger/25 bg-danger-soft px-3.5 py-2.5 text-sm text-danger">
                 {error}
               </p>
             )}
 
-            <a
-              href="/api/auth/github/login"
-              className="px-btn px-btn--ink mb-4 w-full gap-2"
-            >
-              <GitHubMark />
+            <a href="/api/auth/github/login" className="px-btn px-btn--ink w-full">
+              <PixelIcon name="github" size={12} />
               Sign in with GitHub
             </a>
 
-            <div className="mb-4 flex items-center gap-3 text-xs text-faint">
-              <span className="h-px flex-1 bg-line" />
+            <div className="flex items-center gap-3 text-xs text-faint">
+              <span className="px-rule flex-1" />
               or use your email
-              <span className="h-px flex-1 bg-line" />
+              <span className="px-rule flex-1" />
             </div>
 
-            <div className="px-tabs mb-3 grid-cols-2">
-              <ModeTab
-                active={mode === "login"}
-                onSelect={() => {
+            <div role="tablist" aria-label="Sign-in method" className="px-tabs grid-cols-2">
+              <button
+                type="button"
+                aria-pressed={mode === "login"}
+                onClick={() => {
                   setMode("login");
                   setError(null);
                 }}
+                className={`px-tab ${mode === "login" ? "px-tab-active" : ""}`}
               >
                 Sign in
-              </ModeTab>
-              <ModeTab
-                active={mode === "register"}
-                onSelect={() => {
+              </button>
+              <button
+                type="button"
+                aria-pressed={mode === "register"}
+                onClick={() => {
                   setMode("register");
                   setError(null);
                 }}
+                className={`px-tab ${mode === "register" ? "px-tab-active" : ""}`}
               >
                 Create account
-              </ModeTab>
+              </button>
             </div>
 
             <EmailAuthForm
@@ -290,14 +294,14 @@ export function LoginPage() {
               <button
                 onClick={handleDevLogin}
                 disabled={devBusy}
-                className="px-btn px-btn--ghost mt-4 w-full text-muted"
+                className="px-btn px-btn--ghost mt-4 w-full"
               >
                 {devBusy ? "Signing in…" : "Dev login"}
               </button>
             )}
           </div>
         </div>
-        <p className="mt-5 text-center text-xs text-faint">
+        <p className="mt-5 text-center font-mono text-[10px] text-faint">
           Your code is cloned and analyzed on this deployment. Nothing is pushed back.
         </p>
       </div>
