@@ -26,6 +26,25 @@ These apply to every task. Do not deviate without checking the spec.
 6. **No new npm dependencies.** Google Fonts are a `<link>` in `index.html`, nothing more.
 7. **Verification per task is always all four:** `npm run lint && npm run typecheck && npm test && npm run build` from `frontend/`.
 8. **Commit after every task.** Messages follow the repo's imperative style: `feat - `, `fix - `, `chore - `, `docs - ` (note the space-hyphen-space, matching `git log`).
+9. **Never stage the whole tree.** `git add -A`, `git add frontend/src` and `git commit -a` are all forbidden. Always stage the explicit file list from the task's Files block.
+
+> ### Starting state: an uncommitted base
+>
+> When this plan was written the aurora-glass design in the working tree was
+> **uncommitted** — `HEAD` carried a 14-line `index.css` and three of the files it
+> depends on did not exist at all. The user chose to leave it that way.
+>
+> Two consequences, both accepted:
+>
+> - Files this plan **rewrites wholesale** (`index.css`, `index.html`,
+>   `Layout.tsx`, `ThemeToggle.tsx`) necessarily carry the aurora content into
+>   their commit, because `HEAD` holds no other version of them.
+> - Files this plan **edits in place** commit cleanly against the uncommitted
+>   state, so those commits will not replay onto `HEAD` on their own.
+>
+> Rule 9 exists because of this: a blanket `git add -A` in Task 4 would sweep all
+> 1331 lines of that uncommitted design into a commit titled "a PICO-8 pixel
+> styling system", burying work that is not this plan's.
 
 ### Deliberate refinement of the spec
 
@@ -1829,9 +1848,14 @@ accident, not the CSS.
 - [ ] **Step 7: Commit**
 
 ```bash
-cd /home/krtk2/Docs/Projects/AI_Inteligence && git add -A frontend/src frontend/index.html
+cd /home/krtk2/Docs/Projects/AI_Inteligence
+git add frontend/src/index.css frontend/index.html
+# plus every .tsx the retoken script rewrote — list them with:
+#   git status --porcelain frontend/src | grep '^ M'
 git commit -m "feat - a PICO-8 pixel styling system, and migrate every call site onto it"
 ```
+
+Do **not** run `git add -A`. See Global Constraint 9.
 
 ---
 
@@ -2999,7 +3023,8 @@ knows the visual language is deliberate and not an accident:
 - [ ] **Step 8: Commit**
 
 ```bash
-cd /home/krtk2/Docs/Projects/AI_Inteligence && git add -A
+cd /home/krtk2/Docs/Projects/AI_Inteligence
+# stage only the files the visual pass actually touched, then:
 git commit -m "fix - whatever the visual pass surfaced"
 ```
 
