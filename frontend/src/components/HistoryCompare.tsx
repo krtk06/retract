@@ -3,21 +3,13 @@ import { useNavigate } from "react-router-dom";
 
 import { useCompare, useHistory } from "../api/hooks";
 import type { AnalysisHistoryItem } from "../api/types";
-
-const PILLAR_LABELS: Record<string, string> = {
-  "code-quality": "Code Quality",
-  security: "Security",
-  testing: "Testing",
-  documentation: "Documentation",
-  dependencies: "Dependencies",
-  architecture: "Architecture",
-};
+import { PILLAR_LABELS, type Pillar } from "../lib/palette";
 
 function Delta({ value }: { value: number }) {
   if (value === 0) return <span className="text-faint">—</span>;
   const up = value > 0;
   return (
-    <span className={`font-semibold tabular-nums ${up ? "text-ok" : "text-danger"}`}>
+    <span className={`px-badge px-badge--flat font-ui tabular-nums ${up ? "text-ok" : "text-danger"}`}>
       {up ? "+" : ""}
       {value}
     </span>
@@ -27,13 +19,13 @@ function Delta({ value }: { value: number }) {
 function statusBadge(item: AnalysisHistoryItem) {
   if (item.status !== "done") {
     return (
-      <span className="border border-line bg-surface-2 px-1.5 py-0.5 text-[10px] text-muted">
+      <span className="px-badge px-badge--flat font-ui bg-surface-2 text-muted">
         {item.status}
       </span>
     );
   }
   return (
-    <span className="border border-ok/30 bg-ok-soft px-1.5 py-0.5 text-[10px] font-semibold text-ok">
+    <span className="px-badge px-badge--flat font-ui bg-ok-soft text-ok">
       done
     </span>
   );
@@ -93,7 +85,7 @@ export function HistoryCompare({ analysisId }: { analysisId: number }) {
               <button
                 onClick={() => setLeft(item.id)}
                 className={`px-btn px-2.5 py-1 text-xs ${
-                  left === item.id ? "bg-info text-white" : "px-btn--ghost"
+                  left === item.id ? "bg-info text-ink" : "px-btn--ghost"
                 }`}
               >
                 A
@@ -101,7 +93,7 @@ export function HistoryCompare({ analysisId }: { analysisId: number }) {
               <button
                 onClick={() => setRight(item.id)}
                 className={`px-btn px-2.5 py-1 text-xs ${
-                  right === item.id ? "bg-hypo text-white" : "px-btn--ghost"
+                  right === item.id ? "bg-hypo text-ink" : "px-btn--ghost"
                 }`}
               >
                 B
@@ -112,7 +104,7 @@ export function HistoryCompare({ analysisId }: { analysisId: number }) {
       </ul>
 
       {left != null && right != null && (
-        <div className="anim-step-in mt-5 border border-line bg-surface-2 p-4">
+        <div className="anim-step-in px-well mt-5 p-4">
           <h4 className="text-sm font-semibold text-ink">
             Comparison:{" "}
             <span className="font-mono text-info">#{left}</span> →{" "}
@@ -141,9 +133,9 @@ export function HistoryCompare({ analysisId }: { analysisId: number }) {
                 </thead>
                 <tbody>
                   {comparison.data.pillars.map((pillar) => (
-                    <tr key={pillar.pillar} className="border-t border-line">
+                    <tr key={pillar.pillar} className="border-t-2 border-line">
                       <td className="py-1.5 text-ink">
-                        {PILLAR_LABELS[pillar.pillar] ?? pillar.pillar}
+                        {PILLAR_LABELS[pillar.pillar as Pillar] ?? pillar.pillar}
                       </td>
                       <td className="py-1.5 text-muted tabular-nums">{pillar.left_score}</td>
                       <td className="py-1.5 text-muted tabular-nums">{pillar.right_score}</td>
