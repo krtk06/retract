@@ -255,7 +255,11 @@ export function LoginPage() {
               <span className="px-rule flex-1" />
             </div>
 
-            <div role="tablist" aria-label="Sign-in method" className="px-tabs grid-cols-2">
+            {/* A pressed-button group, not a tablist: a tablist requires `tab`
+                children, and these must stay `button` so the accessible names
+                "Sign in" / "Create account" keep resolving as buttons. A
+                tablist wrapping non-tabs is invalid ARIA. */}
+            <div role="group" aria-label="Sign-in method" className="px-tabs grid-cols-2">
               <button
                 type="button"
                 aria-pressed={mode === "login"}
