@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 import { useEveAgent, type EveMessagePart } from "eve/react";
 
 import { useEveToken } from "../api/useEveToken";
+import { PixelIcon } from "./PixelIcon";
 
 /**
  * Chat with the eve agent about one analysis.
@@ -68,7 +69,7 @@ function renderPart(part: EveMessagePart, index: number, role: string): ReactNod
         key={index}
         className={
           role === "user"
-            ? "border border-accent/20 bg-accent-soft px-3.5 py-2 text-sm text-ink"
+            ? "px-well border-l-4 border-l-accent p-3 text-[13px] text-ink"
             : "whitespace-pre-wrap text-sm leading-relaxed text-muted"
         }
       >
@@ -80,22 +81,25 @@ function renderPart(part: EveMessagePart, index: number, role: string): ReactNod
     const state = part.state;
     if (state === "output-available") {
       return (
-        <p key={index} className="font-mono text-[11px] text-ok/80">
-          ✓ {part.toolName}
+        <p key={index} className="flex items-center gap-1.5 font-mono text-[11px] text-ok/80">
+          <PixelIcon name="check" size={12} />
+          {part.toolName}
         </p>
       );
     }
     if (state === "output-error") {
       return (
-        <p key={index} className="font-mono text-[11px] text-danger/80">
-          ✗ {part.toolName} failed{part.errorText ? `: ${part.errorText.slice(0, 120)}` : ""}
+        <p key={index} className="flex items-center gap-1.5 font-mono text-[11px] text-danger/80">
+          <PixelIcon name="cross" size={12} />
+          {part.toolName} failed{part.errorText ? `: ${part.errorText.slice(0, 120)}` : ""}
         </p>
       );
     }
     if (state === "output-denied") {
       return (
-        <p key={index} className="font-mono text-[11px] text-warn/80">
-          ⊘ {part.toolName} was not approved
+        <p key={index} className="flex items-center gap-1.5 font-mono text-[11px] text-warn/80">
+          <PixelIcon name="ban" size={12} />
+          {part.toolName} was not approved
         </p>
       );
     }
@@ -199,7 +203,7 @@ async (text: string) => {
 
   if (authError && messages.length === 0) {
     return (
-      <section className="px-panel border-warn/30 bg-warn-soft p-5 text-sm text-warn">
+      <section className="px-panel border-warn p-4 text-[13px] text-warn">
         The agent is unavailable: {authError}
       </section>
     );
@@ -207,7 +211,7 @@ async (text: string) => {
 
   return (
     <section className="px-panel flex flex-col overflow-hidden">
-      <header className="flex items-center justify-between gap-3 border-b border-line px-5 py-3.5">
+      <header className="flex items-center justify-between gap-3 border-b-2 border-line px-5 py-3.5">
         <div>
           <h3 className="font-semibold text-ink">Ask the agent</h3>
           <p className="text-xs text-faint">
@@ -226,17 +230,14 @@ async (text: string) => {
       {called.length > 0 && (
         <div className="flex flex-wrap gap-1.5 border-b border-line px-5 py-2.5">
           {called.map((name) => (
-            <span
-              key={name}
-              className="border border-line bg-surface-2 px-2 py-0.5 font-mono text-[11px] text-muted"
-            >
+            <span key={name} className="px-badge px-badge--flat font-mono text-[9px] text-muted">
               {name}
             </span>
           ))}
         </div>
       )}
 
-      <div ref={logRef} className="max-h-96 min-h-32 space-y-4 overflow-y-auto px-5 py-4">
+      <div ref={logRef} className="max-h-96 min-h-32 space-y-4 overflow-y-auto px-5 py-4 px-scroll">
         {messages.length === 0 && (
           <div className="space-y-2.5 text-sm text-muted">
             <p>Ask about this analysis, or request a review:</p>
@@ -287,11 +288,11 @@ async (text: string) => {
                 key={option.id}
                 type="button"
                 onClick={() => void agent.respond([{ requestId: approval.requestId, optionId: option.id }])}
-                className={`px-btn ${
+                className={
                   option.id === "approve"
-                    ? "bg-warn text-[#1a1205] hover:brightness-110"
-                    : "border border-warn/40 text-warn hover:bg-warn/10"
-                }`}
+                    ? "px-btn px-btn--primary"
+                    : "px-btn border border-warn/40 text-warn hover:bg-warn/10"
+                }
               >
                 {option.label}
               </button>

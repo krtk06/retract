@@ -2,6 +2,9 @@ import { useMemo, useState } from "react";
 
 import { useRemediation } from "../api/hooks";
 import type { Effort, RemediationItem, RemediationPlan, Repository } from "../api/types";
+import { PILLAR_LABELS, SEVERITY_COLOR_VAR, type Pillar } from "../lib/palette";
+import { EmptyState } from "./EmptyState";
+import { PixelIcon } from "./PixelIcon";
 
 /**
  * The fix plan: what to fix, in what order, and what it is worth.
@@ -25,24 +28,6 @@ import type { Effort, RemediationItem, RemediationPlan, Repository } from "../ap
  * `weighted_penalty_removed / effort` — additive and order-independent, which
  * makes the ordering reliable independently of either displayed figure.
  */
-
-const SEVERITY_STYLES: Record<RemediationItem["severity"], string> = {
-  critical: "border-danger/45 bg-danger-soft text-danger",
-  high: "border-danger/25 bg-danger-soft text-danger",
-  medium: "border-warn/30 bg-warn-soft text-warn",
-  low: "border-info/25 bg-info-soft text-info",
-  info: "border-line-strong bg-surface-2 text-muted",
-};
-
-const PILLAR_LABELS: Record<string, string> = {
-  "code-quality": "Code Quality",
-  security: "Security",
-  testing: "Testing",
-  documentation: "Documentation",
-  dependencies: "Dependencies",
-  architecture: "Architecture",
-  other: "Other",
-};
 
 const EFFORT_STYLES: Record<Effort, string> = {
   low: "text-ok border-ok/40",
@@ -108,11 +93,9 @@ export function RemediationPlanPanel({
   }
   if (!plan || plan.work_items.length === 0) {
     return (
-      <section className="px-panel p-5 sm:p-6">
+      <section className="anim-step-in px-panel p-5">
         <h3 className="font-semibold text-ink">Fix plan</h3>
-        <p className="mt-2 text-sm text-muted">
-          Nothing to fix. No open findings were recorded for this repository.
-        </p>
+        <EmptyState title="Nothing to fix. No open findings were recorded." />
       </section>
     );
   }
@@ -148,19 +131,16 @@ function PlanBody({
   );
 
   return (
-    <section className="px-panel anim-step-in p-6 sm:p-7">
+    <section className="anim-step-in px-panel p-5">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <p className="px-eyebrow">Fix plan</p>
           <p className="mt-1.5 flex flex-wrap items-baseline gap-3">
-            <span className="text-5xl font-extrabold tracking-tighter text-faint tabular-nums">
+            <span className="font-ui text-[28px] text-faint tabular-nums">
               {plan.current_overall ?? "—"}
             </span>
             <span className="text-2xl text-faint/60">→</span>
-            <span
-              className="text-5xl font-extrabold tracking-tighter tabular-nums"
-              style={{ color: "var(--ok)" }}
-            >
+            <span className="font-ui text-[28px] tabular-nums" style={{ color: "var(--ok)" }}>
               {plan.projected_overall ?? "—"}
             </span>
             <span className="text-sm text-muted">
@@ -178,8 +158,9 @@ function PlanBody({
             <a
               href={`/api/analyses/${plan.analysis_id}/remediation.md`}
               download
-              className="px-btn px-btn--ghost"
+              className="px-link inline-flex items-center gap-1.5"
             >
+              <PixelIcon name="copy" size={12} />
               Download .md
             </a>
             {onOpenAgent && (
@@ -204,7 +185,7 @@ function PlanBody({
       </p>
 
       {quickWins.length > 0 && (
-        <div className="mt-6 border border-line bg-surface-2 p-4">
+        <div className="mt-6 px-well p-4">
           <h4 className="px-eyebrow">Quickest wins</h4>
           <ul className="mt-3 space-y-2">
             {quickWins.map((item, index) => (
@@ -224,7 +205,7 @@ function PlanBody({
                 )}
                 <span className="text-xs text-faint">
                   {item.effort} effort ·{" "}
-                  {PILLAR_LABELS[item.pillar] ?? item.pillar} · {item.finding_count}{" "}
+                  {PILLAR_LABELS[item.pillar as Pillar] ?? item.pillar} · {item.finding_count}{" "}
                   {item.finding_count === 1 ? "finding" : "findings"}
                 </span>
               </li>
@@ -251,7 +232,7 @@ function PlanBody({
             <option value="">All areas</option>
             {pillars.map((pillar) => (
               <option key={pillar} value={pillar}>
-                {PILLAR_LABELS[pillar] ?? pillar}
+                {PILLAR_LABELS[pillar as Pillar] ?? pillar}
               </option>
             ))}
           </select>
@@ -299,7 +280,11 @@ function WorkItemCard({
       <div className="flex flex-wrap items-center gap-2">
         <span className="text-xs font-semibold text-faint tabular-nums">#{rank}</span>
         <span
-          className={`border px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide ${SEVERITY_STYLES[item.severity]}`}
+          className="px-badge px-badge--flat"
+          style={{
+            borderColor: `var(${SEVERITY_COLOR_VAR[item.severity]})`,
+            color: `var(${SEVERITY_COLOR_VAR[item.severity]})`,
+          }}
         >
           {item.severity}
         </span>
@@ -310,7 +295,10 @@ function WorkItemCard({
           {item.effort} effort
         </span>
         {item.source === "llm:eve" && (
-          <span className="border border-hypo/30 bg-hypo-soft px-1.5 py-0.5 text-[10px] font-medium text-hypo">
+          <span
+            className="px-badge px-badge--flat"
+            style={{ borderColor: "var(--hypo)", color: "var(--hypo)" }}
+          >
             agent-authored
           </span>
         )}
@@ -321,7 +309,7 @@ function WorkItemCard({
         {item.pillar_points > 0 && (
           <span
             className="ml-auto text-xs font-semibold text-ok tabular-nums"
-            title={`What fixing this is worth in the ${PILLAR_LABELS[item.pillar] ?? item.pillar} pillar. These values do not add up to the headline.`}
+            title={`What fixing this is worth in the ${PILLAR_LABELS[item.pillar as Pillar] ?? item.pillar} pillar. These values do not add up to the headline.`}
           >
             +{item.pillar_points} pts
           </span>
@@ -329,7 +317,7 @@ function WorkItemCard({
       </div>
 
       <p className="mt-1.5 text-xs text-faint">
-        {PILLAR_LABELS[item.pillar] ?? item.pillar} · {item.finding_count}{" "}
+        {PILLAR_LABELS[item.pillar as Pillar] ?? item.pillar} · {item.finding_count}{" "}
         {item.finding_count === 1 ? "finding" : "findings"} · removes{" "}
         {item.weighted_penalty_removed} penalty points
         {item.pillar_points === 0 && " · already saturated at this repository's density"}
@@ -365,7 +353,7 @@ function WorkItemCard({
             <button
               type="button"
               onClick={() => setShowFindings((value) => !value)}
-              className="px-btn--quiet"
+              className="px-btn px-btn--ghost"
             >
               {showFindings ? "hide findings" : `show ${item.finding_count} findings`}
             </button>
@@ -399,7 +387,7 @@ function WorkItemCard({
         <button
           type="button"
           onClick={() => setOpen(true)}
-          className="px-btn--quiet mt-2"
+          className="px-btn px-btn--ghost mt-2"
         >
           show the steps
         </button>
@@ -430,7 +418,7 @@ export function RemediationSummaryCard({
 
   const best = plan.work_items[0];
   return (
-    <section className="px-panel anim-step-in flex flex-wrap items-center justify-between gap-4 p-5 sm:p-6">
+    <section className="anim-step-in px-panel flex flex-wrap items-center justify-between gap-4 p-5">
       <div>
         <h3 className="font-semibold text-ink">How to fix these issues</h3>
         <p className="mt-1.5 text-sm text-muted">

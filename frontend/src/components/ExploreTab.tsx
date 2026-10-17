@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 
 import { useGraphSummary, useGraphSymbols, useNeighborhood } from "../api/hooks";
 import type { GraphLink, SymbolRef } from "../api/types";
+import { EmptyState, Loading } from "./EmptyState";
 
 function KindBadge({ kind }: { kind: string }) {
   const colors: Record<string, string> = {
@@ -12,7 +13,7 @@ function KindBadge({ kind }: { kind: string }) {
   };
   return (
     <span
-      className={`border px-1.5 py-0.5 text-[10px] font-semibold ${colors[kind] ?? "border-line bg-surface-2 text-muted"}`}
+      className={`px-badge px-badge--flat font-ui ${colors[kind] ?? "border-line bg-surface-2 text-muted"}`}
     >
       {kind}
     </span>
@@ -36,7 +37,7 @@ function LinkList({
       <h5 className="px-eyebrow">{title}</h5>
       <ul className="mt-2 space-y-1">
         {links.map((link, index) => (
-          <li key={index} className="flex items-center gap-2 text-sm">
+          <li key={index} className="px-well flex items-center gap-2 px-3 py-2 text-sm">
             <button
               onClick={() => onSelect(link[field])}
               className="min-w-0 truncate text-left font-mono text-accent transition-colors duration-300 hover:underline"
@@ -76,7 +77,7 @@ function NeighborhoodPanel({
     <section className="px-panel p-5">
       <h4 className="text-sm font-semibold text-ink">Dependency view</h4>
       {!root && <p className="mt-2 text-xs text-faint">Select a symbol to inspect its dependencies.</p>}
-      {root && neighborhood.isLoading && <p className="mt-2 text-xs text-faint">Loading…</p>}
+      {root && neighborhood.isLoading && <Loading label="Loading…" />}
       {root && neighborhood.data && (
         <div className="mt-3 space-y-3">
           <p className="font-mono text-sm text-ink">
@@ -128,25 +129,33 @@ function SymbolBrowser({
         className="px-input mt-2.5"
         aria-label="Filter symbols"
       />
-      <ul className="mt-2.5 max-h-96 space-y-0.5 overflow-y-auto pr-1">
-        {filtered.map((symbol) => (
-          <li key={symbol.id}>
-            <button
-              onClick={() => onSelect(symbol.name)}
-              className={`flex w-full items-center gap-2 px-2 py-1.5 text-left text-sm transition-colors duration-300 hover:bg-surface-2 ${
-                selected === symbol.name ? "bg-accent-soft" : ""
-              }`}
-            >
-              <KindBadge kind={symbol.kind} />
-              <span className="truncate font-mono text-ink/90">{symbol.name.split(".").pop()}</span>
-              <span className="ml-auto shrink-0 text-[10px] text-faint">
-                {symbol.file_path.split("/").pop()}
-              </span>
-            </button>
-          </li>
-        ))}
+      <ul className="mt-2.5 max-h-96 space-y-1 overflow-y-auto pr-1">
+        {filtered.map((symbol) => {
+          const active = selected === symbol.name;
+          return (
+            <li key={symbol.id} className={`px-card ${active ? "border-l-accent" : ""}`}>
+              <button
+                onClick={() => onSelect(symbol.name)}
+                className={`flex w-full items-center gap-2 px-2 py-1.5 text-left text-sm transition-colors duration-300 ${
+                  active ? "bg-accent-soft" : "hover:bg-surface-2"
+                }`}
+              >
+                <KindBadge kind={symbol.kind} />
+                <span className="truncate font-mono text-ink/90">{symbol.name.split(".").pop()}</span>
+                <span className="ml-auto shrink-0 text-[10px] text-faint">
+                  {symbol.file_path.split("/").pop()}
+                </span>
+              </button>
+            </li>
+          );
+        })}
       </ul>
-      {symbols.data?.length === 0 && <p className="mt-2 text-xs text-faint">No symbols indexed.</p>}
+      {symbols.data?.length === 0 && (
+        <EmptyState
+          title="No symbols"
+          detail="This repository could not be indexed into a symbol graph."
+        />
+      )}
     </section>
   );
 }
@@ -166,18 +175,18 @@ export function ExploreTab({ analysisId }: { analysisId: number }) {
     <div className="space-y-6">
       <section className="px-panel p-5">
         <h3 className="font-semibold text-ink">Repository Knowledge Graph</h3>
-        {summary.isLoading && <p className="mt-2 text-xs text-faint">Loading graph…</p>}
+        {summary.isLoading && <Loading label="Loading graph…" />}
         {summary.data && (
           <div className="mt-3.5 flex flex-wrap gap-2 text-xs">
-            <span className="px-badge border border-line-strong bg-surface-2 text-ink tabular-nums">
+            <span className="px-badge border-line-strong bg-surface-2 text-ink tabular-nums">
               {symbolTotal} symbols
             </span>
             {Object.entries(summary.data.edges).map(([kind, count]) => (
-              <span key={kind} className="px-badge border border-line bg-surface-2 text-muted tabular-nums">
+              <span key={kind} className="px-badge border-line bg-surface-2 text-muted tabular-nums">
                 {count} {kind}
               </span>
             ))}
-            <span className="px-badge border border-line bg-surface-2 text-muted tabular-nums">
+            <span className="px-badge border-line bg-surface-2 text-muted tabular-nums">
               {edgeTotal} edges total
             </span>
           </div>
