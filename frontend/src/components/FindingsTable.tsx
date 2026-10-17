@@ -5,15 +5,16 @@ import { copyText } from "../lib/clipboard";
 import { buildFixPrompt } from "../lib/buildFixPrompt";
 import { api } from "../api/client";
 import { useSnippet } from "../api/hooks";
+import {
+  PILLARS,
+  PILLAR_LABELS,
+  SEVERITIES,
+  SEVERITY_COLOR_VAR,
+  type Pillar,
+} from "../lib/palette";
+import { PixelIcon } from "./PixelIcon";
+import { EmptyState } from "./EmptyState";
 import type { Finding, Repository, SnippetResponse } from "../api/types";
-
-const SEVERITY_STYLES: Record<Finding["severity"], string> = {
-  critical: "border-danger/45 bg-danger-soft text-danger",
-  high: "border-danger/25 bg-danger-soft text-danger",
-  medium: "border-warn/30 bg-warn-soft text-warn",
-  low: "border-info/25 bg-info-soft text-info",
-  info: "border-line-strong bg-surface-2 text-muted",
-};
 
 const PILLAR_BY_CATEGORY: Record<string, string> = {
   "code-smell": "code-quality",
@@ -40,21 +41,12 @@ const PILLAR_BY_CATEGORY: Record<string, string> = {
   "god-module": "architecture",
 };
 
-const PILLAR_LABELS: Record<string, string> = {
-  "code-quality": "Code Quality",
-  security: "Security",
-  testing: "Testing",
-  documentation: "Documentation",
-  dependencies: "Dependencies",
-  architecture: "Architecture",
-};
-
 const PILLAR_OPTIONS = [
   { value: "", label: "All pillars" },
-  ...Object.entries(PILLAR_LABELS).map(([value, label]) => ({ value, label })),
+  ...PILLARS.map((pillar) => ({ value: pillar, label: PILLAR_LABELS[pillar] })),
 ];
 
-const SEVERITY_OPTIONS = ["critical", "high", "medium", "low", "info"];
+const SEVERITY_OPTIONS = SEVERITIES;
 
 function StatusBadge({ status }: { status: Finding["status"] }) {
   if (status === "verified") {
@@ -138,14 +130,17 @@ function FixWithAgentButton({
   return (
     <button
       onClick={handleCopy}
-      className={
-        copied
-          ? "px-btn border border-ok/40 px-2.5 py-1 text-xs text-ok"
-          : "px-btn px-btn--ghost px-2.5 py-1 text-xs"
-      }
+      className={copied ? "px-btn px-btn--ghost" : "px-btn px-btn--primary"}
       title="Copy a fix brief for your coding agent (opencode, Claude Code, Codex)"
     >
-      {copied ? "Copied ✓" : "Fix with your agent"}
+      {copied ? (
+        <>
+          <PixelIcon name="check" size={12} />
+          <span>Copied ✓</span>
+        </>
+      ) : (
+        "Fix with your agent"
+      )}
     </button>
   );
 }
@@ -156,12 +151,14 @@ function FindingRow({
   commitSha,
   analysisId,
   showSnippet,
+  striped = false,
 }: {
   finding: Finding;
   repository: Repository | null;
   commitSha: string | null;
   analysisId: number;
   showSnippet: boolean;
+  striped?: boolean;
 }) {
   const [expanded, setExpanded] = useState(false);
   const canSnippet = showSnippet && finding.file_path != null && finding.line_start != null;
@@ -174,6 +171,8 @@ function FindingRow({
   // nothing extra. Optional because a stored payload from an older build has none.
   const fix = finding.remediation;
 
+  const severityColor = `var(${SEVERITY_COLOR_VAR[finding.severity]})`;
+
   const blobUrl =
     repository && !repository.url.startsWith("local://") && finding.file_path
       ? `${repository.url}/blob/${commitSha ?? repository.default_branch}/${finding.file_path}` +
@@ -181,10 +180,11 @@ function FindingRow({
       : null;
 
   return (
-    <li className="px-card px-card-hover px-4 py-3.5">
+    <li className={`px-card px-card-hover px-4 py-3.5 ${striped ? "px-stripes" : ""}`}>
       <div className="flex flex-wrap items-center gap-2">
         <span
-          className={`border px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide ${SEVERITY_STYLES[finding.severity]}`}
+          className="px-badge px-badge--flat"
+          style={{ borderColor: severityColor, color: severityColor }}
         >
           {finding.severity}
         </span>
@@ -265,8 +265,8 @@ function FindingList({
   analysisId: number;
 }) {
   return (
-    <ul className="space-y-2.5">
-      {findings.map((finding) => (
+    <ul className="space-y-2.5 overflow-x-auto px-scroll">
+      {findings.map((finding, index) => (
         <FindingRow
           key={finding.id}
           finding={finding}
@@ -274,6 +274,7 @@ function FindingList({
           commitSha={commitSha}
           analysisId={analysisId}
           showSnippet
+          striped={index % 2 === 1}
         />
       ))}
     </ul>
@@ -328,31 +329,37 @@ export function FindingsTable({
           Findings <span className="text-sm font-normal text-faint tabular-nums">({filtered.length})</span>
         </h3>
         <div className="flex flex-wrap items-center gap-2 text-sm">
-          <select
-            value={pillarFilter}
-            onChange={(e) => setPillarFilter(e.target.value)}
-            className="px-input px-select w-auto px-2.5 py-1.5 text-xs"
-            aria-label="Filter by pillar"
-          >
-            {PILLAR_OPTIONS.map((o) => (
-              <option key={o.value} value={o.value}>
-                {o.label}
-              </option>
-            ))}
-          </select>
-          <select
-            value={severityFilter}
-            onChange={(e) => setSeverityFilter(e.target.value)}
-            className="px-input px-select w-auto px-2.5 py-1.5 text-xs"
-            aria-label="Filter by severity"
-          >
-            <option value="">All severities</option>
-            {SEVERITY_OPTIONS.map((s) => (
-              <option key={s} value={s}>
-                {s}
-              </option>
-            ))}
-          </select>
+          <span className="px-select-wrap">
+            <select
+              value={pillarFilter}
+              onChange={(e) => setPillarFilter(e.target.value)}
+              className="px-input px-select w-auto px-2.5 py-1.5 text-xs"
+              aria-label="Filter by pillar"
+            >
+              {PILLAR_OPTIONS.map((o) => (
+                <option key={o.value} value={o.value}>
+                  {o.label}
+                </option>
+              ))}
+            </select>
+            <PixelIcon name="chevron-down" size={12} className="px-select-chevron" />
+          </span>
+          <span className="px-select-wrap">
+            <select
+              value={severityFilter}
+              onChange={(e) => setSeverityFilter(e.target.value)}
+              className="px-input px-select w-auto px-2.5 py-1.5 text-xs"
+              aria-label="Filter by severity"
+            >
+              <option value="">All severities</option>
+              {SEVERITY_OPTIONS.map((s) => (
+                <option key={s} value={s}>
+                  {s}
+                </option>
+              ))}
+            </select>
+            <PixelIcon name="chevron-down" size={12} className="px-select-chevron" />
+          </span>
           <label className="flex cursor-pointer items-center gap-2 border border-line bg-surface-2 px-3 py-1.5 text-xs text-muted transition-colors duration-300 hover:text-ink">
             <input
               type="checkbox"
@@ -365,9 +372,10 @@ export function FindingsTable({
       </div>
 
       {filtered.length === 0 && (
-        <p className="border border-line bg-surface-2 px-4 py-8 text-center text-sm text-faint">
-          No findings match the current filters.
-        </p>
+        <EmptyState
+          title="No findings match"
+          detail="Loosen the filter, or pick another pillar."
+        />
       )}
 
       {groupByPillar ? (
@@ -375,7 +383,7 @@ export function FindingsTable({
           {grouped.map(([pillar, items]) => (
             <div key={pillar}>
               <h4 className="mb-3 flex items-center gap-2 text-sm font-semibold text-ink">
-                {PILLAR_LABELS[pillar] ?? pillar}
+                {PILLAR_LABELS[pillar as Pillar] ?? pillar}
                 <span className="bg-surface-2 px-2 py-0.5 text-xs text-muted tabular-nums">
                   {items.length}
                 </span>

@@ -1,21 +1,17 @@
 import { useState } from "react";
 
 import { useApprovalQueue, useCalibrationStats, useDecide } from "../api/hooks";
+import { SEVERITY_COLOR_VAR } from "../lib/palette";
+import { EmptyState } from "./EmptyState";
 import type { Finding } from "../api/types";
-
-const SEVERITY_STYLES: Record<string, string> = {
-  critical: "border-danger/45 bg-danger-soft text-danger",
-  high: "border-danger/25 bg-danger-soft text-danger",
-  medium: "border-warn/30 bg-warn-soft text-warn",
-  low: "border-info/25 bg-info-soft text-info",
-  info: "border-line-strong bg-surface-2 text-muted",
-};
 
 function gateBadge(finding: Finding) {
   const sev = finding.severity;
+  const severityColor = `var(${SEVERITY_COLOR_VAR[sev]})`;
   return (
     <span
-      className={`border px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide ${SEVERITY_STYLES[sev]}`}
+      className="px-badge px-badge--flat"
+      style={{ borderColor: severityColor, color: severityColor }}
     >
       {sev}
     </span>
@@ -37,7 +33,7 @@ function QueueItem({
   const calibration = (finding.evidence_json?.calibration ?? {}) as Record<string, unknown>;
 
   return (
-    <li className="px-card px-4 py-3.5">
+    <li className="px-well px-4 py-3.5">
       <div className="flex flex-wrap items-center gap-2">
         {gateBadge(finding)}
         <p className="text-sm font-semibold text-ink text-pretty">{finding.title}</p>
@@ -80,7 +76,7 @@ function QueueItem({
                 decide.mutate({ analysisId, findingId: finding.id, decision: "approve", note })
               }
               disabled={decide.isPending}
-              className="px-btn px-btn--primary px-3.5 py-1.5 text-sm"
+              className="px-btn px-btn--primary"
             >
               Approve
             </button>
@@ -89,7 +85,7 @@ function QueueItem({
                 decide.mutate({ analysisId, findingId: finding.id, decision: "dismiss", note })
               }
               disabled={decide.isPending}
-              className="px-btn px-btn--ghost px-3.5 py-1.5 text-sm"
+              className="px-btn px-btn--ghost"
             >
               Dismiss
             </button>
@@ -140,7 +136,7 @@ export function ApprovalQueue({ analysisId }: { analysisId: number }) {
           </span>
         ) : (
           <span className="px-badge border border-warn/30 bg-warn-soft text-warn">
-            <span aria-hidden="true" className="anim-blink h-1.5 w-1.5 bg-warn" />
+            <span aria-hidden="true" className="anim-blink block h-[8px] w-[8px] bg-warn" />
             {pending_count} awaiting review
           </span>
         )}
@@ -167,7 +163,10 @@ export function ApprovalQueue({ analysisId }: { analysisId: number }) {
         ))}
       </ul>
       {pending.length === 0 && !published && (
-        <p className="mt-3 text-sm text-faint">No pending items.</p>
+        <EmptyState
+          title="Nothing awaiting review"
+          detail="High-severity agent claims land here for a human decision."
+        />
       )}
     </section>
   );

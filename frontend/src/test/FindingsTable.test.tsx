@@ -101,4 +101,16 @@ describe("FindingsTable — Fix with your agent", () => {
     expect(text).toContain("severity: critical");
     expect(text).toContain("Cited location: app/db.py:8");
   });
+
+  it("badges every severity from the shared ramp", () => {
+    renderTable([finding({ id: 7, severity: "critical" }), finding({ id: 8, severity: "low" })]);
+
+    expect(document.querySelectorAll(".px-badge").length).toBeGreaterThan(1);
+  });
+
+  it("stripes alternate rows", () => {
+    renderTable([finding({ id: 7 }), finding({ id: 8 })]);
+
+    expect(document.querySelectorAll(".px-stripes").length).toBeGreaterThan(0);
+  });
 });
