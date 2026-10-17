@@ -7,15 +7,29 @@ import { DashboardPage } from "./pages/DashboardPage";
 import { LoginPage } from "./pages/LoginPage";
 import { ReposPage } from "./pages/ReposPage";
 
+function Splash() {
+  return (
+    <div className="grid min-h-[100dvh] place-items-center">
+      <div className="flex flex-col items-center gap-4">
+        <span
+          aria-hidden="true"
+          className="anim-blink h-10 w-10"
+          style={{
+            background: "radial-gradient(circle at 35% 30%, var(--accent-strong), var(--accent))",
+            boxShadow: "0 0 40px var(--accent-glow)",
+          }}
+        />
+        <p className="px-eyebrow">Loading workspace</p>
+      </div>
+    </div>
+  );
+}
+
 export default function App() {
   const me = useMe();
 
   if (me.isLoading) {
-    return (
-      <div className="flex min-h-screen items-center justify-center text-zinc-400">
-        Loading…
-      </div>
-    );
+    return <Splash />;
   }
 
   if (me.isError || !me.data) {

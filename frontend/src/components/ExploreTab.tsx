@@ -5,13 +5,15 @@ import type { GraphLink, SymbolRef } from "../api/types";
 
 function KindBadge({ kind }: { kind: string }) {
   const colors: Record<string, string> = {
-    module: "bg-sky-950 text-sky-300",
-    class: "bg-amber-950 text-amber-300",
-    function: "bg-emerald-950 text-emerald-300",
-    method: "bg-emerald-950 text-emerald-300",
+    module: "border-info/30 bg-info-soft text-info",
+    class: "border-warn/30 bg-warn-soft text-warn",
+    function: "border-ok/30 bg-ok-soft text-ok",
+    method: "border-ok/30 bg-ok-soft text-ok",
   };
   return (
-    <span className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${colors[kind] ?? "bg-zinc-800 text-zinc-300"}`}>
+    <span
+      className={`border px-1.5 py-0.5 text-[10px] font-semibold ${colors[kind] ?? "border-line bg-surface-2 text-muted"}`}
+    >
       {kind}
     </span>
   );
@@ -31,20 +33,18 @@ function LinkList({
   if (links.length === 0) return null;
   return (
     <div>
-      <h5 className="text-xs font-semibold uppercase tracking-wide text-zinc-500">{title}</h5>
-      <ul className="mt-1.5 space-y-1">
+      <h5 className="px-eyebrow">{title}</h5>
+      <ul className="mt-2 space-y-1">
         {links.map((link, index) => (
           <li key={index} className="flex items-center gap-2 text-sm">
             <button
               onClick={() => onSelect(link[field])}
-              className="min-w-0 truncate text-left font-mono text-sky-400 hover:underline"
+              className="min-w-0 truncate text-left font-mono text-accent transition-colors duration-300 hover:underline"
               title={link[field]}
             >
               {link[field]}
             </button>
-            <span className="ml-auto shrink-0 text-[10px] uppercase text-zinc-600">
-              {link.kind}
-            </span>
+            <span className="ml-auto shrink-0 text-[10px] uppercase text-faint">{link.kind}</span>
           </li>
         ))}
       </ul>
@@ -73,16 +73,16 @@ function NeighborhoodPanel({
   );
 
   return (
-    <section className="rounded-lg border border-zinc-800 bg-zinc-900 p-4">
-      <h4 className="text-sm font-semibold">Dependency view</h4>
-      {!root && <p className="mt-2 text-xs text-zinc-500">Select a symbol to inspect its dependencies.</p>}
-      {root && neighborhood.isLoading && <p className="mt-2 text-xs text-zinc-500">Loading…</p>}
+    <section className="px-panel p-5">
+      <h4 className="text-sm font-semibold text-ink">Dependency view</h4>
+      {!root && <p className="mt-2 text-xs text-faint">Select a symbol to inspect its dependencies.</p>}
+      {root && neighborhood.isLoading && <p className="mt-2 text-xs text-faint">Loading…</p>}
       {root && neighborhood.data && (
         <div className="mt-3 space-y-3">
-          <p className="font-mono text-sm">
+          <p className="font-mono text-sm text-ink">
             {root}
             {neighborhood.data.root && (
-              <span className="ml-2 text-xs text-zinc-500">
+              <span className="ml-2 text-xs text-faint">
                 {neighborhood.data.root.file_path}:{neighborhood.data.root.line_start}
               </span>
             )}
@@ -92,7 +92,7 @@ function NeighborhoodPanel({
             <LinkList title="Used by" links={incoming} field="source" onSelect={onSelect} />
           </div>
           {neighborhood.data.links.length === 0 && (
-            <p className="text-xs text-zinc-500">No resolved graph links for this symbol.</p>
+            <p className="text-xs text-faint">No resolved graph links for this symbol.</p>
           )}
         </div>
       )}
@@ -119,34 +119,34 @@ function SymbolBrowser({
   }, [symbols.data, filter]);
 
   return (
-    <section className="rounded-lg border border-zinc-800 bg-zinc-900 p-4">
-      <h4 className="text-sm font-semibold">Symbols</h4>
+    <section className="px-panel p-5">
+      <h4 className="text-sm font-semibold text-ink">Symbols</h4>
       <input
         value={filter}
         onChange={(event) => setFilter(event.target.value)}
         placeholder="Filter symbols…"
-        className="mt-2 w-full rounded-md border border-zinc-700 bg-zinc-950 px-3 py-1.5 text-sm outline-none placeholder:text-zinc-600 focus:border-zinc-500"
+        className="px-input mt-2.5 px-3 py-2 text-sm"
         aria-label="Filter symbols"
       />
-      <ul className="mt-2 max-h-96 space-y-0.5 overflow-y-auto">
+      <ul className="mt-2.5 max-h-96 space-y-0.5 overflow-y-auto pr-1">
         {filtered.map((symbol) => (
           <li key={symbol.id}>
             <button
               onClick={() => onSelect(symbol.name)}
-              className={`flex w-full items-center gap-2 rounded px-2 py-1 text-left text-sm hover:bg-zinc-800 ${
-                selected === symbol.name ? "bg-zinc-800" : ""
+              className={`flex w-full items-center gap-2 px-2 py-1.5 text-left text-sm transition-colors duration-300 hover:bg-surface-2 ${
+                selected === symbol.name ? "bg-accent-soft" : ""
               }`}
             >
               <KindBadge kind={symbol.kind} />
-              <span className="truncate font-mono">{symbol.name.split(".").pop()}</span>
-              <span className="ml-auto shrink-0 text-[10px] text-zinc-600">
+              <span className="truncate font-mono text-ink/90">{symbol.name.split(".").pop()}</span>
+              <span className="ml-auto shrink-0 text-[10px] text-faint">
                 {symbol.file_path.split("/").pop()}
               </span>
             </button>
           </li>
         ))}
       </ul>
-      {symbols.data?.length === 0 && <p className="mt-2 text-xs text-zinc-500">No symbols indexed.</p>}
+      {symbols.data?.length === 0 && <p className="mt-2 text-xs text-faint">No symbols indexed.</p>}
     </section>
   );
 }
@@ -163,24 +163,28 @@ export function ExploreTab({ analysisId }: { analysisId: number }) {
     : null;
 
   return (
-    <div className="space-y-5">
-      <section className="rounded-lg border border-zinc-800 bg-zinc-900 p-4">
-        <h3 className="font-semibold">Repository Knowledge Graph</h3>
-        {summary.isLoading && <p className="mt-2 text-xs text-zinc-500">Loading graph…</p>}
+    <div className="space-y-6">
+      <section className="px-panel p-5">
+        <h3 className="font-semibold text-ink">Repository Knowledge Graph</h3>
+        {summary.isLoading && <p className="mt-2 text-xs text-faint">Loading graph…</p>}
         {summary.data && (
-          <div className="mt-3 flex flex-wrap gap-2 text-xs">
-            <span className="rounded-full bg-zinc-800 px-2.5 py-1">{symbolTotal} symbols</span>
+          <div className="mt-3.5 flex flex-wrap gap-2 text-xs">
+            <span className="px-badge border border-line-strong bg-surface-2 text-ink tabular-nums">
+              {symbolTotal} symbols
+            </span>
             {Object.entries(summary.data.edges).map(([kind, count]) => (
-              <span key={kind} className="rounded-full bg-zinc-800 px-2.5 py-1">
+              <span key={kind} className="px-badge border border-line bg-surface-2 text-muted tabular-nums">
                 {count} {kind}
               </span>
             ))}
-            <span className="rounded-full bg-zinc-800 px-2.5 py-1">{edgeTotal} edges total</span>
+            <span className="px-badge border border-line bg-surface-2 text-muted tabular-nums">
+              {edgeTotal} edges total
+            </span>
           </div>
         )}
       </section>
 
-      <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         <SymbolBrowser analysisId={analysisId} onSelect={setSelected} selected={selected} />
         <NeighborhoodPanel analysisId={analysisId} root={selected} onSelect={setSelected} />
       </div>

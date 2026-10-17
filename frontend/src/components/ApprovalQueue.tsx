@@ -4,17 +4,19 @@ import { useApprovalQueue, useCalibrationStats, useDecide } from "../api/hooks";
 import type { Finding } from "../api/types";
 
 const SEVERITY_STYLES: Record<string, string> = {
-  critical: "bg-red-700 text-white",
-  high: "bg-red-900 text-red-200",
-  medium: "bg-amber-900 text-amber-200",
-  low: "bg-sky-900 text-blue-200",
-  info: "bg-zinc-700 text-zinc-300",
+  critical: "border-danger/45 bg-danger-soft text-danger",
+  high: "border-danger/25 bg-danger-soft text-danger",
+  medium: "border-warn/30 bg-warn-soft text-warn",
+  low: "border-info/25 bg-info-soft text-info",
+  info: "border-line-strong bg-surface-2 text-muted",
 };
 
 function gateBadge(finding: Finding) {
   const sev = finding.severity;
   return (
-    <span className={`rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase ${SEVERITY_STYLES[sev]}`}>
+    <span
+      className={`border px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide ${SEVERITY_STYLES[sev]}`}
+    >
       {sev}
     </span>
   );
@@ -35,27 +37,30 @@ function QueueItem({
   const calibration = (finding.evidence_json?.calibration ?? {}) as Record<string, unknown>;
 
   return (
-    <li className="rounded-lg border border-zinc-800 bg-zinc-950 px-4 py-3">
+    <li className="px-card px-4 py-3.5">
       <div className="flex flex-wrap items-center gap-2">
         {gateBadge(finding)}
-        <p className="text-sm font-medium">{finding.title}</p>
-        <span className="ml-auto text-xs text-zinc-500">
+        <p className="text-sm font-semibold text-ink text-pretty">{finding.title}</p>
+        <span className="ml-auto text-xs text-faint tabular-nums">
           {finding.agent} · {finding.verifier} · conf {finding.confidence.toFixed(2)}
           {finding.confidence < 0.5 && (
-            <span className="ml-1 rounded bg-red-950 px-1 text-red-300" title="low confidence">
+            <span
+              className="ml-1 rounded border border-danger/30 bg-danger-soft px-1 text-danger"
+              title="low confidence"
+            >
               low
             </span>
           )}
         </span>
       </div>
-      <p className="mt-1 text-sm text-zinc-400">{finding.description}</p>
+      <p className="mt-1.5 text-sm leading-relaxed text-muted text-pretty">{finding.description}</p>
       {finding.file_path && (
-        <p className="mt-1 font-mono text-xs text-zinc-500">
+        <p className="mt-1.5 inline-block bg-surface-2 px-1.5 py-0.5 font-mono text-[11px] text-faint">
           {finding.file_path}
           {finding.line_start ? `:${finding.line_start}` : ""}
         </p>
       )}
-      <p className="mt-1 text-xs text-zinc-500">
+      <p className="mt-1.5 text-xs text-faint">
         history for {finding.agent}/{finding.category}:{" "}
         {acceptanceRate == null ? "no data yet" : `${Math.round(acceptanceRate * 100)}% accepted`}
         {calibration.corroborated === true && " · corroborated by another source"}
@@ -67,7 +72,7 @@ function QueueItem({
             value={note}
             onChange={(event) => setNote(event.target.value)}
             placeholder="Optional note explaining the decision"
-            className="w-full rounded-md border border-zinc-700 bg-zinc-900 px-3 py-1.5 text-sm outline-none placeholder:text-zinc-600 focus:border-zinc-500"
+            className="px-input px-3 py-2 text-sm"
           />
           <div className="flex gap-2">
             <button
@@ -75,7 +80,7 @@ function QueueItem({
                 decide.mutate({ analysisId, findingId: finding.id, decision: "approve", note })
               }
               disabled={decide.isPending}
-              className="rounded-md bg-emerald-600 px-3 py-1.5 text-sm font-medium hover:bg-emerald-500 disabled:opacity-50"
+              className="px-btn px-btn--primary px-3.5 py-1.5 text-sm"
             >
               Approve
             </button>
@@ -84,13 +89,13 @@ function QueueItem({
                 decide.mutate({ analysisId, findingId: finding.id, decision: "dismiss", note })
               }
               disabled={decide.isPending}
-              className="rounded-md border border-zinc-700 px-3 py-1.5 text-sm hover:bg-zinc-800 disabled:opacity-50"
+              className="px-btn px-btn--ghost px-3.5 py-1.5 text-sm"
             >
               Dismiss
             </button>
             <button
               onClick={() => setOpen(false)}
-              className="px-2 py-1.5 text-sm text-zinc-500 hover:text-zinc-300"
+              className="px-btn--quiet px-2.5 py-1.5 text-sm"
             >
               Cancel
             </button>
@@ -99,7 +104,7 @@ function QueueItem({
       ) : (
         <button
           onClick={() => setOpen(true)}
-          className="mt-3 rounded-md border border-zinc-700 px-3 py-1.5 text-sm hover:bg-zinc-800"
+          className="px-btn px-btn--ghost mt-3 px-3.5 py-1.5 text-sm"
         >
           Review
         </button>
@@ -118,38 +123,40 @@ export function ApprovalQueue({ analysisId }: { analysisId: number }) {
   };
 
   if (queue.isLoading) {
-    return <p className="text-sm text-zinc-400">Loading approval queue…</p>;
+    return <p className="text-sm text-muted">Loading approval queue…</p>;
   }
   if (!queue.data) return null;
 
   const { pending, published, pending_count } = queue.data;
 
   return (
-    <section className="rounded-lg border border-zinc-800 bg-zinc-900 p-5">
-      <div className="flex items-center justify-between">
-        <h3 className="font-semibold">Human Approval Queue</h3>
+    <section className="px-panel p-5 sm:p-6">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h3 className="font-semibold text-ink">Human Approval Queue</h3>
         {published ? (
-          <span className="rounded-full bg-emerald-950 px-2.5 py-0.5 text-xs text-emerald-300">
+          <span className="px-badge border border-ok/30 bg-ok-soft text-ok">
+            <span aria-hidden="true" className="h-1.5 w-1.5 bg-ok" />
             published
           </span>
         ) : (
-          <span className="rounded-full bg-amber-950 px-2.5 py-0.5 text-xs text-amber-300">
+          <span className="px-badge border border-warn/30 bg-warn-soft text-warn">
+            <span aria-hidden="true" className="anim-blink h-1.5 w-1.5 bg-warn" />
             {pending_count} awaiting review
           </span>
         )}
       </div>
       {published && (
-        <p className="mt-2 text-xs text-zinc-500">
+        <p className="mt-2 text-xs text-faint">
           All high-severity hypotheses have been reviewed. This analysis is published.
         </p>
       )}
       {!published && (
-        <p className="mt-2 text-xs text-zinc-500">
+        <p className="mt-2 text-xs leading-relaxed text-faint text-pretty">
           High-severity LLM hypotheses require an explicit decision before the analysis is
           published. Approving promotes a finding to verified; dismissing removes its weight.
         </p>
       )}
-      <ul className="mt-3 space-y-2">
+      <ul className="mt-4 space-y-2.5">
         {pending.map((finding) => (
           <QueueItem
             key={finding.id}
@@ -160,7 +167,7 @@ export function ApprovalQueue({ analysisId }: { analysisId: number }) {
         ))}
       </ul>
       {pending.length === 0 && !published && (
-        <p className="mt-3 text-sm text-zinc-500">No pending items.</p>
+        <p className="mt-3 text-sm text-faint">No pending items.</p>
       )}
     </section>
   );

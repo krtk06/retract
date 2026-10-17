@@ -37,55 +37,70 @@ export function ReposPage() {
   }
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-10">
       <h1 className="sr-only">Repositories</h1>
+
       <section>
-        <h2 className="mb-3 text-lg font-semibold">Analyze a repository</h2>
-        <form onSubmit={handleSubmit} className="flex gap-3">
-          <input
-            type="text"
-            value={url}
-            onChange={(event) => setUrl(event.target.value)}
-            placeholder="https://github.com/owner/repo"
-            className="flex-1 rounded-md border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm outline-none placeholder:text-zinc-500 focus:border-zinc-500"
-            required
-          />
-          <button
-            type="submit"
-            disabled={createRepo.isPending || analyzeRepo.isPending}
-            className="rounded-md bg-emerald-600 px-4 py-2 text-sm font-medium hover:bg-emerald-500 disabled:opacity-50"
-          >
-            {createRepo.isPending || analyzeRepo.isPending ? "Starting…" : "Analyze"}
-          </button>
+        <div className="mb-4">
+          <p className="px-eyebrow">New analysis</p>
+          <h2 className="mt-1 text-2xl font-bold tracking-tight">Analyze a repository</h2>
+        </div>
+        <form onSubmit={handleSubmit} className="px-frame">
+          <div className="px-frame flex flex-col gap-3 p-3 sm:flex-row sm:items-center">
+            <input
+              type="text"
+              value={url}
+              onChange={(event) => setUrl(event.target.value)}
+              placeholder="https://github.com/owner/repo"
+              className="px-input flex-1 px-4 py-2.5 text-sm"
+              required
+            />
+            <button
+              type="submit"
+              disabled={createRepo.isPending || analyzeRepo.isPending}
+              className="px-btn px-btn--primary px-5 py-2.5 text-sm"
+            >
+              {createRepo.isPending || analyzeRepo.isPending ? "Starting…" : "Analyze"}
+            </button>
+          </div>
         </form>
         {error && (
-          <p className="mt-3 rounded-md bg-red-950 px-3 py-2 text-sm text-red-300">{error}</p>
+          <p className="mt-3 border border-danger/25 bg-danger-soft px-4 py-2.5 text-sm text-danger">
+            {error}
+          </p>
         )}
       </section>
 
       <section>
-        <h2 className="mb-3 text-lg font-semibold">Your repositories</h2>
-        {repos.isLoading && <p className="text-sm text-zinc-400">Loading…</p>}
+        <div className="mb-4 flex items-end justify-between gap-4">
+          <div>
+            <p className="px-eyebrow">Inventory</p>
+            <h2 className="mt-1 text-2xl font-bold tracking-tight">Your repositories</h2>
+          </div>
+          {repos.data && repos.data.length > 0 && (
+            <span className="text-xs text-faint tabular-nums">{repos.data.length} tracked</span>
+          )}
+        </div>
+
+        {repos.isLoading && <p className="text-sm text-muted">Loading…</p>}
         {repos.data?.length === 0 && (
-          <p className="text-sm text-zinc-500">No repositories yet — add one above.</p>
+          <p className="text-sm text-faint">No repositories yet — add one above.</p>
         )}
-        <ul className="space-y-2">
+
+        <ul className="space-y-2.5">
           {repos.data?.map((repo) => (
-            <li
-              key={repo.id}
-              className="flex items-center justify-between rounded-lg border border-zinc-800 bg-zinc-900 px-4 py-3"
-            >
-              <div>
-                <p className="text-sm font-medium">
+            <li key={repo.id} className="px-card px-card-hover flex items-center gap-4 px-4 py-3.5">
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm font-semibold text-ink">
                   {repo.owner}/{repo.name}
                 </p>
-                <p className="text-xs text-zinc-500">{repo.default_branch}</p>
+                <p className="mt-0.5 font-mono text-xs text-faint">{repo.default_branch}</p>
               </div>
-              <div className="flex items-center gap-3">
+              <div className="flex shrink-0 items-center gap-3">
                 {repo.latest_analysis_status && (
                   <button
                     onClick={() => navigate(`/analyses/${repo.latest_analysis_id}`)}
-                    className="hover:opacity-80"
+                    className="transition-transform duration-300 ease-step hover:-translate-y-0.5"
                     title="View latest analysis"
                   >
                     <StatusPill status={repo.latest_analysis_status} />
@@ -94,7 +109,7 @@ export function ReposPage() {
                 <button
                   onClick={() => handleAnalyze(repo.id)}
                   disabled={analyzeRepo.isPending}
-                  className="rounded-md border border-zinc-700 px-3 py-1 text-sm text-zinc-300 hover:bg-zinc-800 disabled:opacity-50"
+                  className="px-btn px-btn--ghost px-3.5 py-1.5 text-xs"
                 >
                   Analyze
                 </button>

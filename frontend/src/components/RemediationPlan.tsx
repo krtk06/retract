@@ -27,11 +27,11 @@ import type { Effort, RemediationItem, RemediationPlan, Repository } from "../ap
  */
 
 const SEVERITY_STYLES: Record<RemediationItem["severity"], string> = {
-  critical: "bg-red-700 text-white",
-  high: "bg-red-900 text-red-200",
-  medium: "bg-amber-900 text-amber-200",
-  low: "bg-sky-900 text-sky-200",
-  info: "bg-zinc-700 text-zinc-300",
+  critical: "border-danger/45 bg-danger-soft text-danger",
+  high: "border-danger/25 bg-danger-soft text-danger",
+  medium: "border-warn/30 bg-warn-soft text-warn",
+  low: "border-info/25 bg-info-soft text-info",
+  info: "border-line-strong bg-surface-2 text-muted",
 };
 
 const PILLAR_LABELS: Record<string, string> = {
@@ -45,9 +45,9 @@ const PILLAR_LABELS: Record<string, string> = {
 };
 
 const EFFORT_STYLES: Record<Effort, string> = {
-  low: "text-emerald-400 border-emerald-800",
-  medium: "text-amber-400 border-amber-800",
-  high: "text-rose-400 border-rose-800",
+  low: "text-ok border-ok/40",
+  medium: "text-warn border-warn/40",
+  high: "text-danger border-danger/40",
 };
 
 const QUICK_WIN_COUNT = 3;
@@ -97,20 +97,20 @@ export function RemediationPlanPanel({
   const plan = query.data;
 
   if (query.isLoading) {
-    return <p className="text-sm text-zinc-500">Building the fix plan…</p>;
+    return <p className="text-sm text-faint">Building the fix plan…</p>;
   }
   if (query.isError) {
     return (
-      <p className="rounded-lg border border-zinc-800 bg-zinc-900 px-4 py-4 text-sm text-zinc-500">
+      <p className="px-panel px-4 py-4 text-sm text-muted">
         The fix plan is unavailable for this analysis.
       </p>
     );
   }
   if (!plan || plan.work_items.length === 0) {
     return (
-      <section className="rounded-lg border border-zinc-800 bg-zinc-900 p-5">
-        <h3 className="font-semibold">Fix plan</h3>
-        <p className="mt-2 text-sm text-zinc-500">
+      <section className="px-panel p-5 sm:p-6">
+        <h3 className="font-semibold text-ink">Fix plan</h3>
+        <p className="mt-2 text-sm text-muted">
           Nothing to fix. No open findings were recorded for this repository.
         </p>
       </section>
@@ -148,26 +148,29 @@ function PlanBody({
   );
 
   return (
-    <section className="rounded-lg border border-zinc-800 bg-zinc-900 p-6">
+    <section className="px-panel anim-step-in p-6 sm:p-7">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <p className="text-sm uppercase tracking-wide text-zinc-500">Fix plan</p>
-          <p className="mt-1 flex items-baseline gap-3">
-            <span className="text-4xl font-bold text-zinc-400">
+          <p className="px-eyebrow">Fix plan</p>
+          <p className="mt-1.5 flex flex-wrap items-baseline gap-3">
+            <span className="text-5xl font-extrabold tracking-tighter text-faint tabular-nums">
               {plan.current_overall ?? "—"}
             </span>
-            <span className="text-zinc-600">→</span>
-            <span className="text-4xl font-bold text-emerald-400">
+            <span className="text-2xl text-faint/60">→</span>
+            <span
+              className="text-5xl font-extrabold tracking-tighter tabular-nums"
+              style={{ color: "var(--ok)" }}
+            >
               {plan.projected_overall ?? "—"}
             </span>
-            <span className="text-sm text-zinc-500">
+            <span className="text-sm text-muted">
               if every item below is fixed
               {plan.recoverable_points != null && ` (+${plan.recoverable_points})`}
             </span>
           </p>
         </div>
-        <div className="flex flex-col items-end gap-2 text-right">
-          <p className="text-xs text-zinc-500">
+        <div className="flex flex-col items-end gap-2.5 text-right">
+          <p className="text-xs text-faint tabular-nums">
             {plan.work_items.length} work {plan.work_items.length === 1 ? "item" : "items"} ·{" "}
             {plan.findings_considered} findings
           </p>
@@ -175,7 +178,7 @@ function PlanBody({
             <a
               href={`/api/analyses/${plan.analysis_id}/remediation.md`}
               download
-              className="rounded-md border border-zinc-700 px-2.5 py-1 text-xs text-zinc-300 transition hover:border-zinc-600 hover:text-zinc-100"
+              className="px-btn px-btn--ghost px-3 py-1.5 text-xs"
             >
               Download .md
             </a>
@@ -183,7 +186,7 @@ function PlanBody({
               <button
                 type="button"
                 onClick={onOpenAgent}
-                className="rounded-md border border-zinc-700 px-2.5 py-1 text-xs text-zinc-300 transition hover:border-zinc-600 hover:text-zinc-100"
+                className="px-btn px-btn--ghost px-3 py-1.5 text-xs"
               >
                 Deep fix plan with the agent
               </button>
@@ -192,20 +195,18 @@ function PlanBody({
         </div>
       </div>
 
-      <p className="mt-3 text-xs leading-relaxed text-zinc-500">
+      <p className="mt-4 text-xs leading-relaxed text-faint text-pretty">
         The headline is this platform&rsquo;s own scoring curve applied to a repository with none of
-        these findings, so it is exact. Each card&rsquo;s <span className="text-zinc-400">+N</span>{" "}
-        is the gain <span className="text-zinc-400">in that item&rsquo;s own pillar</span>, not a share
+        these findings, so it is exact. Each card&rsquo;s <span className="text-ink/80">+N</span>{" "}
+        is the gain <span className="text-ink/80">in that item&rsquo;s own pillar</span>, not a share
         of the headline: the overall is capped at the worst pillar plus 15, so fixing anything but
         the current worst can move it very little. Use the order, not a sum.
       </p>
 
       {quickWins.length > 0 && (
-        <div className="mt-5">
-          <h4 className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
-            Quickest wins
-          </h4>
-          <ul className="mt-2 space-y-1.5">
+        <div className="mt-6 border border-line bg-surface-2 p-4">
+          <h4 className="px-eyebrow">Quickest wins</h4>
+          <ul className="mt-3 space-y-2">
             {quickWins.map((item, index) => (
               <li
                 // Keyed on the ranked position, not `item.key`: two work items can
@@ -215,11 +216,13 @@ function PlanBody({
                 key={`${index}-${item.action}`}
                 className="flex flex-wrap items-baseline gap-2 text-sm"
               >
-                <span className="text-zinc-200">{item.action}</span>
+                <span className="text-ink">{item.action}</span>
                 {item.pillar_points > 0 && (
-                  <span className="text-xs text-emerald-400">+{item.pillar_points} pts</span>
+                  <span className="text-xs font-semibold text-ok tabular-nums">
+                    +{item.pillar_points} pts
+                  </span>
                 )}
-                <span className="text-xs text-zinc-500">
+                <span className="text-xs text-faint">
                   {item.effort} effort ·{" "}
                   {PILLAR_LABELS[item.pillar] ?? item.pillar} · {item.finding_count}{" "}
                   {item.finding_count === 1 ? "finding" : "findings"}
@@ -231,7 +234,7 @@ function PlanBody({
       )}
 
       {plan.unverified_items > 0 && (
-        <p className="mt-4 rounded-md bg-purple-950/40 px-3 py-2 text-xs text-purple-200">
+        <p className="mt-4 border border-hypo/25 bg-hypo-soft px-4 py-2.5 text-xs text-hypo">
           {plan.unverified_items} of these {plan.unverified_items === 1 ? "item rests" : "items rest"}{" "}
           on an unverified hypothesis. Review those before scheduling the work.
         </p>
@@ -242,7 +245,7 @@ function PlanBody({
           <select
             value={pillarFilter}
             onChange={(event) => setPillarFilter(event.target.value)}
-            className="rounded-md border border-zinc-700 bg-zinc-950 px-2 py-1 text-sm"
+            className="px-input px-select w-auto px-3 py-1.5 text-sm"
             aria-label="Filter the fix plan by pillar"
           >
             <option value="">All areas</option>
@@ -268,7 +271,7 @@ function PlanBody({
       </ul>
 
       {plan.truncated_findings > 0 && (
-        <p className="mt-4 text-xs text-zinc-500">
+        <p className="mt-4 text-xs text-faint">
           {plan.truncated_findings} further findings were grouped into work items beyond the
           display limit. The downloaded Markdown contains the ranking it was cut from.
         </p>
@@ -292,22 +295,22 @@ function WorkItemCard({
   const [showFindings, setShowFindings] = useState(false);
 
   return (
-    <li className="rounded-lg border border-zinc-800 bg-zinc-950 p-4">
+    <li className="px-card p-4">
       <div className="flex flex-wrap items-center gap-2">
-        <span className="text-xs text-zinc-600">#{rank}</span>
+        <span className="text-xs font-semibold text-faint tabular-nums">#{rank}</span>
         <span
-          className={`rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase ${SEVERITY_STYLES[item.severity]}`}
+          className={`border px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide ${SEVERITY_STYLES[item.severity]}`}
         >
           {item.severity}
         </span>
-        <p className="text-sm font-medium text-zinc-100">{item.action}</p>
+        <p className="text-sm font-semibold text-ink text-pretty">{item.action}</p>
         <span
-          className={`rounded border px-1.5 py-0.5 text-[10px] ${EFFORT_STYLES[item.effort]}`}
+          className={`border px-1.5 py-0.5 text-[10px] font-medium ${EFFORT_STYLES[item.effort]}`}
         >
           {item.effort} effort
         </span>
         {item.source === "llm:eve" && (
-          <span className="rounded bg-purple-950 px-1.5 py-0.5 text-[10px] text-purple-300">
+          <span className="border border-hypo/30 bg-hypo-soft px-1.5 py-0.5 text-[10px] font-medium text-hypo">
             agent-authored
           </span>
         )}
@@ -317,7 +320,7 @@ function WorkItemCard({
             penalty count in the subline instead. */}
         {item.pillar_points > 0 && (
           <span
-            className="ml-auto text-xs text-emerald-400"
+            className="ml-auto text-xs font-semibold text-ok tabular-nums"
             title={`What fixing this is worth in the ${PILLAR_LABELS[item.pillar] ?? item.pillar} pillar. These values do not add up to the headline.`}
           >
             +{item.pillar_points} pts
@@ -325,7 +328,7 @@ function WorkItemCard({
         )}
       </div>
 
-      <p className="mt-1 text-xs text-zinc-500">
+      <p className="mt-1.5 text-xs text-faint">
         {PILLAR_LABELS[item.pillar] ?? item.pillar} · {item.finding_count}{" "}
         {item.finding_count === 1 ? "finding" : "findings"} · removes{" "}
         {item.weighted_penalty_removed} penalty points
@@ -334,13 +337,13 @@ function WorkItemCard({
 
       {open ? (
         <div className="mt-3 space-y-3">
-          <ol className="list-decimal space-y-1.5 pl-5 text-sm text-zinc-300">
+          <ol className="list-decimal space-y-2 pl-5 text-sm leading-relaxed text-muted">
             {item.steps.map((step) => (
               <li key={step}>{step}</li>
             ))}
           </ol>
-          <p className="text-xs text-zinc-500">
-            <span className="font-medium text-zinc-400">Verify:</span> {item.verify}
+          <p className="text-xs text-faint">
+            <span className="font-semibold text-ink/80">Verify:</span> {item.verify}
           </p>
           {item.references.length > 0 && (
             <ul className="flex flex-wrap gap-3 text-xs">
@@ -350,7 +353,7 @@ function WorkItemCard({
                     href={reference}
                     target="_blank"
                     rel="noreferrer"
-                    className="text-sky-400 hover:underline"
+                    className="px-link"
                   >
                     {referenceLabel(reference)} ↗
                   </a>
@@ -362,26 +365,26 @@ function WorkItemCard({
             <button
               type="button"
               onClick={() => setShowFindings((value) => !value)}
-              className="text-xs text-zinc-400 hover:text-zinc-200"
+              className="px-btn--quiet px-1.5 py-0.5 text-xs"
             >
               {showFindings ? "hide findings" : `show ${item.finding_count} findings`}
             </button>
             {showFindings && (
-              <ul className="mt-2 space-y-1 text-xs">
+              <ul className="mt-2.5 space-y-1.5 text-xs">
                 {item.findings.map((finding) => {
                   const href = blobUrl(repository, commitSha, finding.file_path, finding.line_start);
                   return (
                     <li key={finding.finding_id} className="flex flex-wrap items-baseline gap-2">
-                      <span className="text-zinc-600">[{finding.severity}]</span>
-                      <span className="text-zinc-400">{finding.title}</span>
+                      <span className="text-faint">[{finding.severity}]</span>
+                      <span className="text-muted">{finding.title}</span>
                       {finding.file_path && (
-                        <span className="font-mono text-zinc-600">
+                        <span className="font-mono text-faint/80">
                           {finding.file_path}
                           {finding.line_start ? `:${finding.line_start}` : ""}
                         </span>
                       )}
                       {href && (
-                        <a href={href} target="_blank" rel="noreferrer" className="text-sky-400 hover:underline">
+                        <a href={href} target="_blank" rel="noreferrer" className="px-link">
                           on GitHub ↗
                         </a>
                       )}
@@ -396,7 +399,7 @@ function WorkItemCard({
         <button
           type="button"
           onClick={() => setOpen(true)}
-          className="mt-2 text-xs text-zinc-400 hover:text-zinc-200"
+          className="px-btn--quiet mt-2 px-1.5 py-0.5 text-xs"
         >
           show the steps
         </button>
@@ -427,33 +430,30 @@ export function RemediationSummaryCard({
 
   const best = plan.work_items[0];
   return (
-    <section className="rounded-lg border border-zinc-800 bg-zinc-900 p-5">
-      <div className="flex flex-wrap items-center justify-between gap-4">
-        <div>
-          <h3 className="font-semibold">How to fix these issues</h3>
-          <p className="mt-1 text-sm text-zinc-400">
-            {plan.work_items.length} work {plan.work_items.length === 1 ? "item" : "items"} ·{" "}
-            <span className="text-zinc-300">
-              {plan.current_overall} → {plan.projected_overall}
-            </span>{" "}
-            if all are fixed
+    <section className="px-panel anim-step-in flex flex-wrap items-center justify-between gap-4 p-5 sm:p-6">
+      <div>
+        <h3 className="font-semibold text-ink">How to fix these issues</h3>
+        <p className="mt-1.5 text-sm text-muted">
+          {plan.work_items.length} work {plan.work_items.length === 1 ? "item" : "items"} ·{" "}
+          <span className="font-semibold text-ink">
+            {plan.current_overall} → {plan.projected_overall}
+          </span>{" "}
+          if all are fixed
+        </p>
+        {best && (
+          <p className="mt-1.5 text-sm text-faint">
+            Start with <span className="text-ink/80">{best.action}</span>
+            {best.pillar_points > 0 && ` (+${best.pillar_points} pts)`} · {best.effort} effort
           </p>
-          {best && (
-            <p className="mt-1.5 text-sm text-zinc-500">
-              Start with{" "}
-              <span className="text-zinc-300">{best.action}</span>
-              {best.pillar_points > 0 && ` (+${best.pillar_points} pts)`} · {best.effort} effort
-            </p>
-          )}
-        </div>
-        <button
-          type="button"
-          onClick={onOpen}
-          className="rounded-md bg-zinc-100 px-3 py-1.5 text-sm font-medium text-zinc-900 transition hover:bg-white"
-        >
-          Open fix plan →
-        </button>
+        )}
       </div>
+      <button
+        type="button"
+        onClick={onOpen}
+        className="px-btn px-btn--primary px-4 py-2 text-sm"
+      >
+        Open fix plan →
+      </button>
     </section>
   );
 }

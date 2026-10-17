@@ -20,26 +20,17 @@ const PILLAR_ORDER = [
   "dependencies",
 ];
 
-function barColor(score: number): string {
-  if (score >= 80) return "bg-emerald-500";
-  if (score >= 60) return "bg-lime-500";
-  if (score >= 50) return "bg-amber-500";
-  if (score >= 25) return "bg-orange-500";
-  return "bg-red-500";
-}
-
-function overallTone(score: number): string {
-  if (score >= 80) return "text-emerald-400";
-  if (score >= 60) return "text-lime-400";
-  if (score >= 50) return "text-amber-400";
-  if (score >= 25) return "text-orange-400";
-  return "text-red-400";
+function tone(score: number): string {
+  if (score >= 80) return "var(--ok)";
+  if (score >= 60) return "var(--info)";
+  if (score >= 40) return "var(--warn)";
+  return "var(--danger)";
 }
 
 function AnimatedNumber({ value }: { value: number }) {
   const [display, setDisplay] = useState(0);
   useEffect(() => {
-    const duration = 600;
+    const duration = 700;
     const start = performance.now();
     let frame = 0;
     const tick = (now: number) => {
@@ -56,11 +47,15 @@ function AnimatedNumber({ value }: { value: number }) {
 function Delta({ delta }: { delta: number | null | undefined }) {
   if (delta == null) return null;
   if (delta === 0) {
-    return <span className="text-sm text-zinc-500">no change vs previous</span>;
+    return <span className="text-xs text-faint">no change vs previous</span>;
   }
   const up = delta > 0;
   return (
-    <span className={`text-sm font-medium ${up ? "text-emerald-400" : "text-red-400"}`}>
+    <span
+      className={`px-badge border ${
+        up ? "border-ok/30 bg-ok-soft text-ok" : "border-danger/30 bg-danger-soft text-danger"
+      }`}
+    >
       {up ? "▲" : "▼"} {up ? "+" : ""}
       {delta} vs previous
     </span>
@@ -75,46 +70,70 @@ export function ScoreHero({ score }: { score: Score | null }) {
     data: score.pillars[key],
   })).filter((p) => p.data);
 
+  const overall = score.overall;
+  const color = tone(overall);
+
   return (
-    <section className="rounded-lg border border-zinc-800 bg-zinc-900 p-6">
-      <div className="flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <p className="text-sm uppercase tracking-wide text-zinc-500">Repository Health Score</p>
-          <p className="mt-1 flex items-baseline gap-3">
-            <span className={`text-5xl font-bold ${overallTone(score.overall)}`}>
-              <AnimatedNumber value={score.overall} />
+    <section className="px-panel anim-step-in p-6 sm:p-7">
+      <div className="flex flex-wrap items-center justify-between gap-6">
+        <div className="flex items-center gap-6">
+          <div className="relative grid h-28 w-28 shrink-0 place-items-center">
+            <span
+              aria-hidden="true"
+              className="absolute inset-0"
+              style={{
+                background: `conic-gradient(${color} ${overall * 3.6}deg, var(--line) 0deg)`,
+                filter: `drop-shadow(0 0 16px ${color})`,
+                opacity: 0.9,
+              }}
+            />
+            <span
+              aria-hidden="true"
+              className="absolute inset-[7px]"
+              style={{ background: "var(--surface)" }}
+            />
+            <span
+              className="relative text-4xl font-extrabold tabular-nums tracking-tighter"
+              style={{ color }}
+            >
+              <AnimatedNumber value={overall} />
             </span>
-            <span className="text-lg text-zinc-500">/ 100</span>
-          </p>
+          </div>
+          <div>
+            <p className="px-eyebrow">Repository health score</p>
+            <p className="mt-1.5 text-sm text-muted">
+              out of <span className="text-ink">100</span>
+            </p>
+            <div className="mt-3">
+              <Delta delta={score.delta} />
+            </div>
+          </div>
         </div>
-        <div className="text-right">
-          <Delta delta={score.delta} />
+
+        <div className="text-right text-xs text-faint">
           {score.loc != null && score.kloc != null && (
-            <p className="mt-1 text-xs text-zinc-500">
+            <p className="tabular-nums">
               {score.loc.toLocaleString()} LOC · {score.kloc} KLOC
             </p>
           )}
-          {score.basis === "count" && (
-            <p className="mt-1 text-xs text-zinc-500">
-              No LOC measured — scored on finding count
-            </p>
-          )}
+          {score.basis === "count" && <p className="mt-1">No LOC measured — scored on finding count</p>}
         </div>
       </div>
 
-      <div className="mt-6 space-y-3">
+      <div className="mt-7 space-y-3.5">
         {pillars.map(({ key, label, data }) => {
           // A pillar with no findings scores 100, which is indistinguishable from
           // "checked and clean" unless it is labelled. Nothing was found because
           // nothing was measured, and the number should not read as reassurance.
           const unmeasured = data.findings === 0;
+          const color = tone(data.score);
           return (
             <div key={key} className="flex items-center gap-3">
-              <span className="w-32 shrink-0 text-sm text-zinc-400">{label}</span>
-              <div className="h-2.5 flex-1 overflow-hidden rounded-full bg-zinc-800">
+              <span className="w-32 shrink-0 text-sm text-muted">{label}</span>
+              <div className="h-2.5 flex-1 overflow-hidden bg-surface-2 ring-1 ring-line">
                 {unmeasured ? (
                   <div
-                    className="h-full w-full rounded-full bg-zinc-800"
+                    className="h-full w-full bg-line"
                     role="progressbar"
                     aria-valuenow={data.score}
                     aria-valuemin={0}
@@ -123,10 +142,12 @@ export function ScoreHero({ score }: { score: Score | null }) {
                   />
                 ) : (
                   <div
-                    className={`h-full rounded-full ${barColor(data.score)}`}
+                    className="h-full"
                     style={{
                       width: `${data.score}%`,
-                      transition: "width 700ms cubic-bezier(0.22, 1, 0.36, 1)",
+                      background: `linear-gradient(90deg, color-mix(in oklab, ${color} 55%, transparent), ${color})`,
+                      boxShadow: `0 0 12px color-mix(in oklab, ${color} 40%, transparent)`,
+                      transition: "width 800ms cubic-bezier(0.32, 0.72, 0, 1)",
                     }}
                     role="progressbar"
                     aria-valuenow={data.score}
@@ -137,12 +158,14 @@ export function ScoreHero({ score }: { score: Score | null }) {
                 )}
               </div>
               <span
-                className={`w-8 text-right text-sm font-medium ${unmeasured ? "text-zinc-600" : ""}`}
+                className={`w-8 text-right text-sm font-semibold tabular-nums ${
+                  unmeasured ? "text-faint" : "text-ink"
+                }`}
               >
                 {unmeasured ? "—" : data.score}
               </span>
               <span
-                className="w-28 text-right text-xs text-zinc-500"
+                className="w-28 text-right text-xs text-faint tabular-nums"
                 title={
                   unmeasured
                     ? "no findings — this dimension was not exercised, which is not the same as clean"
@@ -150,7 +173,7 @@ export function ScoreHero({ score }: { score: Score | null }) {
                 }
               >
                 {unmeasured ? (
-                  <span className="text-zinc-600">not measured</span>
+                  <span className="text-faint/70">not measured</span>
                 ) : (
                   <>
                     {data.verified}v / {data.hypotheses}h
@@ -163,7 +186,7 @@ export function ScoreHero({ score }: { score: Score | null }) {
         })}
       </div>
       {pillars.some((p) => p.data.findings === 0) && (
-        <p className="mt-3 text-xs text-zinc-600">
+        <p className="mt-4 text-xs leading-relaxed text-faint">
           A dimension with no findings is shown as &ldquo;not measured&rdquo;: nothing was
           found because nothing triggered that analyzer, which is not the same as clean.
         </p>

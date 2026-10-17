@@ -3,7 +3,37 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Retract</title>
+    <meta
+      name="description"
+      content="Retract analyzes a GitHub repository for quality, security, testing, and documentation health — then tracks the score as it changes."
+    />
+    <meta name="theme-color" content="#1d2b53" />
+    <link
+      rel="icon"
+      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' shape-rendering='crispEdges'%3E%3Crect width='16' height='16' fill='%23000000'/%3E%3Cpath d='M1 1h11v3H5v3H2V4h-1z' fill='%2329adff'/%3E%3Crect x='2' y='11' width='5' height='4' fill='%23ffec27'/%3E%3C/svg%3E"
+    />
+    <title>RETRACT</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&family=Pixelify+Sans:wght@400;500;600;700&family=Silkscreen:wght@400;700&display=swap"
+      rel="stylesheet"
+    />
+    <script>
+      // Apply the stored theme before first paint so a light-mode visitor never
+      // sees a dark flash. Mirrors the default in lib/theme.tsx.
+      (function () {
+        try {
+          var stored = localStorage.getItem("retract-theme");
+          var dark = stored !== "light";
+          document.documentElement.classList.toggle("dark", dark);
+          document.documentElement.style.colorScheme = dark ? "dark" : "light";
+          document
+            .querySelector('meta[name="theme-color"]')
+            .setAttribute("content", dark ? "#1d2b53" : "#c2c3c7");
+        } catch (error) {}
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

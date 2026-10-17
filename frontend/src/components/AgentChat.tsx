@@ -68,8 +68,8 @@ function renderPart(part: EveMessagePart, index: number, role: string): ReactNod
         key={index}
         className={
           role === "user"
-            ? "rounded-lg bg-zinc-800 px-3 py-2 text-sm text-zinc-100"
-            : "whitespace-pre-wrap text-sm leading-relaxed text-zinc-300"
+            ? "border border-accent/20 bg-accent-soft px-3.5 py-2 text-sm text-ink"
+            : "whitespace-pre-wrap text-sm leading-relaxed text-muted"
         }
       >
         {part.text}
@@ -80,28 +80,28 @@ function renderPart(part: EveMessagePart, index: number, role: string): ReactNod
     const state = part.state;
     if (state === "output-available") {
       return (
-        <p key={index} className="font-mono text-[11px] text-emerald-400/80">
+        <p key={index} className="font-mono text-[11px] text-ok/80">
           ✓ {part.toolName}
         </p>
       );
     }
     if (state === "output-error") {
       return (
-        <p key={index} className="font-mono text-[11px] text-rose-400/80">
+        <p key={index} className="font-mono text-[11px] text-danger/80">
           ✗ {part.toolName} failed{part.errorText ? `: ${part.errorText.slice(0, 120)}` : ""}
         </p>
       );
     }
     if (state === "output-denied") {
       return (
-        <p key={index} className="font-mono text-[11px] text-amber-400/80">
+        <p key={index} className="font-mono text-[11px] text-warn/80">
           ⊘ {part.toolName} was not approved
         </p>
       );
     }
     if (state === "approval-responded" || state === "input-available" || state === "input-streaming") {
       return (
-        <p key={index} className="font-mono text-[11px] text-zinc-500">
+        <p key={index} className="font-mono text-[11px] text-faint">
           … {part.toolName}
         </p>
       );
@@ -199,36 +199,36 @@ async (text: string) => {
 
   if (authError && messages.length === 0) {
     return (
-      <section className="rounded-lg border border-amber-900/60 bg-amber-950/30 p-5 text-sm text-amber-200">
+      <section className="px-panel border-warn/30 bg-warn-soft p-5 text-sm text-warn">
         The agent is unavailable: {authError}
       </section>
     );
   }
 
   return (
-    <section className="flex flex-col rounded-lg border border-zinc-800 bg-zinc-900">
-      <header className="flex items-center justify-between gap-3 border-b border-zinc-800 px-5 py-3">
+    <section className="px-panel flex flex-col overflow-hidden">
+      <header className="flex items-center justify-between gap-3 border-b border-line px-5 py-3.5">
         <div>
-          <h3 className="font-semibold">Ask the agent</h3>
-          <p className="text-xs text-zinc-500">
-            Answers cite <code className="text-zinc-400">file:line</code> from this analysis
+          <h3 className="font-semibold text-ink">Ask the agent</h3>
+          <p className="text-xs text-faint">
+            Answers cite <code className="font-mono text-muted">file:line</code> from this analysis
           </p>
         </div>
         <button
           type="button"
           onClick={() => agent.reset()}
-          className="rounded-md border border-zinc-700 px-2.5 py-1 text-xs text-zinc-400 transition hover:border-zinc-600 hover:text-zinc-200"
+          className="px-btn px-btn--ghost px-3 py-1.5 text-xs"
         >
           New chat
         </button>
       </header>
 
       {called.length > 0 && (
-        <div className="flex flex-wrap gap-1.5 border-b border-zinc-800/70 px-5 py-2">
+        <div className="flex flex-wrap gap-1.5 border-b border-line px-5 py-2.5">
           {called.map((name) => (
             <span
               key={name}
-              className="rounded-full bg-zinc-800 px-2 py-0.5 font-mono text-[11px] text-zinc-400"
+              className="border border-line bg-surface-2 px-2 py-0.5 font-mono text-[11px] text-muted"
             >
               {name}
             </span>
@@ -238,7 +238,7 @@ async (text: string) => {
 
       <div ref={logRef} className="max-h-96 min-h-32 space-y-4 overflow-y-auto px-5 py-4">
         {messages.length === 0 && (
-          <div className="space-y-2 text-sm text-zinc-500">
+          <div className="space-y-2.5 text-sm text-muted">
             <p>Ask about this analysis, or request a review:</p>
             <div className="flex flex-wrap gap-2">
               {SUGGESTIONS.map((suggestion) => (
@@ -247,7 +247,7 @@ async (text: string) => {
                   type="button"
                   onClick={() => send(suggestion)}
                   disabled={busy || resuming}
-                  className="rounded-full border border-zinc-700 px-3 py-1 text-xs text-zinc-300 transition hover:border-zinc-600 hover:text-zinc-100 disabled:opacity-50"
+                  className="px-btn px-btn--ghost px-3.5 py-1.5 text-xs"
                 >
                   {suggestion}
                 </button>
@@ -262,35 +262,35 @@ async (text: string) => {
             .filter((node): node is ReactNode => node !== null);
           if (body.length === 0) return null;
           return (
-            <article key={message.id} className="space-y-1">
-              <p className="text-[11px] uppercase tracking-wide text-zinc-500">{message.role}</p>
+            <article key={message.id} className="space-y-1.5">
+              <p className="px-eyebrow">{message.role}</p>
               {body}
             </article>
           );
         })}
 
-        {resuming && <p className="text-xs text-zinc-500">Reconnecting to the agent…</p>}
-        {localError && <p className="text-xs text-rose-400">{localError}</p>}
-        {agent.error && <p className="text-xs text-rose-400">{agent.error.message}</p>}
+        {resuming && <p className="text-xs text-faint">Reconnecting to the agent…</p>}
+        {localError && <p className="text-xs text-danger">{localError}</p>}
+        {agent.error && <p className="text-xs text-danger">{agent.error.message}</p>}
       </div>
 
       {approvals.map((approval) => (
         <div
           key={approval.requestId}
-          className="border-t border-amber-900/60 bg-amber-950/30 px-5 py-3 text-sm"
+          className="border-t border-warn/25 bg-warn-soft px-5 py-3.5 text-sm"
         >
-          <p className="font-medium text-amber-100">Approval required</p>
-          <p className="text-xs text-amber-200/80">{approval.prompt}</p>
-          <div className="mt-2 flex gap-2">
+          <p className="font-semibold text-warn">Approval required</p>
+          <p className="text-xs text-warn/80">{approval.prompt}</p>
+          <div className="mt-2.5 flex gap-2">
             {(approval.options ?? []).map((option) => (
               <button
                 key={option.id}
                 type="button"
                 onClick={() => void agent.respond([{ requestId: approval.requestId, optionId: option.id }])}
-                className={`rounded-md px-3 py-1 text-xs font-medium transition ${
+                className={`px-btn px-3.5 py-1.5 text-xs ${
                   option.id === "approve"
-                    ? "bg-amber-500 text-zinc-950 hover:bg-amber-400"
-                    : "border border-amber-800 text-amber-200 hover:bg-amber-950"
+                    ? "bg-warn text-[#1a1205] hover:brightness-110"
+                    : "border border-warn/40 text-warn hover:bg-warn/10"
                 }`}
               >
                 {option.label}
@@ -305,10 +305,10 @@ async (text: string) => {
           event.preventDefault();
           send(draft);
         }}
-        className="flex flex-col gap-2 border-t border-zinc-800 px-5 py-3"
+        className="flex flex-col gap-2 border-t border-line px-5 py-3.5"
       >
         {adopted.current && draft.trim().length > 0 && (
-          <p className="text-[11px] text-zinc-500">
+          <p className="text-[11px] text-faint">
             Requested from the fix plan — review it, edit it, then send.
           </p>
         )}
@@ -318,12 +318,12 @@ async (text: string) => {
           onChange={(event) => setDraft(event.target.value)}
           disabled={busy || resuming}
           placeholder="Ask about this analysis…"
-          className="flex-1 rounded-md border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 placeholder:text-zinc-600 focus:border-zinc-500 focus:outline-none disabled:opacity-60"
+          className="px-input flex-1 px-3.5 py-2 text-sm disabled:opacity-60"
         />
         <button
           type="submit"
           disabled={busy || resuming || draft.trim().length === 0}
-          className="rounded-md bg-zinc-100 px-4 py-2 text-sm font-medium text-zinc-900 transition hover:bg-white disabled:opacity-40"
+          className="px-btn px-btn--ink px-4 py-2 text-sm"
         >
           {/* "Reconnecting…" rather than a live-looking "Send": the client attaches
               and resumes its session on mount, and a click in that window is

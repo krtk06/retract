@@ -1,9 +1,666 @@
 @import "tailwindcss";
 
-:root {
-  color-scheme: dark;
+/* Class-based theming: `dark:` utilities follow the `.dark` class on <html>,
+   which lib/theme.ts toggles (dark default, persisted to localStorage). */
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme {
+  /* Silkscreen carries every UI atom and every number. Pixelify Sans carries
+     prose. JetBrains Mono carries paths, SHAs and tool names.
+     `font-sans` stays the name so `body`'s @apply and any existing `font-sans`
+     utility keep resolving — only the family behind it changed. */
+  --font-sans: "Pixelify Sans", ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --font-ui: "Silkscreen", "Pixelify Sans", ui-sans-serif, monospace;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  /* Steps, not glides. Nothing in this system eases smoothly. */
+  --ease-step: steps(3, end);
 }
 
-body {
-  @apply bg-zinc-950 text-zinc-100 antialiased;
+@theme inline {
+  --color-canvas: var(--canvas);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-line: var(--line);
+  --color-line-strong: var(--line-strong);
+  --color-ink: var(--ink);
+  --color-muted: var(--muted);
+  --color-faint: var(--faint);
+  --color-accent: var(--accent);
+  --color-accent-strong: var(--accent-strong);
+  --color-accent-ink: var(--accent-ink);
+  --color-accent-soft: var(--accent-soft);
+  --color-ok: var(--ok);
+  --color-ok-soft: var(--ok-soft);
+  --color-warn: var(--warn);
+  --color-warn-soft: var(--warn-soft);
+  --color-danger: var(--danger);
+  --color-danger-soft: var(--danger-soft);
+  --color-info: var(--info);
+  --color-info-soft: var(--info-soft);
+  --color-hypo: var(--hypo);
+  --color-hypo-soft: var(--hypo-soft);
+}
+
+/* ---- Light: Game Boy paper. Same 16 colours, re-picked for contrast on cream. */
+:root {
+  color-scheme: light;
+
+  --canvas: #c2c3c7;
+  --surface: #fff1e8;
+  --surface-2: #c2c3c7;
+
+  --line: #5f574f;
+  --line-strong: #1d2b53;
+
+  --ink: #000000;
+  --muted: #5f574f;
+  --faint: #83769c;
+
+  --accent: #1d2b53;
+  --accent-strong: #7e2553;
+  --accent-ink: #fff1e8;
+
+  --ok: #008751;
+  --warn: #ab5236;
+  --danger: #ff004d;
+  --info: #1d2b53;
+  --hypo: #7e2553;
+
+  --shadow: #5f574f;
+  --bevel-hi: rgba(255, 255, 255, 0.55);
+  --bevel-lo: rgba(0, 0, 0, 0.3);
+
+  --pillar-security: #ff004d;
+  --pillar-code-quality: #ab5236;
+  --pillar-testing: #1d2b53;
+  --pillar-architecture: #7e2553;
+  --pillar-documentation: #008751;
+  --pillar-dependencies: #5f574f;
+
+  --sev-critical: #ff004d;
+  --sev-high: #ab5236;
+  --sev-medium: #7e2553;
+  --sev-low: #1d2b53;
+  --sev-info: #5f574f;
+
+  --status-pending: #5f574f;
+  --status-running: #ab5236;
+  --status-done: #008751;
+  --status-failed: #ff004d;
+
+  /* Dither needs two *different* entries, and in light mode --surface-2 and
+     --canvas are the same grey — so the pair is chosen per theme rather than
+     derived. Cream on grey reads on both a grey canvas and a cream panel. */
+  --dither-a: #fff1e8;
+  --dither-b: #c2c3c7;
+}
+
+/* ---- Dark: pure black canvas, dark-blue panels. The default. */
+.dark {
+  color-scheme: dark;
+
+  --canvas: #000000;
+  --surface: #1d2b53;
+  --surface-2: #000000;
+
+  --line: #5f574f;
+  --line-strong: #c2c3c7;
+
+  --ink: #fff1e8;
+  --muted: #c2c3c7;
+  --faint: #83769c;
+
+  --accent: #29adff;
+  --accent-strong: #ffec27;
+  --accent-ink: #000000;
+
+  --ok: #00e436;
+  --warn: #ffa300;
+  --danger: #ff004d;
+  --info: #ffec27;
+  --hypo: #ff77a8;
+
+  --shadow: #000000;
+  --bevel-hi: rgba(255, 241, 232, 0.1);
+  --bevel-lo: rgba(0, 0, 0, 0.55);
+
+  --pillar-security: #ff004d;
+  --pillar-code-quality: #ffa300;
+  --pillar-testing: #29adff;
+  --pillar-architecture: #83769c;
+  --pillar-documentation: #ff77a8;
+  --pillar-dependencies: #00e436;
+
+  --sev-critical: #ff004d;
+  --sev-high: #ffa300;
+  --sev-medium: #ffec27;
+  --sev-low: #29adff;
+  --sev-info: #c2c3c7;
+
+  --status-pending: #83769c;
+  --status-running: #ffec27;
+  --status-done: #00e436;
+  --status-failed: #ff004d;
+
+  --dither-a: #1d2b53;
+  --dither-b: #000000;
+}
+
+/* Every `-soft` tint is a mix of exactly two palette entries — which is what a
+   PICO-8 dither between those two colours looks like averaged. This is the only
+   reason a tint is allowed to exist at all. */
+:root,
+.dark {
+  --accent-soft: color-mix(in srgb, var(--accent) 22%, var(--surface));
+  --ok-soft: color-mix(in srgb, var(--ok) 22%, var(--surface));
+  --warn-soft: color-mix(in srgb, var(--warn) 22%, var(--surface));
+  --danger-soft: color-mix(in srgb, var(--danger) 22%, var(--surface));
+  --info-soft: color-mix(in srgb, var(--info) 22%, var(--surface));
+  --hypo-soft: color-mix(in srgb, var(--hypo) 22%, var(--surface));
+
+  /* Pixel metrics. Every border is 2px; shadows are hard offsets with no blur. */
+  --px-border: 2px;
+  --px-offset: 4px;
+  --px-cell: 8px;
+}
+
+@layer base {
+  html {
+    background: var(--canvas);
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    @apply font-sans;
+    margin: 0;
+    min-height: 100dvh;
+    background: transparent;
+    color: var(--ink);
+    -webkit-font-smoothing: none;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  /* The hard guarantee behind constraint 2. A stray `rounded-full` left over from
+     the old design renders square rather than silently reintroducing a circle. */
+  *,
+  *::before,
+  *::after {
+    border-radius: 0;
+  }
+
+  /* 8px dot grid — the meter cell unit reused as texture. */
+  body::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    z-index: -2;
+    pointer-events: none;
+    background-image: radial-gradient(
+      circle,
+      color-mix(in srgb, var(--line) 22%, transparent) 1px,
+      transparent 1px
+    );
+    background-size: 8px 8px;
+  }
+
+  /* 2px scanlines, always on. Black at 4% is below the point where it measurably
+     costs contrast, and above the point where the screen stops reading as a
+     screen. */
+  body::after {
+    content: "";
+    position: fixed;
+    inset: 0;
+    z-index: -1;
+    pointer-events: none;
+    background: repeating-linear-gradient(
+      to bottom,
+      transparent 0 2px,
+      rgba(0, 0, 0, 0.04) 2px 4px
+    );
+  }
+
+  ::selection {
+    background: var(--accent);
+    color: var(--accent-ink);
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 0;
+  }
+
+  /* On an accent-filled control the accent ring would vanish into it, so the ring
+     flips to ink. Focus is never removed — only moved. */
+  .px-btn--primary:focus-visible,
+  .px-btn--danger:focus-visible,
+  .px-tab[aria-selected="true"]:focus-visible {
+    outline-color: var(--ink);
+  }
+
+  input,
+  select,
+  textarea,
+  button {
+    font: inherit;
+    color: inherit;
+  }
+  select option {
+    background: var(--surface);
+    color: var(--ink);
+  }
+  input[type="checkbox"] {
+    accent-color: var(--accent);
+  }
+}
+
+@layer components {
+  /* ---- Surfaces ---------------------------------------------------------- */
+
+  .px-frame {
+    background: var(--surface);
+    border: 2px solid var(--line);
+    box-shadow: 4px 4px 0 0 var(--shadow);
+  }
+
+  .px-panel {
+    background: var(--surface);
+    border: 2px solid var(--line);
+    box-shadow: 4px 4px 0 0 var(--shadow);
+  }
+
+  /* A card is a panel whose shadow is suppressed, because a shadow per row in a
+     list reads as noise once there are ten of them. */
+  .px-card {
+    background: var(--surface);
+    border: 2px solid var(--line);
+  }
+  .px-card-hover {
+    background: var(--surface);
+    border: 2px solid var(--line);
+  }
+  .px-card-hover:hover {
+    background: var(--surface-2);
+    border-color: var(--line-strong);
+  }
+
+  /* The inverse of a panel: an inset well, which is how this language says
+     "this is a screen, not a surface". */
+  .px-well {
+    background: var(--surface-2);
+    border: 2px solid var(--line);
+    box-shadow:
+      inset 2px 2px 0 0 var(--bevel-lo),
+      inset -2px -2px 0 0 var(--bevel-hi);
+  }
+
+  .px-rule {
+    border-top: 2px solid var(--line);
+  }
+
+  .px-titlebar {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    height: 28px;
+    padding: 0 10px;
+    background: var(--surface);
+    border-bottom: 2px solid var(--line);
+    font-family: var(--font-ui);
+    font-size: 9px;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+  }
+
+  .px-eyebrow {
+    font-family: var(--font-ui);
+    font-size: 9px;
+    font-weight: 400;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--faint);
+  }
+
+  /* ---- Controls ---------------------------------------------------------- */
+
+  .px-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 7px 12px;
+    background: var(--surface-2);
+    border: 2px solid var(--line);
+    box-shadow: 3px 3px 0 0 var(--shadow);
+    font-family: var(--font-ui);
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    line-height: 1;
+    white-space: nowrap;
+    cursor: pointer;
+    user-select: none;
+    transition: transform 80ms steps(2, end), box-shadow 80ms steps(2, end);
+  }
+  /* The press is physical: the button moves onto its own shadow. */
+  .px-btn:hover:not(:disabled) {
+    border-color: var(--line-strong);
+  }
+  .px-btn:active:not(:disabled) {
+    transform: translate(2px, 2px);
+    box-shadow: 1px 1px 0 0 var(--shadow);
+  }
+  .px-btn:disabled {
+    cursor: not-allowed;
+    color: var(--faint);
+    background-image: repeating-conic-gradient(
+      var(--dither-a) 0% 25%,
+      var(--dither-b) 0% 50%
+    );
+    background-size: 4px 4px;
+    box-shadow: none;
+  }
+  .px-btn-icon {
+    padding: 6px;
+  }
+
+  .px-btn--primary {
+    background: var(--accent);
+    color: var(--accent-ink);
+    border-color: var(--accent);
+  }
+  .px-btn--primary:hover:not(:disabled) {
+    background: var(--accent-strong);
+    border-color: var(--accent-strong);
+  }
+
+  .px-btn--danger {
+    background: var(--danger);
+    color: var(--accent-ink);
+    border-color: var(--danger);
+  }
+
+  .px-btn--ink {
+    background: var(--ink);
+    color: var(--canvas);
+    border-color: var(--ink);
+  }
+
+  .px-btn--ghost {
+    background: transparent;
+    color: var(--ink);
+  }
+
+  .px-btn--quiet {
+    padding: 4px 6px;
+    background: transparent;
+    border-color: transparent;
+    box-shadow: none;
+    color: var(--muted);
+    font-weight: 400;
+  }
+  .px-btn--quiet:hover:not(:disabled) {
+    color: var(--ink);
+    background: var(--surface-2);
+  }
+
+  .px-input {
+    width: 100%;
+    padding: 7px 9px;
+    background: var(--surface-2);
+    border: 2px solid var(--line);
+    color: var(--ink);
+    font-family: var(--font-sans);
+    font-size: 13px;
+    line-height: 1.4;
+  }
+  .px-input::placeholder {
+    color: var(--faint);
+  }
+  .px-input:focus {
+    outline: 2px solid var(--accent);
+    outline-offset: -2px;
+  }
+  .px-select {
+    appearance: none;
+    padding-right: 28px;
+    font-family: var(--font-ui);
+    font-size: 9px;
+    letter-spacing: 0.06em;
+  }
+  /* The chevron that used to be a baked CSS data-URI is now a sprite overlay, so
+     it can inherit the palette instead of hardcoding #7f8f89. */
+  .px-select-wrap {
+    position: relative;
+  }
+  .px-select-wrap > .px-select-chevron {
+    position: absolute;
+    right: 7px;
+    top: 50%;
+    translate: 0 -50%;
+    pointer-events: none;
+    color: var(--muted);
+  }
+
+  /* ---- Badges ------------------------------------------------------------ */
+
+  .px-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 3px 6px;
+    border: 2px solid var(--line);
+    background: var(--surface-2);
+    font-family: var(--font-ui);
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    line-height: 1;
+  }
+  /* Inside a list row a second shadow competes with the row's own. */
+  .px-badge--flat {
+    box-shadow: none;
+    padding: 2px 5px;
+  }
+
+  /* ---- Tabs -------------------------------------------------------------- */
+
+  .px-tabs {
+    display: flex;
+    border-bottom: 2px solid var(--line);
+  }
+  .px-tab {
+    position: relative;
+    padding: 8px 12px;
+    background: transparent;
+    border: none;
+    font-family: var(--font-ui);
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--muted);
+    cursor: pointer;
+  }
+  .px-tab:hover {
+    color: var(--ink);
+    background: var(--surface-2);
+  }
+  .px-tab[aria-selected="true"],
+  .px-tab[aria-current="page"],
+  .px-tab-active {
+    color: var(--ink);
+  }
+  /* An underline rule, not a sliding pill. The old indicator animated a rounded
+     capsule across four equal columns; there is nothing to animate here.
+     `aria-current` covers react-router's NavLink; `px-tab-active` covers the
+     two segmented controls that carry their own class until Task 10 turns them
+     into real tablists. */
+  .px-tab[aria-selected="true"]::after,
+  .px-tab[aria-current="page"]::after,
+  .px-tab-active::after {
+    content: "";
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: -2px;
+    height: 2px;
+    background: var(--accent);
+  }
+
+  /* Sidebar variant: a left rule rather than a bottom one. */
+  .px-tab--side {
+    display: block;
+    width: 100%;
+    text-align: left;
+    padding: 8px 10px;
+  }
+  .px-tab--side[aria-selected="true"],
+  .px-tab--side[aria-current="page"],
+  .px-tab--side.px-tab-active {
+    background: var(--surface-2);
+  }
+  .px-tab--side[aria-selected="true"]::after,
+  .px-tab--side[aria-current="page"]::after,
+  .px-tab--side.px-tab-active::after {
+    left: 0;
+    right: auto;
+    top: 0;
+    bottom: 0;
+    width: 2px;
+    height: auto;
+  }
+
+  /* ---- Texture ----------------------------------------------------------- */
+
+  /* A 2px checkerboard of two palette entries: how PICO-8 shades art, and here
+     how a surface says "disabled", "loading", or "nobody measured this". */
+  .px-dither {
+    background-image: repeating-conic-gradient(
+      var(--dither-a) 0% 25%,
+      var(--dither-b) 0% 50%
+    );
+    background-size: 4px 4px;
+  }
+  /* The 1px variant, for table row striping. */
+  .px-stripes {
+    background-image: repeating-conic-gradient(
+      color-mix(in srgb, var(--line) 30%, transparent) 0% 25%,
+      transparent 0% 50%
+    );
+    background-size: 2px 2px;
+  }
+
+  /* ---- Scrollbars -------------------------------------------------------- */
+
+  .px-scroll {
+    scrollbar-width: thin;
+    scrollbar-color: var(--line-strong) var(--surface-2);
+  }
+  .px-scroll::-webkit-scrollbar {
+    width: 12px;
+    height: 12px;
+  }
+  .px-scroll::-webkit-scrollbar-track {
+    background: var(--surface-2);
+    border: 2px solid var(--line);
+  }
+  .px-scroll::-webkit-scrollbar-thumb {
+    background: var(--line-strong);
+    border: 2px solid var(--surface-2);
+  }
+  .px-scroll::-webkit-scrollbar-corner {
+    background: var(--surface-2);
+  }
+
+  .px-skip {
+    position: absolute;
+    left: 8px;
+    top: -64px;
+    z-index: 60;
+    padding: 6px 10px;
+    background: var(--surface);
+    border: 2px solid var(--accent);
+    font-family: var(--font-ui);
+    font-size: 9px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+  }
+  .px-skip:focus {
+    top: 8px;
+  }
+
+  .px-link {
+    color: var(--accent);
+    text-decoration: underline;
+    text-underline-offset: 2px;
+  }
+  .px-link:hover {
+    color: var(--accent-strong);
+  }
+}
+
+@layer utilities {
+  /* No blur, no scale, no 18px rise. A 4px hop in three steps. */
+  .anim-step-in {
+    animation: step-in 240ms steps(3, end) both;
+  }
+  .anim-blink {
+    animation: blink 1100ms steps(2, end) infinite;
+  }
+  .anim-slide-up {
+    animation: slide-up 900ms steps(6, end) infinite;
+  }
+}
+
+@keyframes step-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes blink {
+  0%,
+  49% {
+    opacity: 1;
+  }
+  50%,
+  100% {
+    opacity: 0.35;
+  }
+}
+
+@keyframes slide-up {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(20px);
+  }
+}
+
+@keyframes cell-on {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
 }

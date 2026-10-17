@@ -33,6 +33,9 @@ const RemediationSummaryCard = lazy(() =>
 
 const EVENT_NAMES = ["status", "step", "tool", "agent", "done", "failed"];
 
+const TABS = ["overview", "explore", "fixes", "agent"] as const;
+type TabName = (typeof TABS)[number];
+
 function formatTime(ts: number) {
   return new Date(ts * 1000).toLocaleTimeString();
 }
@@ -59,7 +62,14 @@ function agentEventText(payload: Record<string, unknown>): string {
   return `error: ${String(payload.error ?? "").slice(0, 140)}`;
 }
 
-type TabName = "overview" | "explore" | "fixes" | "agent";
+function Stat({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="border border-line bg-surface-2 px-3.5 py-2.5">
+      <dt className="text-[10px] font-semibold uppercase tracking-[0.18em] text-faint">{label}</dt>
+      <dd className="mt-1 truncate text-sm text-ink">{children}</dd>
+    </div>
+  );
+}
 
 function AnalysisHeader({
   data,
@@ -73,55 +83,54 @@ function AnalysisHeader({
   onSelectTab: (tab: TabName) => void;
 }) {
   return (
-    <section className="rounded-lg border border-zinc-800 bg-zinc-900 p-5">
+    <section className="px-panel p-5 sm:p-6">
       <Link
         to="/"
-        className="mb-3 inline-flex items-center gap-1 text-sm text-zinc-400 hover:text-zinc-100 hover:underline"
+        className="mb-3 inline-flex items-center gap-1.5 text-sm text-muted transition-colors duration-300 hover:text-ink"
       >
         ← Back
       </Link>
-      <div className="flex items-center justify-between">
-        <h1 className="text-lg font-semibold">{title}</h1>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h1 className="text-2xl font-bold tracking-tight text-ink text-balance">{title}</h1>
         <div className="flex items-center gap-2">
           {data.status === "done" && !data.published && data.pending_approvals > 0 && (
-            <span className="rounded-full bg-amber-950 px-2.5 py-0.5 text-xs text-amber-300">
+            <span className="px-badge border border-warn/30 bg-warn-soft text-warn">
               {data.pending_approvals} pending review
             </span>
           )}
           <StatusPill status={data.status} />
         </div>
       </div>
-      <dl className="mt-4 grid grid-cols-2 gap-x-6 gap-y-2 text-sm md:grid-cols-4">
-        <div>
-          <dt className="text-zinc-500">Commit</dt>
-          <dd className="font-mono">{data.commit_sha?.slice(0, 8) ?? "—"}</dd>
-        </div>
-        <div>
-          <dt className="text-zinc-500">Started</dt>
-          <dd>{data.started_at ? new Date(data.started_at).toLocaleString() : "—"}</dd>
-        </div>
-        <div>
-          <dt className="text-zinc-500">Finished</dt>
-          <dd>{data.finished_at ? new Date(data.finished_at).toLocaleString() : "—"}</dd>
-        </div>
-        <div>
-          <dt className="text-zinc-500">Findings</dt>
-          <dd>{data.finding_count}</dd>
-        </div>
+
+      <dl className="mt-5 grid grid-cols-2 gap-2.5 md:grid-cols-4">
+        <Stat label="Commit">
+          <span className="font-mono text-xs">{data.commit_sha?.slice(0, 8) ?? "—"}</span>
+        </Stat>
+        <Stat label="Started">
+          {data.started_at ? new Date(data.started_at).toLocaleString() : "—"}
+        </Stat>
+        <Stat label="Finished">
+          {data.finished_at ? new Date(data.finished_at).toLocaleString() : "—"}
+        </Stat>
+        <Stat label="Findings">
+          <span className="tabular-nums">{data.finding_count}</span>
+        </Stat>
       </dl>
+
       {data.error && (
-        <p className="mt-4 rounded-md bg-red-950 px-3 py-2 text-sm text-red-300">{data.error}</p>
+        <p className="mt-4 border border-danger/25 bg-danger-soft px-4 py-2.5 text-sm text-danger">
+          {data.error}
+        </p>
       )}
+
       {data.status === "done" && (
-        <div className="mt-4 flex flex-wrap gap-1 border-b border-zinc-800">
-          {(["overview", "explore", "fixes", "agent"] as const).map((name) => (
+        <div className="px-tabs mt-5 grid-cols-4">
+          {TABS.map((name) => (
             <button
               key={name}
               onClick={() => onSelectTab(name)}
-              className={`-mb-px border-b-2 px-3 py-1.5 text-sm capitalize ${
-                tab === name
-                  ? "border-emerald-500 text-zinc-100"
-                  : "border-transparent text-zinc-500 hover:text-zinc-300"
+              className={`px-tab px-3 py-1.5 text-sm capitalize ${
+                tab === name ? "px-tab-active" : ""
               }`}
             >
               {name}
@@ -133,28 +142,43 @@ function AnalysisHeader({
   );
 }
 
+function eventTone(type: string): string {
+  if (type === "failed") return "bg-danger";
+  if (type === "done") return "bg-ok";
+  if (type === "agent") return "bg-hypo";
+  if (type === "tool") return "bg-info";
+  return "bg-faint";
+}
+
 function ProgressFeed({ events, isActive }: { events: AnalysisEvent[]; isActive: boolean }) {
   return (
-    <section>
-      <h3 className="mb-3 font-semibold">Progress</h3>
-      {events.length === 0 && isActive && (
-        <p className="text-sm text-zinc-500">Waiting for events…</p>
-      )}
+    <section className="px-panel p-5 sm:p-6">
+      <div className="mb-3 flex items-center gap-2.5">
+        <h3 className="font-semibold text-ink">Progress</h3>
+        {isActive && (
+          <span className="flex items-center gap-1.5 text-xs text-accent">
+            <span aria-hidden="true" className="anim-blink h-1.5 w-1.5 bg-accent" />
+            live
+          </span>
+        )}
+      </div>
+      {events.length === 0 && isActive && <p className="text-sm text-faint">Waiting for events…</p>}
       {events.length === 0 && !isActive && (
-        <p className="text-sm text-zinc-500">No events recorded.</p>
+        <p className="text-sm text-faint">No events recorded.</p>
       )}
-      <ul className="space-y-1 font-mono text-xs text-zinc-400">
+      <ul className="space-y-1 font-mono text-xs">
         {events.map((event, index) => (
-          <li key={index} className="flex gap-3">
-            <span className="text-zinc-600">{formatTime(event.ts)}</span>
-            <span className="w-24 shrink-0 text-zinc-300">
+          <li key={index} className="anim-step-in flex items-start gap-3" style={{ animationDuration: "0.4s" }}>
+            <span aria-hidden="true" className={`mt-1.5 h-1.5 w-1.5 shrink-0 ${eventTone(event.type)}`} />
+            <span className="shrink-0 text-faint">{formatTime(event.ts)}</span>
+            <span className="w-24 shrink-0 text-ink/80">
               {event.type === "tool"
                 ? `tool:${event.payload.tool}`
                 : event.type === "agent"
                   ? `agent:${event.payload.agent}`
                   : event.type}
             </span>
-            <span>
+            <span className="min-w-0 break-words text-muted">
               {event.type === "tool"
                 ? toolEventText(event.payload)
                 : event.type === "agent"
@@ -181,7 +205,7 @@ export function AnalysisDetailPage() {
   const isDone = analysis.data?.status === "done";
   const score = useScore(analysisId, isDone);
   const [events, setEvents] = useState<AnalysisEvent[]>([]);
-  const [tab, setTab] = useState<"overview" | "explore" | "fixes" | "agent">("overview");
+  const [tab, setTab] = useState<TabName>("overview");
   // Handed to the agent panel when the fix plan's "deep fix plan" button is used,
   // so the same eve session is reused rather than a second one opened.
   const [agentPrompt, setAgentPrompt] = useState<string | null>(null);
@@ -222,10 +246,10 @@ export function AnalysisDetailPage() {
   }, [analysisId]);
 
   if (analysis.isLoading) {
-    return <p className="text-sm text-zinc-400">Loading analysis…</p>;
+    return <p className="text-sm text-muted">Loading analysis…</p>;
   }
   if (analysis.isError || !analysis.data) {
-    return <p className="text-sm text-red-300">Analysis not found.</p>;
+    return <p className="text-sm text-danger">Analysis not found.</p>;
   }
 
   const data = analysis.data;
@@ -233,11 +257,11 @@ export function AnalysisDetailPage() {
   const title = repo ? `${repo.owner}/${repo.name}` : `Analysis #${data.id}`;
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
       <AnalysisHeader data={data} title={title} tab={tab} onSelectTab={setTab} />
 
       {tab === "overview" && (
-        <>
+        <div className="space-y-6">
           {/* /score recomputes and persists a missing score, so an analysis whose
               finalize step never cached one still shows its health score. */}
           {data.status === "done" && <ScoreHero score={score.data ?? data.score_json} />}
@@ -266,13 +290,13 @@ export function AnalysisDetailPage() {
               <RemediationSummaryCard analysisId={analysisId} onOpen={() => setTab("fixes")} />
             </Suspense>
           )}
-        </>
+        </div>
       )}
 
       {tab === "explore" && data.status === "done" && <ExploreTab analysisId={analysisId} />}
 
       {tab === "fixes" && data.status === "done" && (
-        <Suspense fallback={<p className="text-sm text-zinc-500">Building the fix plan…</p>}>
+        <Suspense fallback={<p className="text-sm text-faint">Building the fix plan…</p>}>
           <RemediationPlanPanel
             analysisId={analysisId}
             repository={repo}
@@ -291,9 +315,7 @@ export function AnalysisDetailPage() {
       )}
 
       {tab === "agent" && data.status === "done" && (
-        <Suspense
-          fallback={<p className="text-sm text-zinc-500">Loading the agent…</p>}
-        >
+        <Suspense fallback={<p className="text-sm text-faint">Loading the agent…</p>}>
           <AgentChat analysisId={analysisId} initialPrompt={agentPrompt} />
         </Suspense>
       )}

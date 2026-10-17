@@ -8,11 +8,11 @@ import { useSnippet } from "../api/hooks";
 import type { Finding, Repository, SnippetResponse } from "../api/types";
 
 const SEVERITY_STYLES: Record<Finding["severity"], string> = {
-  critical: "bg-red-700 text-white",
-  high: "bg-red-900 text-red-200",
-  medium: "bg-amber-900 text-amber-200",
-  low: "bg-sky-900 text-sky-200",
-  info: "bg-zinc-700 text-zinc-300",
+  critical: "border-danger/45 bg-danger-soft text-danger",
+  high: "border-danger/25 bg-danger-soft text-danger",
+  medium: "border-warn/30 bg-warn-soft text-warn",
+  low: "border-info/25 bg-info-soft text-info",
+  info: "border-line-strong bg-surface-2 text-muted",
 };
 
 const PILLAR_BY_CATEGORY: Record<string, string> = {
@@ -59,20 +59,22 @@ const SEVERITY_OPTIONS = ["critical", "high", "medium", "low", "info"];
 function StatusBadge({ status }: { status: Finding["status"] }) {
   if (status === "verified") {
     return (
-      <span className="rounded bg-emerald-950 px-1.5 py-0.5 text-[10px] font-medium text-emerald-300">
+      <span className="border border-ok/30 bg-ok-soft px-1.5 py-0.5 text-[10px] font-semibold text-ok">
         verified
       </span>
     );
   }
   if (status === "hypothesis") {
     return (
-      <span className="rounded bg-purple-950 px-1.5 py-0.5 text-[10px] font-medium text-purple-300">
+      <span className="border border-hypo/30 bg-hypo-soft px-1.5 py-0.5 text-[10px] font-semibold text-hypo">
         hypothesis
       </span>
     );
   }
   return (
-    <span className="rounded bg-zinc-800 px-1.5 py-0.5 text-[10px] text-zinc-400">dismissed</span>
+    <span className="border border-line bg-surface-2 px-1.5 py-0.5 text-[10px] font-medium text-muted">
+      dismissed
+    </span>
   );
 }
 
@@ -97,7 +99,7 @@ function FixWithAgentButton({
   if (finding.status === "dismissed") {
     return (
       <span
-        className="cursor-not-allowed text-zinc-700"
+        className="cursor-not-allowed text-faint/60"
         title="Dismissed as a false positive — do not fix"
       >
         fix with your agent
@@ -138,8 +140,8 @@ function FixWithAgentButton({
       onClick={handleCopy}
       className={
         copied
-          ? "rounded-md border border-emerald-700 px-2.5 py-1 text-xs text-emerald-300"
-          : "rounded-md border border-zinc-700 px-2.5 py-1 text-xs text-zinc-300 transition hover:border-zinc-600 hover:text-zinc-100"
+          ? "px-btn border border-ok/40 px-2.5 py-1 text-xs text-ok"
+          : "px-btn px-btn--ghost px-2.5 py-1 text-xs"
       }
       title="Copy a fix brief for your coding agent (opencode, Claude Code, Codex)"
     >
@@ -179,44 +181,41 @@ function FindingRow({
       : null;
 
   return (
-    <li className="rounded-lg border border-zinc-800 bg-zinc-900 px-4 py-3">
+    <li className="px-card px-card-hover px-4 py-3.5">
       <div className="flex flex-wrap items-center gap-2">
         <span
-          className={`rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase ${SEVERITY_STYLES[finding.severity]}`}
+          className={`border px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide ${SEVERITY_STYLES[finding.severity]}`}
         >
           {finding.severity}
         </span>
-        <p className="text-sm font-medium">{finding.title}</p>
+        <p className="text-sm font-semibold text-ink text-pretty">{finding.title}</p>
         <StatusBadge status={finding.status} />
-        <span className="ml-auto text-xs text-zinc-500">
+        <span className="ml-auto text-xs text-faint tabular-nums">
           {finding.verifier} · conf {finding.confidence.toFixed(2)}
         </span>
       </div>
       {finding.description && (
-        <p className="mt-1 text-sm text-zinc-400">{finding.description}</p>
+        <p className="mt-1.5 text-sm leading-relaxed text-muted text-pretty">{finding.description}</p>
       )}
       {fix && (
-        <p className="mt-1 text-sm text-emerald-400/90">
-          <span className="text-zinc-500">Fix:</span> {fix.action}
+        <p className="mt-1.5 text-sm text-ok/90 text-pretty">
+          <span className="text-faint">Fix:</span> {fix.action}
         </p>
       )}
-      <div className="mt-1.5 flex flex-wrap items-center gap-3 text-xs">
+      <div className="mt-2.5 flex flex-wrap items-center gap-3 text-xs">
         {finding.file_path && (
-          <span className="font-mono text-zinc-500">
+          <span className="bg-surface-2 px-1.5 py-0.5 font-mono text-[11px] text-faint">
             {finding.file_path}
             {finding.line_start ? `:${finding.line_start}` : ""}
           </span>
         )}
         {blobUrl && (
-          <a href={blobUrl} target="_blank" rel="noreferrer" className="text-sky-400 hover:underline">
+          <a href={blobUrl} target="_blank" rel="noreferrer" className="px-link">
             view on GitHub ↗
           </a>
         )}
         {canSnippet && (
-          <button
-            onClick={() => setExpanded((v) => !v)}
-            className="text-zinc-400 hover:text-zinc-200"
-          >
+          <button onClick={() => setExpanded((v) => !v)} className="px-btn--quiet px-1.5 py-0.5">
             {expanded ? "hide code" : "show code"}
           </button>
         )}
@@ -229,24 +228,24 @@ function FindingRow({
         />
       </div>
       {expanded && canSnippet && (
-        <div className="mt-2">
-          {snippet.isLoading && <p className="text-xs text-zinc-500">Loading snippet…</p>}
+        <div className="mt-2.5">
+          {snippet.isLoading && <p className="text-xs text-faint">Loading snippet…</p>}
           {snippet.data && (
-            <pre className="overflow-x-auto rounded-md border border-zinc-800 bg-zinc-950 p-3 text-xs">
+            <pre className="overflow-x-auto border border-line bg-surface-2 p-3 text-xs">
               {snippet.data.lines.map((line, i) => {
                 const lineNo = snippet.data!.from_line + i;
                 const isCited = lineNo === finding.line_start;
                 return (
-                  <div key={i} className={isCited ? "bg-amber-950/60" : ""}>
-                    <span className="mr-3 select-none text-zinc-600">{lineNo}</span>
-                    <span className="text-zinc-300">{line}</span>
+                  <div key={i} className={isCited ? "-mx-3 rounded bg-warn-soft px-3" : ""}>
+                    <span className="mr-3 select-none text-faint/60 tabular-nums">{lineNo}</span>
+                    <span className="text-ink/85">{line}</span>
                   </div>
                 );
               })}
             </pre>
           )}
           {snippet.isError && (
-            <p className="text-xs text-zinc-500">Snippet unavailable for this finding.</p>
+            <p className="text-xs text-faint">Snippet unavailable for this finding.</p>
           )}
         </div>
       )}
@@ -266,7 +265,7 @@ function FindingList({
   analysisId: number;
 }) {
   return (
-    <ul className="space-y-2">
+    <ul className="space-y-2.5">
       {findings.map((finding) => (
         <FindingRow
           key={finding.id}
@@ -323,16 +322,16 @@ export function FindingsTable({
   }, [filtered]);
 
   return (
-    <section>
-      <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
-        <h3 className="font-semibold">
-          Findings <span className="text-sm text-zinc-500">({filtered.length})</span>
+    <section className="px-panel p-5 sm:p-6">
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+        <h3 className="font-semibold text-ink">
+          Findings <span className="text-sm font-normal text-faint tabular-nums">({filtered.length})</span>
         </h3>
-        <div className="flex flex-wrap gap-2 text-sm">
+        <div className="flex flex-wrap items-center gap-2 text-sm">
           <select
             value={pillarFilter}
             onChange={(e) => setPillarFilter(e.target.value)}
-            className="rounded-md border border-zinc-700 bg-zinc-900 px-2 py-1 text-sm"
+            className="px-input px-select w-auto px-2.5 py-1.5 text-xs"
             aria-label="Filter by pillar"
           >
             {PILLAR_OPTIONS.map((o) => (
@@ -344,7 +343,7 @@ export function FindingsTable({
           <select
             value={severityFilter}
             onChange={(e) => setSeverityFilter(e.target.value)}
-            className="rounded-md border border-zinc-700 bg-zinc-900 px-2 py-1 text-sm"
+            className="px-input px-select w-auto px-2.5 py-1.5 text-xs"
             aria-label="Filter by severity"
           >
             <option value="">All severities</option>
@@ -354,7 +353,7 @@ export function FindingsTable({
               </option>
             ))}
           </select>
-          <label className="flex items-center gap-1.5 text-xs text-zinc-400">
+          <label className="flex cursor-pointer items-center gap-2 border border-line bg-surface-2 px-3 py-1.5 text-xs text-muted transition-colors duration-300 hover:text-ink">
             <input
               type="checkbox"
               checked={!hideMeta}
@@ -366,18 +365,18 @@ export function FindingsTable({
       </div>
 
       {filtered.length === 0 && (
-        <p className="rounded-lg border border-zinc-800 bg-zinc-900 px-4 py-6 text-center text-sm text-zinc-500">
+        <p className="border border-line bg-surface-2 px-4 py-8 text-center text-sm text-faint">
           No findings match the current filters.
         </p>
       )}
 
       {groupByPillar ? (
-        <div className="space-y-6">
+        <div className="space-y-7">
           {grouped.map(([pillar, items]) => (
             <div key={pillar}>
-              <h4 className="mb-2 flex items-center gap-2 text-sm font-semibold text-zinc-300">
+              <h4 className="mb-3 flex items-center gap-2 text-sm font-semibold text-ink">
                 {PILLAR_LABELS[pillar] ?? pillar}
-                <span className="rounded-full bg-zinc-800 px-2 py-0.5 text-xs text-zinc-400">
+                <span className="bg-surface-2 px-2 py-0.5 text-xs text-muted tabular-nums">
                   {items.length}
                 </span>
               </h4>

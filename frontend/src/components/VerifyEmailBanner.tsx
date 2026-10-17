@@ -26,7 +26,8 @@ export function VerifyEmailBanner() {
 
   if (justVerified) {
     return (
-      <div className="mb-6 rounded-md bg-emerald-950 px-3 py-2 text-sm text-emerald-300">
+      <div className="mb-6 flex items-center gap-2.5 border border-ok/25 bg-ok-soft px-4 py-2.5 text-sm text-ok">
+        <span aria-hidden="true" className="h-1.5 w-1.5 shrink-0 bg-ok" />
         Email verified — signing in with GitHub will now reach this account.
       </div>
     );
@@ -47,23 +48,23 @@ export function VerifyEmailBanner() {
   }
 
   return (
-    <div className="mb-6 flex flex-wrap items-center justify-between gap-3 rounded-md border border-amber-900 bg-amber-950/40 px-3 py-2 text-sm text-amber-200">
-      <span>
-        Verify <span className="font-medium">{user.email}</span> so signing in with GitHub reaches
+    <div className="anim-step-in mb-6 flex flex-wrap items-center justify-between gap-3 border border-warn/25 bg-warn-soft px-4 py-2.5 text-sm text-warn">
+      <span className="text-pretty">
+        Verify <span className="font-semibold">{user.email}</span> so signing in with GitHub reaches
         this account instead of creating a second one.
       </span>
       {sent ? (
-        <span className="text-amber-300/80">Verification email sent.</span>
+        <span className="text-warn/80">Verification email sent.</span>
       ) : (
         <button
           onClick={handleResend}
           disabled={resend.isPending}
-          className="rounded-md border border-amber-800 px-3 py-1 text-amber-200 hover:bg-amber-900/40 disabled:opacity-50"
+          className="px-btn border border-warn/30 px-3.5 py-1.5 text-warn hover:bg-warn/10"
         >
           {resend.isPending ? "Sending…" : "Resend email"}
         </button>
       )}
-      {failed && <span className="w-full text-red-300">{failed}</span>}
+      {failed && <span className="w-full text-danger">{failed}</span>}
     </div>
   );
 }
