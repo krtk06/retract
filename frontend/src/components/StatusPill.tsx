@@ -1,23 +1,26 @@
-const STYLES: Record<string, string> = {
-  pending: "border-line-strong bg-surface-2 text-muted",
-  running: "border-info/30 bg-info-soft text-info",
-  done: "border-ok/30 bg-ok-soft text-ok",
-  failed: "border-danger/30 bg-danger-soft text-danger",
-};
+import { STATUS_COLOR_VAR, type RunStatus } from "../lib/palette";
 
-const DOT: Record<string, string> = {
-  pending: "bg-faint",
-  running: "bg-info anim-blink",
-  done: "bg-ok",
-  failed: "bg-danger",
-};
+const FALLBACK: RunStatus = "pending";
 
+/**
+ * Status is never colour alone: the word is always present, and the glyph
+ * blinks only while work is actually in flight.
+ */
 export function StatusPill({ status }: { status: string }) {
-  const style = STYLES[status] ?? STYLES.pending;
-  const dot = DOT[status] ?? DOT.pending;
+  const key = (status in STATUS_COLOR_VAR ? status : FALLBACK) as RunStatus;
+  const color = `var(${STATUS_COLOR_VAR[key]})`;
+  const live = key === "running";
+
   return (
-    <span className={`px-badge border ${style}`}>
-      <span aria-hidden="true" className={`h-1.5 w-1.5 ${dot}`} />
+    <span
+      className="px-badge"
+      style={{ borderColor: color, color }}
+    >
+      <span
+        aria-hidden="true"
+        className={`block h-[8px] w-[8px] ${live ? "anim-blink" : ""}`}
+        style={{ background: color }}
+      />
       {status}
     </span>
   );

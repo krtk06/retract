@@ -26,8 +26,8 @@ export function VerifyEmailBanner() {
 
   if (justVerified) {
     return (
-      <div className="mb-6 flex items-center gap-2.5 border border-ok/25 bg-ok-soft px-4 py-2.5 text-sm text-ok">
-        <span aria-hidden="true" className="h-1.5 w-1.5 shrink-0 bg-ok" />
+      <div className="mb-6 flex flex-wrap items-center justify-between gap-3 border-ok px-panel px-4 py-3 text-ok">
+        <span aria-hidden="true" className="block h-[8px] w-[8px] shrink-0 bg-ok" />
         Email verified — signing in with GitHub will now reach this account.
       </div>
     );
@@ -48,18 +48,23 @@ export function VerifyEmailBanner() {
   }
 
   return (
-    <div className="anim-step-in mb-6 flex flex-wrap items-center justify-between gap-3 border border-warn/25 bg-warn-soft px-4 py-2.5 text-sm text-warn">
-      <span className="text-pretty">
-        Verify <span className="font-semibold">{user.email}</span> so signing in with GitHub reaches
-        this account instead of creating a second one.
-      </span>
+    <div className="anim-step-in mb-6 flex flex-wrap items-center justify-between gap-3 px-panel px-4 py-3">
+      <div className="flex min-w-[16rem] flex-1 flex-col gap-1">
+        <p className="font-ui text-[9px] uppercase tracking-[0.16em] text-warn">
+          Verifying your email
+        </p>
+        <span className="text-[13px] text-ink">
+          <span className="font-semibold">{user.email}</span> — signing in with GitHub reaches this
+          account instead of creating a second one.
+        </span>
+      </div>
       {sent ? (
-        <span className="text-warn/80">Verification email sent.</span>
+        <span className="text-[13px] text-muted">Verification email sent.</span>
       ) : (
         <button
           onClick={handleResend}
           disabled={resend.isPending}
-          className="px-btn border border-warn/30 px-3.5 py-1.5 text-warn hover:bg-warn/10"
+          className="px-btn px-btn--ghost"
         >
           {resend.isPending ? "Sending…" : "Resend email"}
         </button>
