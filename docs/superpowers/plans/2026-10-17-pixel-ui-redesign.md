@@ -69,7 +69,7 @@ Two spec details are resolved differently, deliberately:
 | `frontend/src/components/EmptyState.tsx` | Exports **both** `EmptyState` and `Loading`. `Loading` is nine lines and shares the frame, so a separate module would exist only to be imported once per page. |
 | `frontend/src/test/palette.test.ts` | Every severity/pillar/status resolved for both themes; thresholds monotonic. |
 | `frontend/src/test/Meter.test.ts` | 20 cells, dither at zero, `progressbar` ARIA. |
-| `frontend/src/test/PixelIcon.test.ts` | Every grid rectangular and binary. |
+| `frontend/src/test/PixelIcon.test.tsx` | Every grid rectangular and binary. **Must be `.tsx`** — the test body contains JSX, which esbuild's `.ts` loader rejects. |
 | `frontend/src/test/Layout.test.tsx` | Title bar, sidebar placement, skip link, window dots. |
 | `frontend/src/test/ScoreHero.test.tsx` | Six meters, `findings === 0` claims no score, basis warning verbatim. |
 | `frontend/src/test/EmptyState.test.tsx` | Empty-state copy, action link, loading rows. |
@@ -411,7 +411,8 @@ git commit -m "feat - one palette module for severity, pillar and status colour"
 
 **Files:**
 - Create: `frontend/src/components/PixelIcon.tsx`
-- Create: `frontend/src/test/PixelIcon.test.ts`
+- Create: `frontend/src/test/PixelIcon.test.tsx` — **`.tsx`, not `.ts`**: the test
+  body contains JSX and esbuild's `.ts` loader rejects it.
 
 **Interfaces:**
 - Consumes: nothing.
@@ -430,7 +431,7 @@ git commit -m "feat - one palette module for severity, pillar and status colour"
 
 - [ ] **Step 1: Write the failing test**
 
-`frontend/src/test/PixelIcon.test.ts`:
+`frontend/src/test/PixelIcon.test.tsx`:
 
 ```ts
 import { render, screen } from "@testing-library/react";
@@ -474,13 +475,19 @@ describe("PixelIcon", () => {
 - [ ] **Step 2: Run the test to verify it fails**
 
 ```bash
-cd frontend && npx vitest run src/test/PixelIcon.test.ts
+cd frontend && npx vitest run src/test/PixelIcon.test.tsx
 ```
 Expected: FAIL — `Cannot find module '../components/PixelIcon'`.
 
 - [ ] **Step 3: Write the implementation**
 
 `frontend/src/components/PixelIcon.tsx`:
+
+> **Every grid below is `#`/`.`, never `1`/`0`.** The art in this design reads as
+> `1`/`0` in a code block, but `cellsOf` only lights `#` and `o`, so a digit grid
+> renders an invisible icon. 139 of the 139 rows are literal; `PixelIcon.test.tsx`
+> is the check that keeps it that way — when a row comes out blank, suspect a
+> digit before suspecting the renderer.
 
 ```tsx
 /**
@@ -575,7 +582,7 @@ export const ICONS = {
   ],
 
   /* Login hero — a 16×16 robot head. Every row is exactly 16 characters;
-     PixelIcon.test.ts fails the build if one is not. */
+     PixelIcon.test.tsx fails the build if one is not. */
   "robot-open": [
     "....########....",
     "...##oo##oo##...",
@@ -723,6 +730,7 @@ export function PixelIcon({ name, size = 16, className, title }: PixelIconProps)
       className={className}
       {...labels}
     >
+      {title ? <title>{title}</title> : null}
       {cellsOf(grid).map(({ x, y }) => (
         <rect key={`${x}-${y}`} x={x} y={y} width={1} height={1} />
       ))}
@@ -734,7 +742,7 @@ export function PixelIcon({ name, size = 16, className, title }: PixelIconProps)
 - [ ] **Step 4: Run the test to verify it passes**
 
 ```bash
-cd frontend && npx vitest run src/test/PixelIcon.test.ts
+cd frontend && npx vitest run src/test/PixelIcon.test.tsx
 ```
 Expected: PASS, 4 tests.
 
@@ -742,7 +750,7 @@ Expected: PASS, 4 tests.
 
 ```bash
 cd frontend && npm run lint && npm run typecheck
-cd /home/krtk2/Docs/Projects/AI_Inteligence && git add frontend/src/components/PixelIcon.tsx frontend/src/test/PixelIcon.test.ts
+cd /home/krtk2/Docs/Projects/AI_Inteligence && git add frontend/src/components/PixelIcon.tsx frontend/src/test/PixelIcon.test.tsx
 git commit -m "feat - icons as grid strings, rendered with crisp edges"
 ```
 
