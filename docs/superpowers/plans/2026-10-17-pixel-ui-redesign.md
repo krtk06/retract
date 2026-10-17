@@ -68,7 +68,7 @@ Two spec details are resolved differently, deliberately:
 | `frontend/src/components/Meter.tsx` | `<Meter>` (20 discrete cells) and `<ScoreRing>` (20 radial cells). |
 | `frontend/src/components/EmptyState.tsx` | Exports **both** `EmptyState` and `Loading`. `Loading` is nine lines and shares the frame, so a separate module would exist only to be imported once per page. |
 | `frontend/src/test/palette.test.ts` | Every severity/pillar/status resolved for both themes; thresholds monotonic. |
-| `frontend/src/test/Meter.test.ts` | 20 cells, dither at zero, `progressbar` ARIA. |
+| `frontend/src/test/Meter.test.tsx` | 20 cells, dither at zero, `progressbar` ARIA. |
 | `frontend/src/test/PixelIcon.test.tsx` | Every grid rectangular and binary. **Must be `.tsx`** — the test body contains JSX, which esbuild's `.ts` loader rejects. |
 | `frontend/src/test/Layout.test.tsx` | Title bar, sidebar placement, skip link, window dots. |
 | `frontend/src/test/ScoreHero.test.tsx` | Six meters, `findings === 0` claims no score, basis warning verbatim. |
@@ -759,8 +759,9 @@ git commit -m "feat - icons as grid strings, rendered with crisp edges"
 ### Task 3: Meter and ScoreRing
 
 **Files:**
-- Create: `frontend/src/components/Meter.tsx`
-- Create: `frontend/src/test/Meter.test.ts`
+- Create: `frontend/src/components/Meter.tsx` — note: no React hooks are needed, so no `react` import
+- Create: `frontend/src/test/Meter.test.tsx` — **`.tsx`**: the test body contains JSX
+- Create: `frontend/src/test/Meter.test.tsx` — **`.tsx`**: the test body contains JSX
 
 **Interfaces:**
 - Consumes: `scoreTone` and `colorFor` from `lib/palette` (Task 1).
@@ -788,7 +789,7 @@ git commit -m "feat - icons as grid strings, rendered with crisp edges"
 
 - [ ] **Step 1: Write the failing test**
 
-`frontend/src/test/Meter.test.ts`:
+`frontend/src/test/Meter.test.tsx`:
 
 ```tsx
 import { render, screen } from "@testing-library/react";
@@ -849,7 +850,7 @@ describe("ScoreRing", () => {
 - [ ] **Step 2: Run the test to verify it fails**
 
 ```bash
-cd frontend && npx vitest run src/test/Meter.test.ts
+cd frontend && npx vitest run src/test/Meter.test.tsx
 ```
 Expected: FAIL — `Cannot find module '../components/Meter'`.
 
@@ -858,7 +859,7 @@ Expected: FAIL — `Cannot find module '../components/Meter'`.
 `frontend/src/components/Meter.tsx`:
 
 ```tsx
-import { useEffect, useState } from "react";
+
 import { colorFor, type Theme } from "../lib/palette";
 
 /**
@@ -989,7 +990,7 @@ export function ScoreRing({ value, tone = "ok", theme, size = 132 }: ScoreRingPr
 - [ ] **Step 4: Run the test to verify it passes**
 
 ```bash
-cd frontend && npx vitest run src/test/Meter.test.ts
+cd frontend && npx vitest run src/test/Meter.test.tsx
 ```
 Expected: PASS, 7 tests. If the ring colour test fails, the cause is a `fill`
 attribute instead of a `fill` style — fix the binding, not the expectation.
@@ -998,7 +999,7 @@ attribute instead of a `fill` style — fix the binding, not the expectation.
 
 ```bash
 cd frontend && npm run lint && npm run typecheck
-cd /home/krtk2/Docs/Projects/AI_Inteligence && git add frontend/src/components/Meter.tsx frontend/src/test/Meter.test.ts
+cd /home/krtk2/Docs/Projects/AI_Inteligence && git add frontend/src/components/Meter.tsx frontend/src/test/Meter.test.tsx
 git commit -m "feat - a 20-cell meter and a blocky score ring"
 ```
 
