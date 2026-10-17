@@ -2537,6 +2537,9 @@ panel become `px-badge px-badge--flat`.
 - delta chips: `▲ +N vs previous` keeps its glyph but moves to
   `px-badge px-badge--flat` with `font-ui`
 - delete the local `PILLAR_LABELS` and import from `../lib/palette`
+- **the `text-white` left over in this file** — plain Tailwind white is not a
+  PICO-8 entry. Replace it with `text-ink` (dark) or `--ink`. Found by the Task 4
+  sweep; it is the last non-palette colour outside `AgentChat.tsx`.
 
 - [ ] **Step 6: Run the test, then the full suite**
 
