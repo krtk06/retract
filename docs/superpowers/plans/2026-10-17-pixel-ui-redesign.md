@@ -761,7 +761,6 @@ git commit -m "feat - icons as grid strings, rendered with crisp edges"
 **Files:**
 - Create: `frontend/src/components/Meter.tsx` — note: no React hooks are needed, so no `react` import
 - Create: `frontend/src/test/Meter.test.tsx` — **`.tsx`**: the test body contains JSX
-- Create: `frontend/src/test/Meter.test.tsx` — **`.tsx`**: the test body contains JSX
 
 **Interfaces:**
 - Consumes: `scoreTone` and `colorFor` from `lib/palette` (Task 1).
