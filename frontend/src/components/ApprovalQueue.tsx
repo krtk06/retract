@@ -68,7 +68,7 @@ function QueueItem({
             value={note}
             onChange={(event) => setNote(event.target.value)}
             placeholder="Optional note explaining the decision"
-            className="px-input px-3 py-2 text-sm"
+            className="px-input"
           />
           <div className="flex gap-2">
             <button
@@ -91,7 +91,7 @@ function QueueItem({
             </button>
             <button
               onClick={() => setOpen(false)}
-              className="px-btn--quiet px-2.5 py-1.5 text-sm"
+              className="px-btn--quiet"
             >
               Cancel
             </button>
@@ -100,7 +100,7 @@ function QueueItem({
       ) : (
         <button
           onClick={() => setOpen(true)}
-          className="px-btn px-btn--ghost mt-3 px-3.5 py-1.5 text-sm"
+          className="px-btn px-btn--ghost mt-3"
         >
           Review
         </button>

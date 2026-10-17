@@ -52,13 +52,13 @@ export function ReposPage() {
               value={url}
               onChange={(event) => setUrl(event.target.value)}
               placeholder="https://github.com/owner/repo"
-              className="px-input flex-1 px-4 py-2.5 text-sm"
+              className="px-input flex-1"
               required
             />
             <button
               type="submit"
               disabled={createRepo.isPending || analyzeRepo.isPending}
-              className="px-btn px-btn--primary px-5 py-2.5 text-sm"
+              className="px-btn px-btn--primary"
             >
               {createRepo.isPending || analyzeRepo.isPending ? "Starting…" : "Analyze"}
             </button>
@@ -109,7 +109,7 @@ export function ReposPage() {
                 <button
                   onClick={() => handleAnalyze(repo.id)}
                   disabled={analyzeRepo.isPending}
-                  className="px-btn px-btn--ghost px-3.5 py-1.5 text-xs"
+                  className="px-btn px-btn--ghost"
                 >
                   Analyze
                 </button>

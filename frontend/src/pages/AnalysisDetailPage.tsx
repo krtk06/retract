@@ -129,7 +129,7 @@ function AnalysisHeader({
             <button
               key={name}
               onClick={() => onSelectTab(name)}
-              className={`px-tab px-3 py-1.5 text-sm capitalize ${
+              className={`px-tab capitalize ${
                 tab === name ? "px-tab-active" : ""
               }`}
             >

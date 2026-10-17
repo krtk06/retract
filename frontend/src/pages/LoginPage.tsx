@@ -61,7 +61,7 @@ function ModeTab({
     <button
       type="button"
       onClick={onSelect}
-      className={`px-tab px-3 py-1.5 text-sm ${active ? "px-tab-active" : ""}`}
+      className={`px-tab ${active ? "px-tab-active" : ""}`}
     >
       {children}
     </button>
@@ -93,7 +93,7 @@ function EmailAuthForm({
         onChange={(event) => onEmailChange(event.target.value)}
         placeholder="you@example.com"
         autoComplete="email"
-        className="px-input px-3.5 py-2.5 text-sm"
+        className="px-input"
         required
       />
       <input
@@ -103,13 +103,13 @@ function EmailAuthForm({
         placeholder={mode === "register" ? "At least 8 characters" : "Password"}
         autoComplete={mode === "register" ? "new-password" : "current-password"}
         minLength={mode === "register" ? 8 : undefined}
-        className="px-input px-3.5 py-2.5 text-sm"
+        className="px-input"
         required
       />
       <button
         type="submit"
         disabled={pending}
-        className="px-btn px-btn--primary w-full px-4 py-2.5 text-sm"
+        className="px-btn px-btn--primary w-full"
       >
         {pending
           ? mode === "register"
@@ -243,7 +243,7 @@ export function LoginPage() {
 
             <a
               href="/api/auth/github/login"
-              className="px-btn px-btn--ink mb-4 w-full gap-2 px-4 py-2.5 text-sm"
+              className="px-btn px-btn--ink mb-4 w-full gap-2"
             >
               <GitHubMark />
               Sign in with GitHub
@@ -290,7 +290,7 @@ export function LoginPage() {
               <button
                 onClick={handleDevLogin}
                 disabled={devBusy}
-                className="px-btn px-btn--ghost mt-4 w-full px-4 py-2.5 text-sm text-muted"
+                className="px-btn px-btn--ghost mt-4 w-full text-muted"
               >
                 {devBusy ? "Signing in…" : "Dev login"}
               </button>

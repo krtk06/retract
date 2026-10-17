@@ -215,7 +215,7 @@ function FindingRow({
           </a>
         )}
         {canSnippet && (
-          <button onClick={() => setExpanded((v) => !v)} className="px-btn--quiet px-1.5 py-0.5">
+          <button onClick={() => setExpanded((v) => !v)} className="px-btn--quiet">
             {expanded ? "hide code" : "show code"}
           </button>
         )}
@@ -333,7 +333,7 @@ export function FindingsTable({
             <select
               value={pillarFilter}
               onChange={(e) => setPillarFilter(e.target.value)}
-              className="px-input px-select w-auto px-2.5 py-1.5 text-xs"
+              className="px-input px-select w-auto"
               aria-label="Filter by pillar"
             >
               {PILLAR_OPTIONS.map((o) => (
@@ -348,7 +348,7 @@ export function FindingsTable({
             <select
               value={severityFilter}
               onChange={(e) => setSeverityFilter(e.target.value)}
-              className="px-input px-select w-auto px-2.5 py-1.5 text-xs"
+              className="px-input px-select w-auto"
               aria-label="Filter by severity"
             >
               <option value="">All severities</option>

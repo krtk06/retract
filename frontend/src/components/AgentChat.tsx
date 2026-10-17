@@ -217,7 +217,7 @@ async (text: string) => {
         <button
           type="button"
           onClick={() => agent.reset()}
-          className="px-btn px-btn--ghost px-3 py-1.5 text-xs"
+          className="px-btn px-btn--ghost"
         >
           New chat
         </button>
@@ -247,7 +247,7 @@ async (text: string) => {
                   type="button"
                   onClick={() => send(suggestion)}
                   disabled={busy || resuming}
-                  className="px-btn px-btn--ghost px-3.5 py-1.5 text-xs"
+                  className="px-btn px-btn--ghost"
                 >
                   {suggestion}
                 </button>
@@ -287,7 +287,7 @@ async (text: string) => {
                 key={option.id}
                 type="button"
                 onClick={() => void agent.respond([{ requestId: approval.requestId, optionId: option.id }])}
-                className={`px-btn px-3.5 py-1.5 text-xs ${
+                className={`px-btn ${
                   option.id === "approve"
                     ? "bg-warn text-[#1a1205] hover:brightness-110"
                     : "border border-warn/40 text-warn hover:bg-warn/10"
@@ -318,12 +318,12 @@ async (text: string) => {
           onChange={(event) => setDraft(event.target.value)}
           disabled={busy || resuming}
           placeholder="Ask about this analysis…"
-          className="px-input flex-1 px-3.5 py-2 text-sm disabled:opacity-60"
+          className="px-input flex-1 disabled:opacity-60"
         />
         <button
           type="submit"
           disabled={busy || resuming || draft.trim().length === 0}
-          className="px-btn px-btn--ink px-4 py-2 text-sm"
+          className="px-btn px-btn--ink"
         >
           {/* "Reconnecting…" rather than a live-looking "Send": the client attaches
               and resumes its session on mount, and a click in that window is

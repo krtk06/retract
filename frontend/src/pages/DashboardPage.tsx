@@ -61,7 +61,7 @@ function Row({ analysis, onReanalyze, busy, active }: AnalysisRowProps) {
         <button
           onClick={() => onReanalyze(analysis.repository_id)}
           disabled={busy || active}
-          className="px-btn px-btn--ghost px-3.5 py-1.5 text-xs"
+          className="px-btn px-btn--ghost"
           title={active ? "An analysis is already running" : "Re-analyze latest commit"}
         >
           Re-analyze
@@ -179,7 +179,7 @@ export function DashboardPage() {
               <span className="text-lg font-bold text-ink tabular-nums">{repos.data.length}</span>{" "}
               repositor{repos.data.length === 1 ? "y" : "ies"} tracked
             </p>
-            <Link to="/repos" className="px-btn px-btn--ghost px-3.5 py-1.5 text-xs">
+            <Link to="/repos" className="px-btn px-btn--ghost">
               Manage repositories →
             </Link>
           </div>

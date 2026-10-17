@@ -84,7 +84,7 @@ export function HistoryCompare({ analysisId }: { analysisId: number }) {
             <span className="ml-auto flex gap-1.5">
               <button
                 onClick={() => setLeft(item.id)}
-                className={`px-btn px-2.5 py-1 text-xs ${
+                className={`px-btn ${
                   left === item.id ? "bg-info text-ink" : "px-btn--ghost"
                 }`}
               >
@@ -92,7 +92,7 @@ export function HistoryCompare({ analysisId }: { analysisId: number }) {
               </button>
               <button
                 onClick={() => setRight(item.id)}
-                className={`px-btn px-2.5 py-1 text-xs ${
+                className={`px-btn ${
                   right === item.id ? "bg-hypo text-ink" : "px-btn--ghost"
                 }`}
               >

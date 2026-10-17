@@ -125,7 +125,7 @@ function SymbolBrowser({
         value={filter}
         onChange={(event) => setFilter(event.target.value)}
         placeholder="Filter symbols…"
-        className="px-input mt-2.5 px-3 py-2 text-sm"
+        className="px-input mt-2.5"
         aria-label="Filter symbols"
       />
       <ul className="mt-2.5 max-h-96 space-y-0.5 overflow-y-auto pr-1">

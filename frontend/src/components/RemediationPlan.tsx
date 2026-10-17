@@ -178,7 +178,7 @@ function PlanBody({
             <a
               href={`/api/analyses/${plan.analysis_id}/remediation.md`}
               download
-              className="px-btn px-btn--ghost px-3 py-1.5 text-xs"
+              className="px-btn px-btn--ghost"
             >
               Download .md
             </a>
@@ -186,7 +186,7 @@ function PlanBody({
               <button
                 type="button"
                 onClick={onOpenAgent}
-                className="px-btn px-btn--ghost px-3 py-1.5 text-xs"
+                className="px-btn px-btn--ghost"
               >
                 Deep fix plan with the agent
               </button>
@@ -245,7 +245,7 @@ function PlanBody({
           <select
             value={pillarFilter}
             onChange={(event) => setPillarFilter(event.target.value)}
-            className="px-input px-select w-auto px-3 py-1.5 text-sm"
+            className="px-input px-select w-auto"
             aria-label="Filter the fix plan by pillar"
           >
             <option value="">All areas</option>
@@ -365,7 +365,7 @@ function WorkItemCard({
             <button
               type="button"
               onClick={() => setShowFindings((value) => !value)}
-              className="px-btn--quiet px-1.5 py-0.5 text-xs"
+              className="px-btn--quiet"
             >
               {showFindings ? "hide findings" : `show ${item.finding_count} findings`}
             </button>
@@ -399,7 +399,7 @@ function WorkItemCard({
         <button
           type="button"
           onClick={() => setOpen(true)}
-          className="px-btn--quiet mt-2 px-1.5 py-0.5 text-xs"
+          className="px-btn--quiet mt-2"
         >
           show the steps
         </button>
@@ -450,7 +450,7 @@ export function RemediationSummaryCard({
       <button
         type="button"
         onClick={onOpen}
-        className="px-btn px-btn--primary px-4 py-2 text-sm"
+        className="px-btn px-btn--primary"
       >
         Open fix plan →
       </button>
