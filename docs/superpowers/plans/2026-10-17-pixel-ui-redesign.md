@@ -140,10 +140,11 @@ Every `rounded-*` utility is deleted from every call site. Every `bg-*/SOFT` and
 
   export const PILLARS: readonly Pillar[];                 // canonical display order
   export const PILLAR_LABELS: Record<Pillar, string>;
-  export const PILLAR_COLOR_VAR: Record<Pillar, string>;  // e.g. "var(--pillar-security)"
+  export const PILLAR_COLOR_VAR: Record<Pillar, string>;  // BARE custom-property
+                                                       // name, e.g. "--pillar-security"
   export const SEVERITIES: readonly Severity[];
-  export const SEVERITY_COLOR_VAR: Record<Severity, string>;
-  export const STATUS_COLOR_VAR: Record<RunStatus, string>;
+  export const SEVERITY_COLOR_VAR: Record<Severity, string>;  // "--sev-critical"
+  export const STATUS_COLOR_VAR: Record<RunStatus, string>;   // "--status-done"
 
   /** "ok" | "info" | "warn" | "danger" — the ONE score threshold table. */
   export function scoreTone(score: number): "ok" | "info" | "warn" | "danger";
@@ -151,6 +152,13 @@ Every `rounded-*` utility is deleted from every call site. Every `bg-*/SOFT` and
    *  ScoreRing/AnimatedNumber, which paint into SVG attributes. */
   export function colorFor(name: string, theme: Theme): string;
   ```
+
+> **The `*_COLOR_VAR` constants hold BARE custom-property names, not `var(…)`
+> wrappers.** `"--status-done"`, never `"var(--status-done)"`. Every call site
+> wraps them itself — `` `var(${STATUS_COLOR_VAR[key]})` `` — because
+> `colorFor` also accepts bare names and strips a `var()` prefix defensively.
+> Emitting the wrapper from the constant would produce `var(var(--x))` at every
+> call site, which is invalid CSS.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -209,7 +217,8 @@ describe("palette", () => {
 
   it("labels every pillar and severity", () => {
     for (const pillar of PILLARS) expect(PILLAR_LABELS[pillar]).toBeTruthy();
-    for (const severity of SEVERITIES) expect(SEVERITY_COLOR_VAR[severity]).toMatch(/^var\(/);
+    // bare custom-property name, NOT a var() wrapper — see the note above
+    for (const severity of SEVERITIES) expect(SEVERITY_COLOR_VAR[severity]).toMatch(/^--/);
   });
 
   it("thresholds scores monotonically", () => {
