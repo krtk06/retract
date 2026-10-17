@@ -27,6 +27,40 @@ These apply to every task. Do not deviate without checking the spec.
 7. **Verification per task is always all four:** `npm run lint && npm run typecheck && npm test && npm run build` from `frontend/`.
 8. **Commit after every task.** Messages follow the repo's imperative style: `feat - `, `fix - `, `chore - `, `docs - ` (note the space-hyphen-space, matching `git log`).
 9. **Never stage the whole tree.** `git add -A`, `git add frontend/src` and `git commit -a` are all forbidden. Always stage the explicit file list from the task's Files block.
+10. **A `.px-*` component owns its own padding, font-size and font-weight.** Never put a conflicting utility beside one. `px-btn px-3.5 py-1.5 text-xs` is a bug: Tailwind's `utilities` layer follows `components`, so the leftover utilities win and the button silently renders at 12px instead of the system's 9px Silkscreen. Correct forms: `px-btn px-btn--ghost`, or add a modifier if a genuine variant is needed.
+
+    The Task 4 migration renamed class *names* but did not strip the old
+    utilities, so this shipped in 10 files and had to be swept in a follow-up
+    commit (`fix - strip legacy utilities that were overriding the pixel
+    components`). Verify with:
+
+    ```bash
+    cd frontend/src && python3 - <<'PY'
+    import re, pathlib
+    OWN = ("px-btn", "px-badge", "px-input", "px-tab", "px-eyebrow")
+    PAD = re.compile(r'^p[trblxy]?-(\d|\[)')
+    SIZE = re.compile(r'^text-(xs|sm|base|lg|xl|2xl|3xl|4xl|5xl)$')
+    WEIGHT = re.compile(r'^font-(medium|semibold|bold|extrabold)$')
+    COMP = re.compile(r'^px-(btn|badge|input|tab|select|panel|card|well|frame|titlebar|eyebrow|link|skip|dither|stripes|scroll|tabs)')
+    CLS = re.compile(r'className\s*=\s*(?:\{)?\s*[`"\']([^`"\']*)[`"\']')
+    bad = 0
+    for p in sorted(pathlib.Path('.').rglob('*.tsx')):
+        if 'test' in str(p): continue
+        for body in CLS.findall(p.read_text()):
+            toks = body.split(); names = [t.split(':')[-1] for t in toks]
+            if not any(any(n == g or n.startswith(g + "--") for g in OWN) for n in names): continue
+            for t in toks:
+                core = t.split(':')[-1]
+                if COMP.match(core): continue
+                if PAD.match(core) or SIZE.match(core) or WEIGHT.match(core):
+                    print(f"{p}: {core}"); bad += 1
+    print("OK: no conflicting utilities" if not bad else f"{bad} conflicts")
+    PY
+    ```
+
+    Expected: `OK: no conflicting utilities`. Bracketed sizes (`text-[9px]`) and
+    `font-mono` are deliberately exempt — the agent tool chips use them on
+    purpose. `p-5` on a `px-panel` is also fine, because panels define no padding.
 
 > ### Starting state: an uncommitted base
 >
