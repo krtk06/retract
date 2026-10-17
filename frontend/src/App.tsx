@@ -2,6 +2,7 @@ import { Navigate, Route, Routes } from "react-router-dom";
 
 import { useMe } from "./api/hooks";
 import { Layout } from "./components/Layout";
+import { PixelIcon } from "./components/PixelIcon";
 import { AnalysisDetailPage } from "./pages/AnalysisDetailPage";
 import { DashboardPage } from "./pages/DashboardPage";
 import { LoginPage } from "./pages/LoginPage";
@@ -9,16 +10,11 @@ import { ReposPage } from "./pages/ReposPage";
 
 function Splash() {
   return (
-    <div className="grid min-h-[100dvh] place-items-center">
-      <div className="flex flex-col items-center gap-4">
-        <span
-          aria-hidden="true"
-          className="anim-blink h-10 w-10"
-          style={{
-            background: "radial-gradient(circle at 35% 30%, var(--accent-strong), var(--accent))",
-            boxShadow: "0 0 40px var(--accent-glow)",
-          }}
-        />
+    <div className="grid min-h-[100dvh] place-items-center bg-canvas">
+      <div className="px-well flex flex-col items-center gap-3 p-8">
+        <span className="anim-blink block text-accent">
+          <PixelIcon name="logo" size={24} />
+        </span>
         <p className="px-eyebrow">Loading workspace</p>
       </div>
     </div>
