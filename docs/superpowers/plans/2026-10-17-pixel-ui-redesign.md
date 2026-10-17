@@ -57,6 +57,25 @@ Two spec details are resolved differently, deliberately:
 
 ---
 
+> ### Testing notes, learned while executing
+>
+> - **`Layout` cannot render bare.** It calls `useQueryClient()` and
+>   `VerifyEmailBanner` runs a `["me"]` query, so any test rendering it needs a
+>   real `QueryClientProvider` with retries off, or every assertion throws
+>   `No QueryClient set`.
+> - **`Layout` renders deliberate duplicates.** There are two
+>   `<nav aria-label="Primary">` (desktop sidebar + mobile tab strip) and two
+>   `user.login` renderings (title bar + sidebar "SIGNED IN" well). A
+>   screen-wide `getByRole`/`getByText` will throw. Scope with `within(...)` for
+>   the sidebar, or use `getAllByText` with an explicit `toHaveLength` — which
+>   pins both placements instead of loosening to "at least one".
+> - **Test files containing JSX must be `.tsx`.** esbuild's `.ts` loader rejects
+>   it, and the failure is a parse error rather than a clean module-resolution
+>   error, which makes the "verify it fails first" step misleading.
+> - **`--accent-glow` is now undefined.** Two references survive until Task 10
+>   rewrites the files that own them (`pages/LoginPage.tsx`,
+>   `pages/DashboardPage.tsx`). They are silent no-ops until then.
+
 ## File Structure
 
 **Created**
