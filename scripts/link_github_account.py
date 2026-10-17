@@ -49,7 +49,7 @@ def _count(db: Session, user_id: int) -> dict[str, int]:
     }
 
 
-def main() -> int:
+def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--github-id", type=int, required=True, help="GitHub numeric user id")
     parser.add_argument("--email", required=True, help="email of the account to attach to")
@@ -65,121 +65,147 @@ def main() -> int:
         help="delete each --move-from account once it owns nothing",
     )
     parser.add_argument("--apply", action="store_true", help="write (default: dry run)")
-    args = parser.parse_args()
+    return parser.parse_args()
 
+
+def _resolve_target(db: Session, args: argparse.Namespace) -> User | None:
+    """Find the account to attach to, or print a refusal and return None."""
+    target = db.scalar(select(User).where(User.email == args.email))
+    if target is None:
+        print(f"no account with email {args.email}", file=sys.stderr)
+        return None
+    if not target.password_hash:
+        print(
+            f"refusing: {args.email} has no password. A password-less account is a\n"
+            "dev-bypass leftover; automatic linking will not adopt one either.",
+            file=sys.stderr,
+        )
+        return None
+    if target.github_id not in (None, args.github_id):
+        print(
+            f"refusing: {args.email} is already linked to GitHub id "
+            f"{target.github_id}, not {args.github_id}. That account belongs to "
+            "somebody else.",
+            file=sys.stderr,
+        )
+        return None
+    return target
+
+
+def _release_holder(db: Session, args: argparse.Namespace, target: User) -> None:
+    """Release the GitHub id from any superseded duplicate that still holds it.
+
+    An account created by an earlier, link-less sign-in may already hold the
+    GitHub identity, and github_id is unique. That account is the superseded
+    duplicate this script exists to resolve, so the id is released from it
+    rather than left to collide.
+    """
+    holder = db.scalar(select(User).where(User.github_id == args.github_id))
+    if holder is None or holder.id == target.id:
+        return
+    owns_repos = (
+        db.scalar(select(UserRepository).where(UserRepository.user_id == holder.id).limit(1))
+        is not None
+    )
+    owns_approvals = (
+        db.scalar(select(Approval).where(Approval.user_id == holder.id).limit(1)) is not None
+    )
+    print(
+        f"\ngitHub id {args.github_id} is currently on user #{holder.id} "
+        f"{holder.login} (repositories={owns_repos}, approvals={owns_approvals})"
+    )
+    if not args.apply:
+        print("  would release the id from it and attach it to the target")
+        return
+    holder.github_id = None
+    db.flush()
+    if not owns_repos and not owns_approvals:
+        db.delete(holder)
+        db.flush()
+        print(f"  released, and deleted user #{holder.id} (it owned nothing)")
+
+
+def _resolve_sources(db: Session, args: argparse.Namespace, target: User) -> list[User]:
+    sources: list[User] = []
+    for login in args.move_from:
+        source = db.scalar(select(User).where(User.login == login))
+        if source is None:
+            print(f"  ! no account with login {login!r}; skipped", file=sys.stderr)
+            continue
+        if source.id == target.id:
+            continue
+        sources.append(source)
+    return sources
+
+
+def _move_sources(
+    db: Session, args: argparse.Namespace, target: User, sources: list[User]
+) -> None:
+    for source in sources:
+        repos = db.scalars(
+            select(Repository).join(UserRepository).where(UserRepository.user_id == source.id)
+        ).all()
+        print(f"\nmoving from user #{source.id} {source.login}:")
+        print(f"  {len(repos)} repositories, {len(_count(db, source.id))} approvals")
+
+        if not args.apply:
+            continue
+
+        for repo in repos:
+            # Repositories are many-to-many by design, so this grants access
+            # without touching the clone or the analysis history.
+            if db.get(UserRepository, (repo.id, target.id)) is None:
+                db.add(UserRepository(repo_id=repo.id, user_id=target.id))
+            db.execute(
+                UserRepository.__table__.delete().where(
+                    UserRepository.repo_id == repo.id,
+                    UserRepository.user_id == source.id,
+                )
+            )
+            # The legacy creator column, kept in step so ownership has one answer.
+            if repo.added_by == source.id:
+                repo.added_by = target.id
+        db.execute(
+            Approval.__table__.update().where(Approval.user_id == source.id).values(
+                user_id=target.id
+            )
+        )
+
+
+def _delete_empty_sources(db: Session, sources: list[User]) -> None:
+    for source in sources:
+        remaining = db.scalar(
+            select(UserRepository).where(UserRepository.user_id == source.id).limit(1)
+        )
+        approvals = db.scalar(select(Approval).where(Approval.user_id == source.id).limit(1))
+        if remaining is None and approvals is None:
+            db.delete(source)
+            print(f"deleted user #{source.id} {source.login} (owned nothing)")
+
+
+def main() -> int:
+    args = _parse_args()
     settings = get_settings()
     print(f"database: {settings.database_url.split('@')[-1]}")
     print(f"mode:     {'APPLY' if args.apply else 'dry run — nothing will be written'}")
 
     with Session(get_engine()) as db:
-        target = db.scalar(select(User).where(User.email == args.email))
+        target = _resolve_target(db, args)
         if target is None:
-            print(f"no account with email {args.email}", file=sys.stderr)
             return 1
-        if not target.password_hash:
-            print(
-                f"refusing: {args.email} has no password. A password-less account is a\n"
-                "dev-bypass leftover; automatic linking will not adopt one either.",
-                file=sys.stderr,
-            )
-            return 1
-        if target.github_id not in (None, args.github_id):
-            print(
-                f"refusing: {args.email} is already linked to GitHub id "
-                f"{target.github_id}, not {args.github_id}. That account belongs to "
-                "somebody else.",
-                file=sys.stderr,
-            )
-            return 1
-
         print(f"\ntarget: user #{target.id} {target.login} <{target.email}>")
 
-        # An account created by an earlier, link-less sign-in may already hold the
-        # GitHub identity, and github_id is unique. That account is the superseded
-        # duplicate this script exists to resolve, so the id is released from it
-        # rather than left to collide.
-        holder = db.scalar(select(User).where(User.github_id == args.github_id))
-        if holder is not None and holder.id != target.id:
-            owns_repos = (
-                db.scalar(
-                    select(UserRepository).where(UserRepository.user_id == holder.id).limit(1)
-                )
-                is not None
-            )
-            owns_approvals = (
-                db.scalar(select(Approval).where(Approval.user_id == holder.id).limit(1)) is not None
-            )
-            print(
-                f"\ngitHub id {args.github_id} is currently on user #{holder.id} "
-                f"{holder.login} (repositories={owns_repos}, approvals={owns_approvals})"
-            )
-            if not args.apply:
-                print("  would release the id from it and attach it to the target")
-            else:
-                holder.github_id = None
-                db.flush()
-                if not owns_repos and not owns_approvals:
-                    db.delete(holder)
-                    db.flush()
-                    print(f"  released, and deleted user #{holder.id} (it owned nothing)")
-
-        sources = []
-        for login in args.move_from:
-            source = db.scalar(select(User).where(User.login == login))
-            if source is None:
-                print(f"  ! no account with login {login!r}; skipped", file=sys.stderr)
-                continue
-            if source.id == target.id:
-                continue
-            sources.append(source)
-
-        for source in sources:
-            repos = db.scalars(
-                select(Repository).join(UserRepository).where(UserRepository.user_id == source.id)
-            ).all()
-            print(f"\nmoving from user #{source.id} {source.login}:")
-            print(f"  {len(repos)} repositories, {len(_count(db, source.id))} approvals")
-
-            if not args.apply:
-                continue
-
-            for repo in repos:
-                # Repositories are many-to-many by design, so this grants access
-                # without touching the clone or the analysis history.
-                if db.get(UserRepository, (repo.id, target.id)) is None:
-                    db.add(UserRepository(repo_id=repo.id, user_id=target.id))
-                db.execute(
-                    UserRepository.__table__.delete().where(
-                        UserRepository.repo_id == repo.id,
-                        UserRepository.user_id == source.id,
-                    )
-                )
-                # The legacy creator column, kept in step so ownership has one answer.
-                if repo.added_by == source.id:
-                    repo.added_by = target.id
-            db.execute(
-                Approval.__table__.update().where(Approval.user_id == source.id).values(
-                    user_id=target.id
-                )
-            )
+        _release_holder(db, args, target)
+        sources = _resolve_sources(db, args, target)
+        _move_sources(db, args, target, sources)
 
         if args.apply and target.github_id is None:
             target.github_id = args.github_id
             print(f"\nlinked GitHub id {args.github_id} to user #{target.id}")
-
         db.commit()
 
         if args.apply and args.delete_source:
-            for source in sources:
-                remaining = db.scalar(
-                    select(UserRepository).where(UserRepository.user_id == source.id).limit(1)
-                )
-                approvals = db.scalar(
-                    select(Approval).where(Approval.user_id == source.id).limit(1)
-                )
-                if remaining is None and approvals is None:
-                    db.delete(source)
-                    print(f"deleted user #{source.id} {source.login} (owned nothing)")
+            _delete_empty_sources(db, sources)
             db.commit()
 
         owned = db.scalar(

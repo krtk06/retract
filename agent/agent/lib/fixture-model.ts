@@ -82,6 +82,7 @@ const UNCitedFinding = {
   category: "injection",
 };
 
+// aislop-ignore-next-line ai-slop/meta-comment -- this docstring describes the helper, not an edit plan
 /**
  * Runs a scripted sequence of tool steps for one turn, then answers.
  *
@@ -98,6 +99,17 @@ function steps(
 ): MockModelResponse {
   if (!firstTurnWithMarker(marker, request)) return { text: final };
   return plan[currentTurnStep(request)] ?? { text: final };
+}
+
+/** Runs one tool step, then answers differently for a refusal/failure and a success. */
+function toolThenAnswer(
+  marker: string,
+  request: MockModelRequest,
+  step: MockModelResponse,
+  denied: string,
+  ok: string,
+): MockModelResponse {
+  return steps(marker, request, [step], toolFailed(request) ? denied : ok);
 }
 
 const SCRIPTS: Record<string, Script> = {
@@ -177,85 +189,76 @@ const SCRIPTS: Record<string, Script> = {
         : "Recorded 1 finding citing app/cache_key.py:11.",
     ),
 
-  "run-analysis": (request) => {
-    const final = toolFailed(request)
-      ? "Understood — I did not start an analysis. Say the word if you want one."
-      : "Started analysis 43; it is running.";
-    return steps("run-analysis", request, [
+  "run-analysis": (request) =>
+    toolThenAnswer(
+      "run-analysis",
+      request,
       { toolCalls: [{ name: "run_analysis", input: { repositoryId: 7 } }] },
-    ], final);
-  },
+      "Understood — I did not start an analysis. Say the word if you want one.",
+      "Started analysis 43; it is running.",
+    ),
 
-  "remediation-plan": (request) => {
-    const final = toolFailed(request)
-      ? "Understood — I did not attach the fix. The catalog's generic steps still stand."
-      : "Attached a repo-specific fix for finding 900, citing app/cache_key.py:11.";
-    return steps(
+  "remediation-plan": (request) =>
+    toolThenAnswer(
       "remediation-plan",
       request,
-      [
-        {
-          toolCalls: [
-            {
-              name: "record_remediation",
-              input: {
-                analysisId: ANALYSIS_ID,
-                agent: "eve:security",
-                remediations: [
-                  {
-                    finding_id: 900,
-                    action: "Load the salt from the OS keyring at process start",
-                    steps: [
-                      "Read the salt once in app/cache_key.py and pass it in, instead of "
-                        + "recomputing the SHA1 on every call.",
-                      "Delete the module-level literal at app/cache_key.py:11.",
-                    ],
-                    effort: "low",
-                    verify: "Re-run gitleaks; finding 900 should disappear.",
-                    reasoning: "The catalog says rotate it, which does not help here: the "
-                      + "value is not a credential, it is a cache salt.",
-                  },
-                ],
-              },
+      {
+        toolCalls: [
+          {
+            name: "record_remediation",
+            input: {
+              analysisId: ANALYSIS_ID,
+              agent: "eve:security",
+              remediations: [
+                {
+                  finding_id: 900,
+                  action: "Load the salt from the OS keyring at process start",
+                  steps: [
+                    "Read the salt once in app/cache_key.py and pass it in, instead of "
+                      + "recomputing the SHA1 on every call.",
+                    "Delete the module-level literal at app/cache_key.py:11.",
+                  ],
+                  effort: "low",
+                  verify: "Re-run gitleaks; finding 900 should disappear.",
+                  reasoning: "The catalog says rotate it, which does not help here: the "
+                    + "value is not a credential, it is a cache salt.",
+                },
+              ],
             },
-          ],
-        },
-      ],
-      final,
-    );
-  },
+          },
+        ],
+      },
+      "Understood — I did not attach the fix. The catalog's generic steps still stand.",
+      "Attached a repo-specific fix for finding 900, citing app/cache_key.py:11.",
+    ),
 
-  "decide-finding": (request) => {
-    const final = toolFailed(request)
-      ? "Understood — I did not record a decision. The finding stays pending."
-      : "Recorded the reviewer's approval.";
-    return steps(
+  "decide-finding": (request) =>
+    toolThenAnswer(
       "decide-finding",
       request,
-      [
-        {
-          toolCalls: [
-            {
-              name: "decide_finding",
-              input: {
-                analysisId: ANALYSIS_ID,
-                findingId: 900,
-                decision: "approve",
-                note: "confirmed",
-              },
+      {
+        toolCalls: [
+          {
+            name: "decide_finding",
+            input: {
+              analysisId: ANALYSIS_ID,
+              findingId: 900,
+              decision: "approve",
+              note: "confirmed",
             },
-          ],
-        },
-      ],
-      final,
-    );
-  },
+          },
+        ],
+      },
+      "Understood — I did not record a decision. The finding stays pending.",
+      "Recorded the reviewer's approval.",
+    ),
 };
 
 const MARKER = /\[fixture:([a-z-]+)\]/;
 
 export const fixtureModel: MockModelResponder = (request) => {
   if (process.env.EVE_FIXTURE_DEBUG === "1") {
+    // aislop-ignore-next-line ai-slop/console-leftover -- debug-gated by EVE_FIXTURE_DEBUG, not production output
     console.log(
       "[fixture] roles=" +
         request.messages.map((m) => m.role).join(",") +

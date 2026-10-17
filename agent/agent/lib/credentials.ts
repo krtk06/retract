@@ -232,5 +232,5 @@ export function resolveModelId(
   env: Record<string, string | undefined> = process.env,
   fallback: string,
 ): string {
-  return env.RETRACT_MODEL?.trim() || fallback;
+  return env.RETRACT_MODEL?.trim() || fallback; // aislop-ignore-line ai-slop/hidden-fallback -- blank-vs-nullish fallback is the documented contract
 }

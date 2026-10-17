@@ -19,7 +19,6 @@ depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:
-    # --- who is a development account ------------------------------------------
     # The bypass mints accounts with no GitHub identity and no password; that is
     # also how the old rules already described one, so the backfill is exact.
     op.add_column(
@@ -27,7 +26,6 @@ def upgrade() -> None:
     )
     op.execute("UPDATE users SET is_dev = true WHERE github_id IS NULL AND password_hash IS NULL")
 
-    # --- one repository row per (creator, url) ---------------------------------
     op.add_column(
         "repositories",
         sa.Column("is_shared", sa.Boolean(), nullable=False, server_default=sa.false()),

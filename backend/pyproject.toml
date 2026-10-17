@@ -23,6 +23,8 @@ dependencies = [
     "pyjwt>=2.14",
     "bcrypt>=4.1",
     "httpx>=0.27",
+    # Parses PEP 508 requirement strings and versions for the dependency audit.
+    "packaging>=24",
     "sse-starlette>=2.1",
     "radon>=6.0",
     # >=1.179 because 1.178 pins `pyjwt~=2.13.0`, which holds the vulnerable release

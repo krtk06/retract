@@ -30,8 +30,8 @@ def send(to: str, subject: str, body: str) -> None:
         return
     try:
         _send_smtp(settings.smtp_url, settings.mail_from, to, subject, body)
-    except (OSError, smtplib.SMTPException, ValueError):
-        logger.exception("could not send %r to %s; the request continues", subject, to)
+    except (OSError, smtplib.SMTPException, ValueError) as exc:
+        logger.exception("could not send %r to %s; the request continues: %s", subject, to, exc)
 
 
 def _no_transport(to: str, subject: str, body: str) -> None:

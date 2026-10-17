@@ -1,0 +1,3 @@
+# Fixture app with deliberately planted vulnerabilities. It is analysis input for
+# the Retract benchmark, not shipped code, so its slop and secrets are intentional.
+benchmark/seedy-python-app/

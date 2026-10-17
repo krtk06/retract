@@ -98,23 +98,8 @@ def _render_ungrounded(
     return "\n".join(lines)
 
 
-def render_report(
-    result: BenchmarkResult,
-    command: str = "",
-    calibration: list[CalibrationRow] | None = None,
-) -> str:
+def _render_headline_metrics(result: BenchmarkResult) -> list[str]:
     lines: list[str] = []
-    lines.append(f"# Benchmark report — `{result.repo}`")
-    lines.append("")
-    lines.append(f"Analysis: **#{result.analysis_id}**")
-    if command:
-        lines.append("")
-        lines.append(f"Reproduce: `{command}`")
-    lines.append("")
-
-    if not result.has_ground_truth:
-        return _render_ungrounded(result, calibration, command)
-
     lines.append("## Headline")
     lines.append("")
     lines.append("| Metric | Value |")
@@ -142,18 +127,27 @@ def render_report(
         f"| Findings | {result.open_findings} open, {result.dismissed_findings} dismissed |"
     )
     lines.append("")
+    return lines
 
-    if result.untriaged_planted:
-        lines.append("## Planted false positives not triaged")
-        lines.append("")
-        lines.append("These were expected to be dismissed and were not:")
-        lines.append("")
-        for outcome in result.untriaged_planted:
-            where = outcome.expectation.file or "(any file)"
-            note = outcome.expectation.note or "no note"
-            lines.append(f"- **{outcome.expectation.category}** in `{where}` — {note}")
-        lines.append("")
 
+def _render_untriaged(result: BenchmarkResult) -> list[str]:
+    if not result.untriaged_planted:
+        return []
+    lines: list[str] = []
+    lines.append("## Planted false positives not triaged")
+    lines.append("")
+    lines.append("These were expected to be dismissed and were not:")
+    lines.append("")
+    for outcome in result.untriaged_planted:
+        where = outcome.expectation.file or "(any file)"
+        note = outcome.expectation.note or "no note"
+        lines.append(f"- **{outcome.expectation.category}** in `{where}` — {note}")
+    lines.append("")
+    return lines
+
+
+def _render_per_category(result: BenchmarkResult) -> list[str]:
+    lines: list[str] = []
     lines.append("## Per category")
     lines.append("")
     lines.append("| Category | Expected | Recalled | Recall | Open | Matched | Precision |")
@@ -167,78 +161,125 @@ def render_report(
             f"{score.open_findings} | {score.matched_findings} | {_pct(score.precision_grounded)} |"
         )
     lines.append("")
+    return lines
 
+
+def _render_missed(result: BenchmarkResult) -> list[str]:
     missed = [
         o
         for o in result.outcomes
         if o.match.value == "unmatched" and not o.expectation.expect_dismissed
     ]
-    if missed:
-        lines.append("## Missed expectations")
-        lines.append("")
-        for outcome in missed:
-            where = outcome.expectation.file or "(any file)"
-            line = f":{outcome.expectation.line}" if outcome.expectation.line else ""
-            note = outcome.expectation.note or "no note"
-            lines.append(f"- **{outcome.expectation.category}** `{where}{line}` — {note}")
-        lines.append("")
+    if not missed:
+        return []
+    lines: list[str] = []
+    lines.append("## Missed expectations")
+    lines.append("")
+    for outcome in missed:
+        where = outcome.expectation.file or "(any file)"
+        line = f":{outcome.expectation.line}" if outcome.expectation.line else ""
+        note = outcome.expectation.note or "no note"
+        lines.append(f"- **{outcome.expectation.category}** `{where}{line}` — {note}")
+    lines.append("")
+    return lines
 
+
+def _render_mislocated(result: BenchmarkResult) -> list[str]:
     mislocated = [o for o in result.outcomes if o.match.value in ("wrong-file", "wrong-line")]
-    if mislocated:
-        lines.append("## Reported, but not where expected")
-        lines.append("")
-        for outcome in mislocated:
-            where = outcome.expectation.file or "(any file)"
-            line = f":{outcome.expectation.line}" if outcome.expectation.line else ""
-            lines.append(
-                f"- **{outcome.expectation.category}** expected `{where}{line}`, "
-                f"matched `{outcome.match.value}` (finding #{outcome.finding_id})"
-            )
-        lines.append("")
-
-    if result.duplicate_findings:
-        lines.append("## Duplicate reports")
-        lines.append("")
+    if not mislocated:
+        return []
+    lines: list[str] = []
+    lines.append("## Reported, but not where expected")
+    lines.append("")
+    for outcome in mislocated:
+        where = outcome.expectation.file or "(any file)"
+        line = f":{outcome.expectation.line}" if outcome.expectation.line else ""
         lines.append(
-            f"{len(result.duplicate_findings)} open finding(s) repeat a condition another "
-            "finding already covers (same category and file). These are not new problems, "
-            "but they are noise a reviewer has to read past:"
+            f"- **{outcome.expectation.category}** expected `{where}{line}`, "
+            f"matched `{outcome.match.value}` (finding #{outcome.finding_id})"
         )
-        lines.append("")
-        for finding_id in result.duplicate_findings:
-            lines.append(f"- finding #{finding_id}")
-        lines.append("")
+    lines.append("")
+    return lines
 
-    if result.unreviewed_categories:
-        lines.append("## Not covered by this ground truth")
+
+def _render_duplicates(result: BenchmarkResult) -> list[str]:
+    if not result.duplicate_findings:
+        return []
+    lines: list[str] = []
+    lines.append("## Duplicate reports")
+    lines.append("")
+    lines.append(
+        f"{len(result.duplicate_findings)} open finding(s) repeat a condition another "
+        "finding already covers (same category and file). These are not new problems, "
+        "but they are noise a reviewer has to read past:"
+    )
+    lines.append("")
+    for finding_id in result.duplicate_findings:
+        lines.append(f"- finding #{finding_id}")
+    lines.append("")
+    return lines
+
+
+def _render_unreviewed(result: BenchmarkResult) -> list[str]:
+    if not result.unreviewed_categories:
+        return []
+    lines: list[str] = []
+    lines.append("## Not covered by this ground truth")
+    lines.append("")
+    lines.append(
+        "These categories produced findings but are not enumerated in the ground-truth "
+        "file, so they are excluded from precision. Add them to make the numbers tighter:"
+    )
+    lines.append("")
+    for name in sorted(result.unreviewed_categories):
+        count = result.categories[name].unreviewed_findings
+        lines.append(f"- `{name}` ({count} finding{'s' if count != 1 else ''})")
+    lines.append("")
+    return lines
+
+
+def _render_how_to_read() -> list[str]:
+    return [
+        "- **Recall** is the number to improve by adding analyzers: an expectation with no "
+        "matching finding is a gap in coverage.",
+        "- **Precision (grounded)** is the number to quote. Only categories the ground truth "
+        "enumerates are counted, so an incomplete ground-truth file lowers "
+        "precision (strict), not precision (grounded).",
+        "- A finding is matched by category, then file, then line within a small tolerance "
+        "(tools cite the enclosing symbol or block). A dismissed finding never counts as "
+        "detected — including for planted false positives, which are expected to be dismissed.",
+    ]
+
+
+def render_report(
+    result: BenchmarkResult,
+    command: str = "",
+    calibration: list[CalibrationRow] | None = None,
+) -> str:
+    lines: list[str] = []
+    lines.append(f"# Benchmark report — `{result.repo}`")
+    lines.append("")
+    lines.append(f"Analysis: **#{result.analysis_id}**")
+    if command:
         lines.append("")
-        lines.append(
-            "These categories produced findings but are not enumerated in the ground-truth "
-            "file, so they are excluded from precision. Add them to make the numbers tighter:"
-        )
-        lines.append("")
-        for name in sorted(result.unreviewed_categories):
-            count = result.categories[name].unreviewed_findings
-            lines.append(f"- `{name}` ({count} finding{'s' if count != 1 else ''})")
-        lines.append("")
+        lines.append(f"Reproduce: `{command}`")
+    lines.append("")
+
+    if not result.has_ground_truth:
+        return _render_ungrounded(result, calibration, command)
+
+    lines.extend(_render_headline_metrics(result))
+    lines.extend(_render_untriaged(result))
+    lines.extend(_render_per_category(result))
+    lines.extend(_render_missed(result))
+    lines.extend(_render_mislocated(result))
+    lines.extend(_render_duplicates(result))
+    lines.extend(_render_unreviewed(result))
 
     if calibration:
         lines.extend(render_calibration(calibration, result.loc, result.open_findings))
         lines.append("## How to read this")
     lines.append("")
-    lines.append(
-        "- **Recall** is the number to improve by adding analyzers: an expectation with no "
-        "matching finding is a gap in coverage."
-    )
-    lines.append(
-        "- **Precision (grounded)** is the number to quote. Only categories the ground truth "
-        "enumerates are counted, so an incomplete ground-truth file lowers "
-        "precision (strict), not precision (grounded)."
-    )
-    lines.append(
-        "- A finding is matched by category, then file, then line within a small tolerance "
-        "(tools cite the enclosing symbol or block). A dismissed finding never counts as "
-        "detected — including for planted false positives, which are expected to be dismissed."
-    )
+    lines.extend(_render_how_to_read())
     lines.append("")
     return "\n".join(lines)

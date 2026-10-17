@@ -39,6 +39,83 @@ function verifiedFromUrl(): boolean {
 
 const AUTH_FALLBACK = "GitHub sign-in did not complete. Try again.";
 
+function ModeTab({
+  active,
+  onSelect,
+  children,
+}: {
+  active: boolean;
+  onSelect: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onSelect}
+      className={`rounded px-3 py-1 ${
+        active ? "bg-zinc-800 text-zinc-100" : "text-zinc-400 hover:text-zinc-200"
+      }`}
+    >
+      {children}
+    </button>
+  );
+}
+
+function EmailAuthForm({
+  mode,
+  email,
+  password,
+  pending,
+  onEmailChange,
+  onPasswordChange,
+  onSubmit,
+}: {
+  mode: Mode;
+  email: string;
+  password: string;
+  pending: boolean;
+  onEmailChange: (value: string) => void;
+  onPasswordChange: (value: string) => void;
+  onSubmit: (event: React.FormEvent) => void;
+}) {
+  return (
+    <form aria-label="Email sign-in" onSubmit={onSubmit} className="space-y-3">
+      <input
+        type="email"
+        value={email}
+        onChange={(event) => onEmailChange(event.target.value)}
+        placeholder="you@example.com"
+        autoComplete="email"
+        className="block w-full rounded-md border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm outline-none placeholder:text-zinc-500 focus:border-zinc-500"
+        required
+      />
+      <input
+        type="password"
+        value={password}
+        onChange={(event) => onPasswordChange(event.target.value)}
+        placeholder={mode === "register" ? "At least 8 characters" : "Password"}
+        autoComplete={mode === "register" ? "new-password" : "current-password"}
+        minLength={mode === "register" ? 8 : undefined}
+        className="block w-full rounded-md border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm outline-none placeholder:text-zinc-500 focus:border-zinc-500"
+        required
+      />
+      <button
+        type="submit"
+        disabled={pending}
+        className="block w-full rounded-md bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-500 disabled:opacity-50"
+      >
+        {pending
+          ? mode === "register"
+            ? "Creating account…"
+            : "Signing in…"
+          : mode === "register"
+            ? "Create account"
+            : "Sign in"}
+      </button>
+    </form>
+  );
+}
+
 export function LoginPage() {
   const queryClient = useQueryClient();
   const register = useRegister();
@@ -146,66 +223,35 @@ export function LoginPage() {
         </div>
 
         <div className="mb-3 grid grid-cols-2 rounded-md border border-zinc-700 p-1 text-sm">
-          <button
-            type="button"
-            onClick={() => {
+          <ModeTab
+            active={mode === "login"}
+            onSelect={() => {
               setMode("login");
               setError(null);
             }}
-            className={`rounded px-3 py-1 ${
-              mode === "login" ? "bg-zinc-800 text-zinc-100" : "text-zinc-400 hover:text-zinc-200"
-            }`}
           >
             Sign in
-          </button>
-          <button
-            type="button"
-            onClick={() => {
+          </ModeTab>
+          <ModeTab
+            active={mode === "register"}
+            onSelect={() => {
               setMode("register");
               setError(null);
             }}
-            className={`rounded px-3 py-1 ${
-              mode === "register" ? "bg-zinc-800 text-zinc-100" : "text-zinc-400 hover:text-zinc-200"
-            }`}
           >
             Create account
-          </button>
+          </ModeTab>
         </div>
 
-        <form aria-label="Email sign-in" onSubmit={handleSubmit} className="space-y-3">
-          <input
-            type="email"
-            value={email}
-            onChange={(event) => setEmail(event.target.value)}
-            placeholder="you@example.com"
-            autoComplete="email"
-            className="block w-full rounded-md border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm outline-none placeholder:text-zinc-500 focus:border-zinc-500"
-            required
-          />
-          <input
-            type="password"
-            value={password}
-            onChange={(event) => setPassword(event.target.value)}
-            placeholder={mode === "register" ? "At least 8 characters" : "Password"}
-            autoComplete={mode === "register" ? "new-password" : "current-password"}
-            minLength={mode === "register" ? 8 : undefined}
-            className="block w-full rounded-md border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm outline-none placeholder:text-zinc-500 focus:border-zinc-500"
-            required
-          />
-          <button
-            type="submit"
-            disabled={pending}
-            className="block w-full rounded-md bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-500 disabled:opacity-50"
-          >
-            {pending
-              ? mode === "register"
-                ? "Creating account…"
-                : "Signing in…"
-              : mode === "register"
-                ? "Create account"
-                : "Sign in"}
-          </button>
-        </form>
+        <EmailAuthForm
+          mode={mode}
+          email={email}
+          password={password}
+          pending={pending}
+          onEmailChange={setEmail}
+          onPasswordChange={setPassword}
+          onSubmit={handleSubmit}
+        />
 
         {showDevLogin && (
           <button

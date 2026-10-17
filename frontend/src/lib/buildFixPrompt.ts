@@ -109,7 +109,7 @@ export const PILLAR_BY_CATEGORY: Record<string, string> = {
   complexity: "code-quality",
   maintainability: "code-quality",
   duplication: "code-quality",
-  secret: "security",
+  secret: "security", // aislop-ignore-line security/hardcoded-secret -- finding-category key, not a credential
   vulnerability: "security",
   injection: "security",
   "weak-crypto": "security",

@@ -1,6 +1,7 @@
 """Dependency checks: vulnerable versions (OSV API) + outdated pins (PyPI/npm)."""
 
 import json
+import logging
 import time
 from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
 from dataclasses import dataclass
@@ -14,6 +15,9 @@ from app.models import Severity
 from app.services.tools.context import ToolContext
 from app.services.tools.findings import FindingDraft
 
+logger = logging.getLogger(__name__)
+
+# aislop-ignore-next-line ai-slop/hardcoded-url -- stable public API endpoint
 OSV_BATCH_URL = "https://api.osv.dev/v1/querybatch"
 PYPI_URL = "https://pypi.org/pypi/{name}/json"
 NPM_URL = "https://registry.npmjs.org/{name}"
@@ -67,8 +71,8 @@ def _parse_requirements(path: Path, source: str) -> list[Dep]:
             version = _exact_pin_version(req)
             if version:
                 out.append(Dep(req.name, version, "PyPI", source, line_no))
-    except OSError:
-        pass
+    except OSError as exc:
+        logger.warning("could not read dependency file %s: %s", source, exc)
     return out
 
 
@@ -278,11 +282,22 @@ def _latest_version(client: httpx.Client, dep: Dep) -> str | None:
         if dep.ecosystem == "PyPI":
             response = client.get(PYPI_URL.format(name=dep.name))
             response.raise_for_status()
-            return response.json().get("info", {}).get("version")
+            return _registry_field(response.json(), "info", "version")
         if dep.ecosystem == "npm":
             response = client.get(NPM_URL.format(name=dep.name))
             response.raise_for_status()
-            return response.json().get("dist-tags", {}).get("latest")
+            return _registry_field(response.json(), "dist-tags", "latest")
     except (httpx.HTTPError, ValueError):
         return None
     return None
+
+
+def _registry_field(payload: object, section: str, key: str) -> str | None:
+    """Read ``payload[section][key]`` without assuming either level exists."""
+    if not isinstance(payload, dict):
+        return None
+    part = payload.get(section)
+    if not isinstance(part, dict):
+        return None
+    value = part.get(key)
+    return value if isinstance(value, str) else None

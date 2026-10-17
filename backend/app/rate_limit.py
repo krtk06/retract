@@ -68,5 +68,5 @@ def enforce(
             )
     except HTTPException:
         raise
-    except redis.RedisError:
-        logger.warning("rate limiter unavailable; allowing the request", exc_info=True)
+    except redis.RedisError as exc:
+        logger.warning("rate limiter unavailable; allowing the request: %s", exc, exc_info=True)

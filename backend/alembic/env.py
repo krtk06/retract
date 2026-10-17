@@ -7,6 +7,8 @@ from sqlalchemy import engine_from_config, pool
 from alembic import context
 from app.config import get_settings
 from app.db import Base
+
+# aislop-ignore-next-line ai-slop/unused-import -- imported so Alembic autogenerate sees every model
 from app.models import Analysis, Approval, CalibrationStat, Finding, Repository, User  # noqa: F401
 
 config = context.config

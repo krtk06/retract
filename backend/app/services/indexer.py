@@ -83,67 +83,85 @@ def _walk_python(root: Node, source: bytes, rel: str, out: IndexResult) -> None:
     )
     module_scope = (module, 1)
 
-    def visit(node: Node, class_stack: list[str], scope: tuple[str, int]) -> None:
-        next_scope = scope
-        next_class_stack = class_stack
-        if node.type == "class_definition":
-            name_node = node.child_by_field_name("name")
-            if name_node is not None:
-                name = _text(name_node, source)
-                line = node.start_point[0] + 1
-                out.symbols.append(
-                    SymbolRec(rel, name, SymbolKind.CLASS, line, node.end_point[0] + 1)
-                )
-                next_scope = (name, line)
-                next_class_stack = [*class_stack, name]
-        elif node.type == "function_definition":
-            name_node = node.child_by_field_name("name")
-            if name_node is not None:
-                name = _text(name_node, source)
-                kind = SymbolKind.METHOD if class_stack else SymbolKind.FUNCTION
-                line = node.start_point[0] + 1
-                out.symbols.append(SymbolRec(rel, name, kind, line, node.end_point[0] + 1))
-                next_scope = (name, line)
-        elif node.type == "import_statement":
-            for child in node.children:
-                if child.type in ("dotted_name", "aliased_import"):
-                    out.edges.append(
-                        EdgeRec(
-                            rel,
-                            module,
-                            1,
-                            _text(child, source).split(" as ")[0],
-                            EdgeKind.IMPORTS,
-                        )
-                    )
-        elif node.type == "import_from_statement":
-            module_node = node.child_by_field_name("module_name")
-            if module_node is not None:
-                prefix = _text(module_node, source)
-                names = [
-                    _text(c, source).split(" as ")[0]
-                    for c in node.children
-                    if c.type in ("dotted_name", "aliased_import")
-                ]
-                # "from x import a, b" -> edges to x, x.a, x.b
-                out.edges.append(EdgeRec(rel, module, 1, prefix, EdgeKind.IMPORTS))
-                for imported in names:
-                    joined = (
-                        f"{prefix}{imported}" if prefix.endswith(".") else f"{prefix}.{imported}"
-                    )
-                    out.edges.append(EdgeRec(rel, module, 1, joined, EdgeKind.IMPORTS))
-        elif node.type == "call":
-            func = node.child_by_field_name("function")
-            if func is not None and func.type in ("identifier", "attribute"):
-                callee = _text(func, source)
-                if func.type == "attribute":
-                    attribute = func.child_by_field_name("attribute")
-                    if attribute is not None:
-                        callee = _text(attribute, source)
-                out.edges.append(EdgeRec(rel, next_scope[0], next_scope[1], callee, EdgeKind.CALLS))
+    def handle_class(
+        node: Node, class_stack: list[str], scope: tuple[str, int]
+    ) -> tuple[tuple[str, int], list[str]]:
+        name_node = node.child_by_field_name("name")
+        if name_node is None:
+            return scope, class_stack
+        name = _text(name_node, source)
+        line = node.start_point[0] + 1
+        out.symbols.append(SymbolRec(rel, name, SymbolKind.CLASS, line, node.end_point[0] + 1))
+        return (name, line), [*class_stack, name]
 
+    def handle_function(
+        node: Node, class_stack: list[str], scope: tuple[str, int]
+    ) -> tuple[tuple[str, int], list[str]]:
+        name_node = node.child_by_field_name("name")
+        if name_node is None:
+            return scope, class_stack
+        name = _text(name_node, source)
+        kind = SymbolKind.METHOD if class_stack else SymbolKind.FUNCTION
+        line = node.start_point[0] + 1
+        out.symbols.append(SymbolRec(rel, name, kind, line, node.end_point[0] + 1))
+        return (name, line), class_stack
+
+    def handle_import(
+        node: Node, class_stack: list[str], scope: tuple[str, int]
+    ) -> tuple[tuple[str, int], list[str]]:
         for child in node.children:
-            visit(child, next_class_stack, next_scope)
+            if child.type in ("dotted_name", "aliased_import"):
+                out.edges.append(
+                    EdgeRec(rel, module, 1, _text(child, source).split(" as ")[0], EdgeKind.IMPORTS)
+                )
+        return scope, class_stack
+
+    def handle_import_from(
+        node: Node, class_stack: list[str], scope: tuple[str, int]
+    ) -> tuple[tuple[str, int], list[str]]:
+        module_node = node.child_by_field_name("module_name")
+        if module_node is None:
+            return scope, class_stack
+        prefix = _text(module_node, source)
+        names = [
+            _text(c, source).split(" as ")[0]
+            for c in node.children
+            if c.type in ("dotted_name", "aliased_import")
+        ]
+        # "from x import a, b" -> edges to x, x.a, x.b
+        out.edges.append(EdgeRec(rel, module, 1, prefix, EdgeKind.IMPORTS))
+        for imported in names:
+            joined = f"{prefix}{imported}" if prefix.endswith(".") else f"{prefix}.{imported}"
+            out.edges.append(EdgeRec(rel, module, 1, joined, EdgeKind.IMPORTS))
+        return scope, class_stack
+
+    def handle_call(
+        node: Node, class_stack: list[str], scope: tuple[str, int]
+    ) -> tuple[tuple[str, int], list[str]]:
+        func = node.child_by_field_name("function")
+        if func is not None and func.type in ("identifier", "attribute"):
+            callee = _text(func, source)
+            if func.type == "attribute":
+                attribute = func.child_by_field_name("attribute")
+                if attribute is not None:
+                    callee = _text(attribute, source)
+            out.edges.append(EdgeRec(rel, scope[0], scope[1], callee, EdgeKind.CALLS))
+        return scope, class_stack
+
+    handlers = {
+        "class_definition": handle_class,
+        "function_definition": handle_function,
+        "import_statement": handle_import,
+        "import_from_statement": handle_import_from,
+        "call": handle_call,
+    }
+
+    def visit(node: Node, class_stack: list[str], scope: tuple[str, int]) -> None:
+        handler = handlers.get(node.type)
+        if handler is not None:
+            scope, class_stack = handler(node, class_stack, scope)
+        for child in node.children:
+            visit(child, class_stack, scope)
 
     visit(root, [], module_scope)
 
@@ -155,55 +173,59 @@ def _walk_javascript(root: Node, source: bytes, rel: str, out: IndexResult) -> N
     )
     module_scope = (module, 1)
 
-    def visit(node: Node, scope: tuple[str, int]) -> None:
-        next_scope = scope
-        if node.type == "class_declaration":
-            name_node = node.child_by_field_name("name")
-            if name_node is not None:
-                name = _text(name_node, source)
-                line = node.start_point[0] + 1
-                out.symbols.append(
-                    SymbolRec(rel, name, SymbolKind.CLASS, line, node.end_point[0] + 1)
-                )
-                next_scope = (name, line)
-        elif node.type == "function_declaration":
-            name_node = node.child_by_field_name("name")
-            if name_node is not None:
-                name = _text(name_node, source)
-                line = node.start_point[0] + 1
-                out.symbols.append(
-                    SymbolRec(rel, name, SymbolKind.FUNCTION, line, node.end_point[0] + 1)
-                )
-                next_scope = (name, line)
-        elif node.type == "import_statement":
-            src_node = node.child_by_field_name("source")
-            if src_node is not None:
-                out.edges.append(
-                    EdgeRec(rel, module, 1, _text(src_node, source).strip("'\""), EdgeKind.IMPORTS)
-                )
-        elif node.type == "call_expression":
-            func = node.child_by_field_name("function")
-            if func is not None:
-                if func.type == "identifier":
-                    callee = _text(func, source)
-                    out.edges.append(
-                        EdgeRec(rel, next_scope[0], next_scope[1], callee, EdgeKind.CALLS)
-                    )
-                elif func.type == "member_expression":
-                    attr = func.child_by_field_name("property")
-                    if attr is not None:
-                        out.edges.append(
-                            EdgeRec(
-                                rel,
-                                next_scope[0],
-                                next_scope[1],
-                                _text(attr, source),
-                                EdgeKind.CALLS,
-                            )
-                        )
+    def handle_class(node: Node, scope: tuple[str, int]) -> tuple[str, int]:
+        name_node = node.child_by_field_name("name")
+        if name_node is None:
+            return scope
+        name = _text(name_node, source)
+        line = node.start_point[0] + 1
+        out.symbols.append(SymbolRec(rel, name, SymbolKind.CLASS, line, node.end_point[0] + 1))
+        return (name, line)
 
+    def handle_function(node: Node, scope: tuple[str, int]) -> tuple[str, int]:
+        name_node = node.child_by_field_name("name")
+        if name_node is None:
+            return scope
+        name = _text(name_node, source)
+        line = node.start_point[0] + 1
+        out.symbols.append(SymbolRec(rel, name, SymbolKind.FUNCTION, line, node.end_point[0] + 1))
+        return (name, line)
+
+    def handle_import(node: Node, scope: tuple[str, int]) -> tuple[str, int]:
+        src_node = node.child_by_field_name("source")
+        if src_node is not None:
+            out.edges.append(
+                EdgeRec(rel, module, 1, _text(src_node, source).strip("'\""), EdgeKind.IMPORTS)
+            )
+        return scope
+
+    def handle_call(node: Node, scope: tuple[str, int]) -> tuple[str, int]:
+        func = node.child_by_field_name("function")
+        if func is not None:
+            if func.type == "identifier":
+                callee = _text(func, source)
+                out.edges.append(EdgeRec(rel, scope[0], scope[1], callee, EdgeKind.CALLS))
+            elif func.type == "member_expression":
+                attr = func.child_by_field_name("property")
+                if attr is not None:
+                    out.edges.append(
+                        EdgeRec(rel, scope[0], scope[1], _text(attr, source), EdgeKind.CALLS)
+                    )
+        return scope
+
+    handlers = {
+        "class_declaration": handle_class,
+        "function_declaration": handle_function,
+        "import_statement": handle_import,
+        "call_expression": handle_call,
+    }
+
+    def visit(node: Node, scope: tuple[str, int]) -> None:
+        handler = handlers.get(node.type)
+        if handler is not None:
+            scope = handler(node, scope)
         for child in node.children:
-            visit(child, next_scope)
+            visit(child, scope)
 
     visit(root, module_scope)
 

@@ -133,8 +133,8 @@ def run_analysis(analysis_id: int) -> dict:
                 analysis.error = str(exc)[:2000]
                 session.commit()
             bus.publish(analysis_id, "failed", {"error": str(exc)[:2000]})
-        except Exception:  # noqa: BLE001
-            logger.exception("failed to record analysis failure")
+        except Exception as record_exc:  # noqa: BLE001
+            logger.exception("failed to record analysis failure: %s", record_exc)
         return {"ok": False, "error": str(exc)}
     finally:
         session.close()
@@ -169,8 +169,8 @@ def fail_stalled_analysis(analysis_id: int, message: str) -> dict:
         analysis.error = message[:2000]
         session.commit()
         get_bus().publish(analysis_id, "failed", {"error": analysis.error})
-    except Exception:  # noqa: BLE001
-        logger.exception("failed to record failure for analysis %s", analysis_id)
+    except Exception as exc:  # noqa: BLE001
+        logger.exception("failed to record failure for analysis %s: %s", analysis_id, exc)
     finally:
         session.close()
     return {"ok": True, "analysis_id": analysis_id, "error": message}
@@ -258,8 +258,8 @@ def finalize_analysis(_results: list, analysis_id: int) -> dict:
                     ),
                 },
             )
-        except Exception:  # noqa: BLE001 — verification failure must not block scoring
-            logger.exception("verification failed for analysis %s", analysis_id)
+        except Exception as exc:  # noqa: BLE001 — verification failure must not block scoring
+            logger.exception("verification failed for analysis %s: %s", analysis_id, exc)
 
         try:
             updated = calibration_mod.recalibrate_analysis(session, analysis_id)
@@ -268,8 +268,8 @@ def finalize_analysis(_results: list, analysis_id: int) -> dict:
                 "step",
                 {"step": "calibrate", "message": f"Calibrated {updated} findings"},
             )
-        except Exception:  # noqa: BLE001
-            logger.exception("calibration failed for analysis %s", analysis_id)
+        except Exception as exc:  # noqa: BLE001
+            logger.exception("calibration failed for analysis %s: %s", analysis_id, exc)
 
         score = compute_score(session, analysis_id)
         analysis.score_json = score

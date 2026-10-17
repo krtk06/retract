@@ -21,7 +21,7 @@ const PILLAR_BY_CATEGORY: Record<string, string> = {
   "complexity-review": "code-quality",
   maintainability: "code-quality",
   duplication: "code-quality",
-  secret: "security",
+  secret: "security", // aislop-ignore-line security/hardcoded-secret -- finding-category key, not a credential
   vulnerability: "security",
   injection: "security",
   "weak-crypto": "security",
@@ -254,6 +254,33 @@ function FindingRow({
   );
 }
 
+function FindingList({
+  findings,
+  repository,
+  commitSha,
+  analysisId,
+}: {
+  findings: Finding[];
+  repository: Repository | null;
+  commitSha: string | null;
+  analysisId: number;
+}) {
+  return (
+    <ul className="space-y-2">
+      {findings.map((finding) => (
+        <FindingRow
+          key={finding.id}
+          finding={finding}
+          repository={repository}
+          commitSha={commitSha}
+          analysisId={analysisId}
+          showSnippet
+        />
+      ))}
+    </ul>
+  );
+}
+
 export function FindingsTable({
   findings,
   repository,
@@ -354,34 +381,22 @@ export function FindingsTable({
                   {items.length}
                 </span>
               </h4>
-              <ul className="space-y-2">
-                {items.map((finding) => (
-                  <FindingRow
-                    key={finding.id}
-                    finding={finding}
-                    repository={repository}
-                    commitSha={commitSha}
-                    analysisId={analysisId}
-                    showSnippet
-                  />
-                ))}
-              </ul>
+              <FindingList
+                findings={items}
+                repository={repository}
+                commitSha={commitSha}
+                analysisId={analysisId}
+              />
             </div>
           ))}
         </div>
       ) : (
-        <ul className="space-y-2">
-          {filtered.map((finding) => (
-            <FindingRow
-              key={finding.id}
-              finding={finding}
-              repository={repository}
-              commitSha={commitSha}
-              analysisId={analysisId}
-              showSnippet
-            />
-          ))}
-        </ul>
+        <FindingList
+          findings={filtered}
+          repository={repository}
+          commitSha={commitSha}
+          analysisId={analysisId}
+        />
       )}
     </section>
   );
