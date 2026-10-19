@@ -184,7 +184,9 @@ def _score(expectation: Expectation, findings: Sequence[Finding]) -> Match:
     return Match.WRONG_LINE
 
 
-def _record_planted(result: BenchmarkResult, expectation, open_findings: Sequence[Finding]) -> None:
+def _record_planted(
+    result: BenchmarkResult, expectation: Expectation, open_findings: Sequence[Finding]
+) -> None:
     """A planted false positive is "found" only while it is still open."""
     still_open = [
         f
@@ -202,7 +204,7 @@ def _record_planted(result: BenchmarkResult, expectation, open_findings: Sequenc
 
 
 def _record_expectation(
-    result: BenchmarkResult, expectation, open_findings: Sequence[Finding]
+    result: BenchmarkResult, expectation: Expectation, open_findings: Sequence[Finding]
 ) -> None:
     """Score one planted expectation and link the finding it matched, if any."""
     score = result.categories.setdefault(expectation.category, CategoryScore(expectation.category))
