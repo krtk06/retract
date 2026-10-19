@@ -1,12 +1,12 @@
 import type { ReactNode } from "react";
 import { Link } from "react-router-dom";
-import { PixelIcon, type PixelIconName } from "./PixelIcon";
+import { Icon, type IconName } from "./Icon";
 
 export interface EmptyStateProps {
   title: string;
   detail?: string;
   action?: { label: string; to: string } | ReactNode;
-  icon?: PixelIconName;
+  icon?: IconName;
 }
 
 /**
@@ -16,15 +16,17 @@ export interface EmptyStateProps {
  */
 export function EmptyState({ title, detail, action, icon = "logo" }: EmptyStateProps) {
   return (
-    <div className="px-well flex flex-col items-center gap-3 p-8 text-center">
-      <span className="text-faint">
-        <PixelIcon name={icon} size={24} />
+    <div className="inset flex flex-col items-center gap-3 p-8 text-center">
+      {/* A quiet float: the page is breathing, not frozen. Static under
+          reduced motion. */}
+      <span className="anim-float text-faint">
+        <Icon name={icon} size={24} />
       </span>
-      <p className="font-ui text-[11px] uppercase tracking-[0.06em] text-ink">{title}</p>
+      <p className="text-[13px] font-medium text-ink">{title}</p>
       {detail ? <p className="max-w-[32rem] text-[13px] text-muted">{detail}</p> : null}
       {action ? (
         typeof action === "object" && action !== null && "to" in action ? (
-          <Link to={action.to} className="px-btn px-btn--primary">
+          <Link to={action.to} className="btn btn--primary sheen press">
             {action.label}
           </Link>
         ) : (
@@ -38,13 +40,9 @@ export function EmptyState({ title, detail, action, icon = "logo" }: EmptyStateP
 export function Loading({ label, rows = 3 }: { label: string; rows?: number }) {
   return (
     <div role="status" aria-live="polite" className="flex flex-col gap-2">
-      <p className="px-eyebrow">{label}</p>
+      <p className="label">{label}</p>
       {Array.from({ length: rows }, (_, index) => (
-        <span
-          key={index}
-          aria-hidden="true"
-          className="px-dither block h-[28px] border-2 border-line"
-        />
+        <span key={index} aria-hidden="true" className="skeleton h-9" />
       ))}
     </div>
   );

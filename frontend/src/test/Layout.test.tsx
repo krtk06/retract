@@ -3,6 +3,7 @@ import { render, screen, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { describe, expect, it } from "vitest";
 import { Layout } from "../components/Layout";
+import { ThemeProvider } from "../components/ThemeProvider";
 import type { User } from "../api/types";
 
 const user: User = {
@@ -22,32 +23,36 @@ function renderLayout(path = "/") {
   });
 
   return render(
-    <QueryClientProvider client={queryClient}>
-      <MemoryRouter initialEntries={[path]}>
-        <Layout user={user}>
-          <p>content</p>
-        </Layout>
-      </MemoryRouter>
-    </QueryClientProvider>,
+    <ThemeProvider>
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter initialEntries={[path]}>
+          <Layout user={user}>
+            <p>content</p>
+          </Layout>
+        </MemoryRouter>
+      </QueryClientProvider>
+    </ThemeProvider>,
   );
 }
 
 describe("Layout", () => {
-  it("renders a window title bar carrying the wordmark", () => {
+  it("renders a top bar carrying the wordmark", () => {
     const { container } = renderLayout();
-    expect(container.querySelector(".px-titlebar")).not.toBeNull();
-    expect(screen.getByText("RETRACT")).toBeInTheDocument();
+    const topbar = container.querySelector<HTMLElement>(".topbar");
+    expect(topbar).not.toBeNull();
+    // "Retract" also appears in the footer, so scope to the bar.
+    expect(within(topbar!).getByText("Retract")).toBeInTheDocument();
   });
 
-  it("puts navigation in the sidebar, not the title bar", () => {
+  it("puts navigation in the rail, not the top bar", () => {
     const { container } = renderLayout("/repos");
-    const sidebar = container.querySelector<HTMLElement>("nav[aria-label='Primary']")!;
-    expect(sidebar).not.toBeNull();
-    // Scoped to the sidebar rather than the whole screen: the mobile tab strip is
-    // a second <nav aria-label="Primary"> rendering the same two links, so an
+    const rail = container.querySelectorAll<HTMLElement>("nav[aria-label='Primary']")[0];
+    expect(rail).not.toBeNull();
+    // Scoped to the rail rather than the whole screen: the mobile tab strip is a
+    // second <nav aria-label="Primary"> rendering the same two links, so an
     // unscoped query matches twice and asserts nothing about which nav owns it.
-    const link = within(sidebar).getByRole("link", { name: /repositories/i });
-    expect(sidebar.contains(link)).toBe(true);
+    const link = within(rail).getByRole("link", { name: /repositories/i });
+    expect(rail.contains(link)).toBe(true);
     expect(link).toHaveAttribute("aria-current", "page");
   });
 
@@ -58,16 +63,9 @@ describe("Layout", () => {
 
   it("shows the user and a log out control", () => {
     renderLayout();
-    // The login appears twice by design — in the title bar beside Log out, and in
-    // the sidebar's "signed in" well — so the assertion is on both occurrences.
+    // The login appears twice by design — in the top bar and in the rail's
+    // "signed in" card — so the assertion is on both occurrences.
     expect(screen.getAllByText("krztk2")).toHaveLength(2);
     expect(screen.getByRole("button", { name: /log out/i })).toBeInTheDocument();
-  });
-
-  it("marks the window dots decorative", () => {
-    const { container } = renderLayout();
-    const dots = container.querySelectorAll("[data-window-dot]");
-    expect(dots).toHaveLength(3);
-    for (const dot of dots) expect(dot.getAttribute("aria-hidden")).toBe("true");
   });
 });

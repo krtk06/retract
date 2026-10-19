@@ -1,10 +1,12 @@
 import { useMemo, useState } from "react";
+import { m } from "motion/react";
 
 import { useRemediation } from "../api/hooks";
 import type { Effort, RemediationItem, RemediationPlan, Repository } from "../api/types";
+import { EASE, stagger } from "../lib/motion";
 import { PILLAR_LABELS, SEVERITY_COLOR_VAR, type Pillar } from "../lib/palette";
 import { EmptyState } from "./EmptyState";
-import { PixelIcon } from "./PixelIcon";
+import { Icon } from "./Icon";
 
 /**
  * The fix plan: what to fix, in what order, and what it is worth.
@@ -82,19 +84,19 @@ export function RemediationPlanPanel({
   const plan = query.data;
 
   if (query.isLoading) {
-    return <p className="text-sm text-faint">Building the fix plan…</p>;
+    return <p className="text-[13px] text-faint">Building the fix plan…</p>;
   }
   if (query.isError) {
     return (
-      <p className="px-panel px-4 py-4 text-sm text-muted">
+      <p className="panel px-4 py-4 text-[13px] text-muted">
         The fix plan is unavailable for this analysis.
       </p>
     );
   }
   if (!plan || plan.work_items.length === 0) {
     return (
-      <section className="anim-step-in px-panel p-5">
-        <h3 className="font-semibold text-ink">Fix plan</h3>
+      <section className="panel anim-in p-5">
+        <h3 className="text-[15px] font-semibold text-ink">Fix plan</h3>
         <EmptyState title="Nothing to fix. No open findings were recorded." />
       </section>
     );
@@ -131,26 +133,28 @@ function PlanBody({
   );
 
   return (
-    <section className="anim-step-in px-panel p-5">
+    <section className="panel anim-in p-6">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <p className="px-eyebrow">Fix plan</p>
+          <p className="label">Fix plan</p>
           <p className="mt-1.5 flex flex-wrap items-baseline gap-3">
-            <span className="font-ui text-[28px] text-faint tabular-nums">
+            <span className="figure text-2xl text-faint">
               {plan.current_overall ?? "—"}
             </span>
-            <span className="text-2xl text-faint/60">→</span>
-            <span className="font-ui text-[28px] tabular-nums" style={{ color: "var(--ok)" }}>
+            <span className="text-xl text-faint/60">
+              <Icon name="arrow-right" size={18} />
+            </span>
+            <span className="figure text-2xl" style={{ color: "var(--ok)" }}>
               {plan.projected_overall ?? "—"}
             </span>
-            <span className="text-sm text-muted">
+            <span className="text-[13px] text-muted">
               if every item below is fixed
               {plan.recoverable_points != null && ` (+${plan.recoverable_points})`}
             </span>
           </p>
         </div>
         <div className="flex flex-col items-end gap-2.5 text-right">
-          <p className="text-xs text-faint tabular-nums">
+          <p className="text-[12px] text-faint tabular-nums">
             {plan.work_items.length} work {plan.work_items.length === 1 ? "item" : "items"} ·{" "}
             {plan.findings_considered} findings
           </p>
@@ -158,17 +162,13 @@ function PlanBody({
             <a
               href={`/api/analyses/${plan.analysis_id}/remediation.md`}
               download
-              className="px-link inline-flex items-center gap-1.5"
+              className="link inline-flex items-center gap-1.5"
             >
-              <PixelIcon name="copy" size={12} />
+              <Icon name="download" size={14} />
               Download .md
             </a>
             {onOpenAgent && (
-              <button
-                type="button"
-                onClick={onOpenAgent}
-                className="px-btn px-btn--ghost"
-              >
+              <button type="button" onClick={onOpenAgent} className="btn btn--ghost">
                 Deep fix plan with the agent
               </button>
             )}
@@ -176,7 +176,7 @@ function PlanBody({
         </div>
       </div>
 
-      <p className="mt-4 text-xs leading-relaxed text-faint text-pretty">
+      <p className="mt-4 text-[12px] leading-relaxed text-faint text-pretty">
         The headline is this platform&rsquo;s own scoring curve applied to a repository with none of
         these findings, so it is exact. Each card&rsquo;s <span className="text-ink/80">+N</span>{" "}
         is the gain <span className="text-ink/80">in that item&rsquo;s own pillar</span>, not a share
@@ -185,8 +185,8 @@ function PlanBody({
       </p>
 
       {quickWins.length > 0 && (
-        <div className="mt-6 px-well p-4">
-          <h4 className="px-eyebrow">Quickest wins</h4>
+        <div className="inset mt-6 p-4">
+          <h4 className="label">Quickest wins</h4>
           <ul className="mt-3 space-y-2">
             {quickWins.map((item, index) => (
               <li
@@ -195,15 +195,15 @@ function PlanBody({
                 // keys make React reuse the wrong element — which silently breaks the
                 // expand control on the card below.
                 key={`${index}-${item.action}`}
-                className="flex flex-wrap items-baseline gap-2 text-sm"
+                className="flex flex-wrap items-baseline gap-2 text-[13px]"
               >
                 <span className="text-ink">{item.action}</span>
                 {item.pillar_points > 0 && (
-                  <span className="text-xs font-semibold text-ok tabular-nums">
+                  <span className="text-[12px] font-medium text-ok tabular-nums">
                     +{item.pillar_points} pts
                   </span>
                 )}
-                <span className="text-xs text-faint">
+                <span className="text-[12px] text-faint">
                   {item.effort} effort ·{" "}
                   {PILLAR_LABELS[item.pillar as Pillar] ?? item.pillar} · {item.finding_count}{" "}
                   {item.finding_count === 1 ? "finding" : "findings"}
@@ -215,18 +215,18 @@ function PlanBody({
       )}
 
       {plan.unverified_items > 0 && (
-        <p className="mt-4 border border-hypo/25 bg-hypo-soft px-4 py-2.5 text-xs text-hypo">
+        <p className="mt-4 rounded-[2px] border border-hypo/40 bg-hypo-soft px-4 py-2.5 text-[12px] text-hypo">
           {plan.unverified_items} of these {plan.unverified_items === 1 ? "item rests" : "items rest"}{" "}
           on an unverified hypothesis. Review those before scheduling the work.
         </p>
       )}
 
       {pillars.length > 1 && (
-        <div className="mt-5 flex flex-wrap gap-2 text-sm">
+        <div className="mt-5 flex flex-wrap gap-2 text-[13px]">
           <select
             value={pillarFilter}
             onChange={(event) => setPillarFilter(event.target.value)}
-            className="px-input px-select w-auto"
+            className="input select w-auto"
             aria-label="Filter the fix plan by pillar"
           >
             <option value="">All areas</option>
@@ -240,19 +240,20 @@ function PlanBody({
       )}
 
       <ul className="mt-4 space-y-3">
-        {visible.map(({ item, rank }) => (
+        {visible.map(({ item, rank }, index) => (
           <WorkItemCard
             key={`${rank}-${item.action}`}
             item={item}
             rank={rank}
             repository={repository}
             commitSha={commitSha}
+            index={index}
           />
         ))}
       </ul>
 
       {plan.truncated_findings > 0 && (
-        <p className="mt-4 text-xs text-faint">
+        <p className="mt-4 text-[12px] text-faint">
           {plan.truncated_findings} further findings were grouped into work items beyond the
           display limit. The downloaded Markdown contains the ranking it was cut from.
         </p>
@@ -266,21 +267,29 @@ function WorkItemCard({
   rank,
   repository,
   commitSha,
+  index = 0,
 }: {
   item: RemediationItem;
   rank: number;
   repository: Repository | null;
   commitSha: string | null;
+  index?: number;
 }) {
   const [open, setOpen] = useState(false);
   const [showFindings, setShowFindings] = useState(false);
 
   return (
-    <li className="px-card p-4">
+    <m.li
+      layout
+      initial={{ opacity: 0, y: 6 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.34, ease: EASE, delay: stagger(index, 0.045, 0.3) }}
+      className="card p-4"
+    >
       <div className="flex flex-wrap items-center gap-2">
-        <span className="text-xs font-semibold text-faint tabular-nums">#{rank}</span>
+        <span className="text-[12px] font-medium text-faint tabular-nums">#{rank}</span>
         <span
-          className="px-badge px-badge--flat"
+          className="chip chip--flat"
           style={{
             borderColor: `var(${SEVERITY_COLOR_VAR[item.severity]})`,
             color: `var(${SEVERITY_COLOR_VAR[item.severity]})`,
@@ -288,15 +297,15 @@ function WorkItemCard({
         >
           {item.severity}
         </span>
-        <p className="text-sm font-semibold text-ink text-pretty">{item.action}</p>
+        <p className="text-[13px] font-medium text-ink text-pretty">{item.action}</p>
         <span
-          className={`border px-1.5 py-0.5 text-[10px] font-medium ${EFFORT_STYLES[item.effort]}`}
+          className={`rounded-[2px] border px-1.5 py-0.5 text-[10px] font-medium ${EFFORT_STYLES[item.effort]}`}
         >
           {item.effort} effort
         </span>
         {item.source === "llm:eve" && (
           <span
-            className="px-badge px-badge--flat"
+            className="chip chip--flat"
             style={{ borderColor: "var(--hypo)", color: "var(--hypo)" }}
           >
             agent-authored
@@ -308,7 +317,7 @@ function WorkItemCard({
             penalty count in the subline instead. */}
         {item.pillar_points > 0 && (
           <span
-            className="ml-auto text-xs font-semibold text-ok tabular-nums"
+            className="ml-auto text-[12px] font-medium text-ok tabular-nums"
             title={`What fixing this is worth in the ${PILLAR_LABELS[item.pillar as Pillar] ?? item.pillar} pillar. These values do not add up to the headline.`}
           >
             +{item.pillar_points} pts
@@ -316,7 +325,7 @@ function WorkItemCard({
         )}
       </div>
 
-      <p className="mt-1.5 text-xs text-faint">
+      <p className="mt-1.5 text-[12px] text-faint">
         {PILLAR_LABELS[item.pillar as Pillar] ?? item.pillar} · {item.finding_count}{" "}
         {item.finding_count === 1 ? "finding" : "findings"} · removes{" "}
         {item.weighted_penalty_removed} penalty points
@@ -324,41 +333,43 @@ function WorkItemCard({
       </p>
 
       {open ? (
-        <div className="mt-3 space-y-3">
-          <ol className="list-decimal space-y-2 pl-5 text-sm leading-relaxed text-muted">
+        <m.div
+          className="mt-3 space-y-3 overflow-hidden"
+          initial={{ opacity: 0, height: 0 }}
+          animate={{ opacity: 1, height: "auto" }}
+          transition={{ duration: 0.28, ease: EASE }}
+        >
+          <ol className="list-decimal space-y-2 pl-5 text-[13px] leading-relaxed text-muted">
             {item.steps.map((step) => (
               <li key={step}>{step}</li>
             ))}
           </ol>
-          <p className="text-xs text-faint">
-            <span className="font-semibold text-ink/80">Verify:</span> {item.verify}
+          <p className="text-[12px] text-faint">
+            <span className="font-medium text-ink/80">Verify:</span> {item.verify}
           </p>
           {item.references.length > 0 && (
-            <ul className="flex flex-wrap gap-3 text-xs">
+            <ul className="flex flex-wrap gap-3 text-[12px]">
               {item.references.map((reference) => (
                 <li key={reference}>
-                  <a
-                    href={reference}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="px-link"
-                  >
-                    {referenceLabel(reference)} ↗
+                  <a href={reference} target="_blank" rel="noreferrer" className="link inline-flex items-center gap-1">
+                    {referenceLabel(reference)}
+                    <Icon name="external" size={12} />
                   </a>
                 </li>
               ))}
             </ul>
           )}
           <div>
-            <button
-              type="button"
-              onClick={() => setShowFindings((value) => !value)}
-              className="px-btn px-btn--ghost"
-            >
+            <button type="button" onClick={() => setShowFindings((value) => !value)} className="btn btn--ghost">
               {showFindings ? "hide findings" : `show ${item.finding_count} findings`}
             </button>
             {showFindings && (
-              <ul className="mt-2.5 space-y-1.5 text-xs">
+              <m.ul
+                className="mt-2.5 space-y-1.5 overflow-hidden text-[12px]"
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: "auto" }}
+                transition={{ duration: 0.24, ease: EASE }}
+              >
                 {item.findings.map((finding) => {
                   const href = blobUrl(repository, commitSha, finding.file_path, finding.line_start);
                   return (
@@ -372,27 +383,24 @@ function WorkItemCard({
                         </span>
                       )}
                       {href && (
-                        <a href={href} target="_blank" rel="noreferrer" className="px-link">
-                          on GitHub ↗
+                        <a href={href} target="_blank" rel="noreferrer" className="link inline-flex items-center gap-1">
+                          on GitHub
+                          <Icon name="external" size={12} />
                         </a>
                       )}
                     </li>
                   );
                 })}
-              </ul>
+              </m.ul>
             )}
           </div>
-        </div>
+        </m.div>
       ) : (
-        <button
-          type="button"
-          onClick={() => setOpen(true)}
-          className="px-btn px-btn--ghost mt-2"
-        >
+        <button type="button" onClick={() => setOpen(true)} className="btn btn--ghost mt-2.5 press">
           show the steps
         </button>
       )}
-    </li>
+    </m.li>
   );
 }
 
@@ -418,29 +426,26 @@ export function RemediationSummaryCard({
 
   const best = plan.work_items[0];
   return (
-    <section className="anim-step-in px-panel flex flex-wrap items-center justify-between gap-4 p-5">
+    <section className="panel anim-in flex flex-wrap items-center justify-between gap-4 p-5">
       <div>
-        <h3 className="font-semibold text-ink">How to fix these issues</h3>
-        <p className="mt-1.5 text-sm text-muted">
+        <h3 className="text-[15px] font-semibold text-ink">How to fix these issues</h3>
+        <p className="mt-1.5 text-[13px] text-muted">
           {plan.work_items.length} work {plan.work_items.length === 1 ? "item" : "items"} ·{" "}
-          <span className="font-semibold text-ink">
+          <span className="font-medium text-ink">
             {plan.current_overall} → {plan.projected_overall}
           </span>{" "}
           if all are fixed
         </p>
         {best && (
-          <p className="mt-1.5 text-sm text-faint">
+          <p className="mt-1.5 text-[13px] text-faint">
             Start with <span className="text-ink/80">{best.action}</span>
             {best.pillar_points > 0 && ` (+${best.pillar_points} pts)`} · {best.effort} effort
           </p>
         )}
       </div>
-      <button
-        type="button"
-        onClick={onOpen}
-        className="px-btn px-btn--primary"
-      >
-        Open fix plan →
+      <button type="button" onClick={onOpen} className="btn btn--primary">
+        Open fix plan
+        <Icon name="arrow-right" size={14} />
       </button>
     </section>
   );

@@ -5,18 +5,10 @@ import type { GraphLink, SymbolRef } from "../api/types";
 import { EmptyState, Loading } from "./EmptyState";
 
 function KindBadge({ kind }: { kind: string }) {
-  const colors: Record<string, string> = {
-    module: "border-info/30 bg-info-soft text-info",
-    class: "border-warn/30 bg-warn-soft text-warn",
-    function: "border-ok/30 bg-ok-soft text-ok",
-    method: "border-ok/30 bg-ok-soft text-ok",
-  };
+  // A symbol kind is classification, not evidence: the dossier reserves hue for
+  // severity, status and verification, so kinds are a flat mono ticket.
   return (
-    <span
-      className={`px-badge px-badge--flat font-ui ${colors[kind] ?? "border-line bg-surface-2 text-muted"}`}
-    >
-      {kind}
-    </span>
+    <span className="chip chip--flat font-mono text-[10px] text-muted">{kind}</span>
   );
 }
 
@@ -34,13 +26,13 @@ function LinkList({
   if (links.length === 0) return null;
   return (
     <div>
-      <h5 className="px-eyebrow">{title}</h5>
+      <h5 className="label">{title}</h5>
       <ul className="mt-2 space-y-1">
         {links.map((link, index) => (
-          <li key={index} className="px-well flex items-center gap-2 px-3 py-2 text-sm">
+          <li key={index} className="inset flex items-center gap-2 px-3 py-2 text-[13px]">
             <button
               onClick={() => onSelect(link[field])}
-              className="min-w-0 truncate text-left font-mono text-accent transition-colors duration-300 hover:underline"
+              className="min-w-0 truncate text-left font-mono text-accent hover:underline"
               title={link[field]}
             >
               {link[field]}
@@ -74,16 +66,16 @@ function NeighborhoodPanel({
   );
 
   return (
-    <section className="px-panel p-5">
-      <h4 className="text-sm font-semibold text-ink">Dependency view</h4>
-      {!root && <p className="mt-2 text-xs text-faint">Select a symbol to inspect its dependencies.</p>}
+    <section className="panel p-5">
+      <h4 className="text-[13px] font-semibold text-ink">Dependency view</h4>
+      {!root && <p className="mt-2 text-[12px] text-faint">Select a symbol to inspect its dependencies.</p>}
       {root && neighborhood.isLoading && <Loading label="Loading…" />}
       {root && neighborhood.data && (
         <div className="mt-3 space-y-3">
-          <p className="font-mono text-sm text-ink">
+          <p className="font-mono text-[13px] text-ink">
             {root}
             {neighborhood.data.root && (
-              <span className="ml-2 text-xs text-faint">
+              <span className="ml-2 text-[11px] text-faint">
                 {neighborhood.data.root.file_path}:{neighborhood.data.root.line_start}
               </span>
             )}
@@ -93,7 +85,7 @@ function NeighborhoodPanel({
             <LinkList title="Used by" links={incoming} field="source" onSelect={onSelect} />
           </div>
           {neighborhood.data.links.length === 0 && (
-            <p className="text-xs text-faint">No resolved graph links for this symbol.</p>
+            <p className="text-[12px] text-faint">No resolved graph links for this symbol.</p>
           )}
         </div>
       )}
@@ -120,23 +112,23 @@ function SymbolBrowser({
   }, [symbols.data, filter]);
 
   return (
-    <section className="px-panel p-5">
-      <h4 className="text-sm font-semibold text-ink">Symbols</h4>
+    <section className="panel p-5">
+      <h4 className="text-[13px] font-semibold text-ink">Symbols</h4>
       <input
         value={filter}
         onChange={(event) => setFilter(event.target.value)}
         placeholder="Filter symbols…"
-        className="px-input mt-2.5"
+        className="input mt-2.5"
         aria-label="Filter symbols"
       />
-      <ul className="mt-2.5 max-h-96 space-y-1 overflow-y-auto pr-1">
+      <ul className="scroll mt-2.5 max-h-96 space-y-1 overflow-y-auto pr-1">
         {filtered.map((symbol) => {
           const active = selected === symbol.name;
           return (
-            <li key={symbol.id} className={`px-card ${active ? "border-l-accent" : ""}`}>
+            <li key={symbol.id} className="card overflow-hidden">
               <button
                 onClick={() => onSelect(symbol.name)}
-                className={`flex w-full items-center gap-2 px-2 py-1.5 text-left text-sm transition-colors duration-300 ${
+                className={`flex w-full items-center gap-2 px-2.5 py-1.5 text-left text-[13px] transition-colors ${
                   active ? "bg-accent-soft" : "hover:bg-surface-2"
                 }`}
               >
@@ -173,20 +165,20 @@ export function ExploreTab({ analysisId }: { analysisId: number }) {
 
   return (
     <div className="space-y-6">
-      <section className="px-panel p-5">
-        <h3 className="font-semibold text-ink">Repository Knowledge Graph</h3>
+      <section className="panel p-5">
+        <h3 className="text-[15px] font-semibold text-ink">Repository knowledge graph</h3>
         {summary.isLoading && <Loading label="Loading graph…" />}
         {summary.data && (
-          <div className="mt-3.5 flex flex-wrap gap-2 text-xs">
-            <span className="px-badge border-line-strong bg-surface-2 text-ink tabular-nums">
+          <div className="mt-3.5 flex flex-wrap gap-2 text-[11px]">
+            <span className="chip chip--flat border-line-strong bg-surface-2 text-ink tabular-nums">
               {symbolTotal} symbols
             </span>
             {Object.entries(summary.data.edges).map(([kind, count]) => (
-              <span key={kind} className="px-badge border-line bg-surface-2 text-muted tabular-nums">
+              <span key={kind} className="chip chip--flat border-line bg-surface-2 text-muted tabular-nums">
                 {count} {kind}
               </span>
             ))}
-            <span className="px-badge border-line bg-surface-2 text-muted tabular-nums">
+            <span className="chip chip--flat border-line bg-surface-2 text-muted tabular-nums">
               {edgeTotal} edges total
             </span>
           </div>

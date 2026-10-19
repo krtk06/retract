@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { m } from "motion/react";
 import { useEveAgent, type EveMessagePart } from "eve/react";
 
 import { useEveToken } from "../api/useEveToken";
-import { PixelIcon } from "./PixelIcon";
+import { EASE } from "../lib/motion";
+import { Icon } from "./Icon";
 
 /**
  * Chat with the eve agent about one analysis.
@@ -69,8 +71,8 @@ function renderPart(part: EveMessagePart, index: number, role: string): ReactNod
         key={index}
         className={
           role === "user"
-            ? "px-well border-l-4 border-l-accent p-3 text-[13px] text-ink"
-            : "whitespace-pre-wrap text-sm leading-relaxed text-muted"
+            ? "inset p-3 text-[13px] font-medium text-ink"
+            : "whitespace-pre-wrap text-[13px] leading-relaxed text-muted"
         }
       >
         {part.text}
@@ -82,7 +84,7 @@ function renderPart(part: EveMessagePart, index: number, role: string): ReactNod
     if (state === "output-available") {
       return (
         <p key={index} className="flex items-center gap-1.5 font-mono text-[11px] text-ok/80">
-          <PixelIcon name="check" size={12} />
+          <Icon name="check" size={13} />
           {part.toolName}
         </p>
       );
@@ -90,7 +92,7 @@ function renderPart(part: EveMessagePart, index: number, role: string): ReactNod
     if (state === "output-error") {
       return (
         <p key={index} className="flex items-center gap-1.5 font-mono text-[11px] text-danger/80">
-          <PixelIcon name="cross" size={12} />
+          <Icon name="x" size={13} />
           {part.toolName} failed{part.errorText ? `: ${part.errorText.slice(0, 120)}` : ""}
         </p>
       );
@@ -98,7 +100,7 @@ function renderPart(part: EveMessagePart, index: number, role: string): ReactNod
     if (state === "output-denied") {
       return (
         <p key={index} className="flex items-center gap-1.5 font-mono text-[11px] text-warn/80">
-          <PixelIcon name="ban" size={12} />
+          <Icon name="ban" size={13} />
           {part.toolName} was not approved
         </p>
       );
@@ -203,26 +205,22 @@ async (text: string) => {
 
   if (authError && messages.length === 0) {
     return (
-      <section className="px-panel border-warn p-4 text-[13px] text-warn">
+      <section className="panel border-warn p-4 text-[13px] text-warn">
         The agent is unavailable: {authError}
       </section>
     );
   }
 
   return (
-    <section className="px-panel flex flex-col overflow-hidden">
-      <header className="flex items-center justify-between gap-3 border-b-2 border-line px-5 py-3.5">
+    <section className="panel flex flex-col overflow-hidden">
+      <header className="flex items-center justify-between gap-3 border-b border-line px-5 py-3.5">
         <div>
-          <h3 className="font-semibold text-ink">Ask the agent</h3>
-          <p className="text-xs text-faint">
+          <h3 className="text-[15px] font-semibold text-ink">Ask the agent</h3>
+          <p className="text-[12px] text-faint">
             Answers cite <code className="font-mono text-muted">file:line</code> from this analysis
           </p>
         </div>
-        <button
-          type="button"
-          onClick={() => agent.reset()}
-          className="px-btn px-btn--ghost"
-        >
+        <button type="button" onClick={() => agent.reset()} className="btn btn--ghost">
           New chat
         </button>
       </header>
@@ -230,16 +228,16 @@ async (text: string) => {
       {called.length > 0 && (
         <div className="flex flex-wrap gap-1.5 border-b border-line px-5 py-2.5">
           {called.map((name) => (
-            <span key={name} className="px-badge px-badge--flat font-mono text-[9px] text-muted">
+            <span key={name} className="chip chip--flat font-mono text-[10px] text-muted">
               {name}
             </span>
           ))}
         </div>
       )}
 
-      <div ref={logRef} className="max-h-96 min-h-32 space-y-4 overflow-y-auto px-5 py-4 px-scroll">
+      <div ref={logRef} className="scroll max-h-96 min-h-32 space-y-4 overflow-y-auto px-5 py-4">
         {messages.length === 0 && (
-          <div className="space-y-2.5 text-sm text-muted">
+          <div className="space-y-2.5 text-[13px] text-muted">
             <p>Ask about this analysis, or request a review:</p>
             <div className="flex flex-wrap gap-2">
               {SUGGESTIONS.map((suggestion) => (
@@ -248,7 +246,7 @@ async (text: string) => {
                   type="button"
                   onClick={() => send(suggestion)}
                   disabled={busy || resuming}
-                  className="px-btn px-btn--ghost"
+                  className="btn btn--ghost lift press"
                 >
                   {suggestion}
                 </button>
@@ -262,26 +260,39 @@ async (text: string) => {
             .map((part, index) => renderPart(part, index, message.role))
             .filter((node): node is ReactNode => node !== null);
           if (body.length === 0) return null;
+          const isLast = message.id === messages[messages.length - 1]?.id;
           return (
-            <article key={message.id} className="space-y-1.5">
-              <p className="px-eyebrow">{message.role}</p>
+            <m.article
+              key={message.id}
+              layout="position"
+              initial={{ opacity: 0, y: 6 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.3, ease: EASE }}
+              className="space-y-1.5"
+            >
+              <p className="label">{message.role}</p>
               {body}
-            </article>
+              {/* The streaming caret: proof the answer is still arriving. */}
+              {isLast && busy && <span className="caret" aria-hidden="true" />}
+            </m.article>
           );
         })}
 
-        {resuming && <p className="text-xs text-faint">Reconnecting to the agent…</p>}
-        {localError && <p className="text-xs text-danger">{localError}</p>}
-        {agent.error && <p className="text-xs text-danger">{agent.error.message}</p>}
+        {resuming && <p className="text-[12px] text-faint">Reconnecting to the agent…</p>}
+        {localError && <p className="text-[12px] text-danger">{localError}</p>}
+        {agent.error && <p className="text-[12px] text-danger">{agent.error.message}</p>}
       </div>
 
       {approvals.map((approval) => (
-        <div
+        <m.div
           key={approval.requestId}
-          className="border-t border-warn/25 bg-warn-soft px-5 py-3.5 text-sm"
+          initial={{ opacity: 0, y: 6 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.3, ease: EASE }}
+          className="border-t border-warn/30 bg-warn-soft px-5 py-3.5 text-[13px]"
         >
-          <p className="font-semibold text-warn">Approval required</p>
-          <p className="text-xs text-warn/80">{approval.prompt}</p>
+          <p className="font-medium text-warn">Approval required</p>
+          <p className="text-[12px] text-warn/80">{approval.prompt}</p>
           <div className="mt-2.5 flex gap-2">
             {(approval.options ?? []).map((option) => (
               <button
@@ -290,15 +301,15 @@ async (text: string) => {
                 onClick={() => void agent.respond([{ requestId: approval.requestId, optionId: option.id }])}
                 className={
                   option.id === "approve"
-                    ? "px-btn px-btn--primary"
-                    : "px-btn border border-warn/40 text-warn hover:bg-warn/10"
+                    ? "btn btn--primary sheen press"
+                    : "btn border border-warn/40 bg-transparent text-warn press"
                 }
               >
                 {option.label}
               </button>
             ))}
           </div>
-        </div>
+        </m.div>
       ))}
 
       <form
@@ -314,18 +325,18 @@ async (text: string) => {
           </p>
         )}
         <div className="flex items-center gap-2">
-        <input
-          value={draft}
-          onChange={(event) => setDraft(event.target.value)}
-          disabled={busy || resuming}
-          placeholder="Ask about this analysis…"
-          className="px-input flex-1 disabled:opacity-60"
-        />
-        <button
-          type="submit"
-          disabled={busy || resuming || draft.trim().length === 0}
-          className="px-btn px-btn--ink"
-        >
+          <input
+            value={draft}
+            onChange={(event) => setDraft(event.target.value)}
+            disabled={busy || resuming}
+            placeholder="Ask about this analysis…"
+            className="input flex-1 disabled:opacity-60"
+          />
+          <button
+            type="submit"
+            disabled={busy || resuming || draft.trim().length === 0}
+            className="btn btn--solid press"
+          >
           {/* "Reconnecting…" rather than a live-looking "Send": the client attaches
               and resumes its session on mount, and a click in that window is
               swallowed by the busy guard, so a button that looks ready but does

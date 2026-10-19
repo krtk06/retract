@@ -2,6 +2,7 @@ import { useState } from "react";
 
 import { ApiError } from "../api/client";
 import { useMe, useResendVerification } from "../api/hooks";
+import { Icon } from "./Icon";
 
 /**
  * Asks the user to confirm their email address, and confirms it after they do.
@@ -26,8 +27,8 @@ export function VerifyEmailBanner() {
 
   if (justVerified) {
     return (
-      <div className="mb-6 flex flex-wrap items-center justify-between gap-3 border-ok px-panel px-4 py-3 text-ok">
-        <span aria-hidden="true" className="block h-[8px] w-[8px] shrink-0 bg-ok" />
+      <div className="anim-in mb-6 flex flex-wrap items-center gap-2.5 rounded-[2px] border border-ok/40 bg-ok-soft px-4 py-3 text-[13px] text-ok">
+        <Icon name="check" size={15} />
         Email verified — signing in with GitHub will now reach this account.
       </div>
     );
@@ -48,28 +49,22 @@ export function VerifyEmailBanner() {
   }
 
   return (
-    <div className="anim-step-in mb-6 flex flex-wrap items-center justify-between gap-3 px-panel px-4 py-3">
+    <div className="anim-in mb-6 flex flex-wrap items-center justify-between gap-3 rounded-[2px] border border-warn/40 bg-warn-soft px-4 py-3">
       <div className="flex min-w-[16rem] flex-1 flex-col gap-1">
-        <p className="font-ui text-[9px] uppercase tracking-[0.16em] text-warn">
-          Verifying your email
-        </p>
+        <p className="label text-warn">Verifying your email</p>
         <span className="text-[13px] text-ink">
-          <span className="font-semibold">{user.email}</span> — signing in with GitHub reaches this
+          <span className="font-medium">{user.email}</span> — signing in with GitHub reaches this
           account instead of creating a second one.
         </span>
       </div>
       {sent ? (
         <span className="text-[13px] text-muted">Verification email sent.</span>
       ) : (
-        <button
-          onClick={handleResend}
-          disabled={resend.isPending}
-          className="px-btn px-btn--ghost"
-        >
+        <button onClick={handleResend} disabled={resend.isPending} className="btn btn--ghost">
           {resend.isPending ? "Sending…" : "Resend email"}
         </button>
       )}
-      {failed && <span className="w-full text-danger">{failed}</span>}
+      {failed && <span className="w-full text-[13px] text-danger">{failed}</span>}
     </div>
   );
 }

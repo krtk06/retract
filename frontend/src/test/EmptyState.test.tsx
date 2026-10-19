@@ -24,6 +24,6 @@ describe("Loading", () => {
   it("announces the label and draws the requested number of rows", () => {
     const { container } = render(<Loading label="Loading graph…" rows={4} />);
     expect(screen.getByText("Loading graph…")).toBeInTheDocument();
-    expect(container.querySelectorAll(".px-dither")).toHaveLength(4);
+    expect(container.querySelectorAll(".skeleton")).toHaveLength(4);
   });
 });

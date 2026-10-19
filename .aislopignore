@@ -1,3 +1,9 @@
 # Fixture app with deliberately planted vulnerabilities. It is analysis input for
 # the Retract benchmark, not shipped code, so its slop and secrets are intentional.
 benchmark/seedy-python-app/
+
+# Installed agent tooling, not product code: the Impeccable skill ships generated
+# bundles (live-browser.js, modern-screenshot.umd.js, live-browser-dom.js). They
+# are third-party build outputs, regenerated on skill update, and excluded from
+# the product score.
+.opencode/

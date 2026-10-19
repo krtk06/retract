@@ -1,10 +1,12 @@
 import { useMemo, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
+import { m } from "motion/react";
 
 import { copyText } from "../lib/clipboard";
 import { buildFixPrompt } from "../lib/buildFixPrompt";
 import { api } from "../api/client";
 import { useSnippet } from "../api/hooks";
+import { EASE, stagger } from "../lib/motion";
 import {
   PILLARS,
   PILLAR_LABELS,
@@ -12,7 +14,7 @@ import {
   SEVERITY_COLOR_VAR,
   type Pillar,
 } from "../lib/palette";
-import { PixelIcon } from "./PixelIcon";
+import { Icon } from "./Icon";
 import { EmptyState } from "./EmptyState";
 import type { Finding, Repository, SnippetResponse } from "../api/types";
 
@@ -50,24 +52,12 @@ const SEVERITY_OPTIONS = SEVERITIES;
 
 function StatusBadge({ status }: { status: Finding["status"] }) {
   if (status === "verified") {
-    return (
-      <span className="border border-ok/30 bg-ok-soft px-1.5 py-0.5 text-[10px] font-semibold text-ok">
-        verified
-      </span>
-    );
+    return <span className="chip border-ok/40 bg-ok-soft text-ok">verified</span>;
   }
   if (status === "hypothesis") {
-    return (
-      <span className="border border-hypo/30 bg-hypo-soft px-1.5 py-0.5 text-[10px] font-semibold text-hypo">
-        hypothesis
-      </span>
-    );
+    return <span className="chip border-hypo/40 bg-hypo-soft text-hypo">hypothesis</span>;
   }
-  return (
-    <span className="border border-line bg-surface-2 px-1.5 py-0.5 text-[10px] font-medium text-muted">
-      dismissed
-    </span>
-  );
+  return <span className="chip border-line bg-surface-2 text-muted">dismissed</span>;
 }
 
 function FixWithAgentButton({
@@ -130,12 +120,19 @@ function FixWithAgentButton({
   return (
     <button
       onClick={handleCopy}
-      className={copied ? "px-btn px-btn--ghost" : "px-btn px-btn--primary"}
+      className={copied ? "btn btn--ghost" : "btn btn--primary sheen press"}
       title="Copy a fix brief for your coding agent (opencode, Claude Code, Codex)"
     >
       {copied ? (
         <>
-          <PixelIcon name="check" size={12} />
+          <m.span
+            className="grid place-items-center"
+            initial={{ scale: 0.6, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            transition={{ duration: 0.22, ease: EASE }}
+          >
+            <Icon name="check" size={15} />
+          </m.span>
           <span>Copied ✓</span>
         </>
       ) : (
@@ -152,6 +149,7 @@ function FindingRow({
   analysisId,
   showSnippet,
   striped = false,
+  index = 0,
 }: {
   finding: Finding;
   repository: Repository | null;
@@ -159,6 +157,7 @@ function FindingRow({
   analysisId: number;
   showSnippet: boolean;
   striped?: boolean;
+  index?: number;
 }) {
   const [expanded, setExpanded] = useState(false);
   const canSnippet = showSnippet && finding.file_path != null && finding.line_start != null;
@@ -173,6 +172,10 @@ function FindingRow({
 
   const severityColor = `var(${SEVERITY_COLOR_VAR[finding.severity]})`;
 
+  // Only the head of a long ledger is staggered; the tail arrives as one quiet
+  // block, or a 191-row list would spend seconds entering.
+  const appendDelay = stagger(index, 0.035, 0.28);
+
   const blobUrl =
     repository && !repository.url.startsWith("local://") && finding.file_path
       ? `${repository.url}/blob/${commitSha ?? repository.default_branch}/${finding.file_path}` +
@@ -180,42 +183,51 @@ function FindingRow({
       : null;
 
   return (
-    <li className={`px-card px-card-hover px-4 py-3.5 ${striped ? "px-stripes" : ""}`}>
+    <m.li
+      layout
+      initial={{ opacity: 0, y: 5 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.34, ease: EASE, delay: appendDelay }}
+      className={`card card--hover px-4 py-3.5 ${striped ? "stripes" : ""}`}
+    >
       <div className="flex flex-wrap items-center gap-2">
         <span
-          className="px-badge px-badge--flat"
+          className="chip chip--flat"
           style={{ borderColor: severityColor, color: severityColor }}
         >
           {finding.severity}
         </span>
-        <p className="text-sm font-semibold text-ink text-pretty">{finding.title}</p>
+        <p className="text-[13px] font-medium text-ink text-pretty">{finding.title}</p>
         <StatusBadge status={finding.status} />
-        <span className="ml-auto text-xs text-faint tabular-nums">
+        <span className="ml-auto text-[11px] text-faint tabular-nums">
           {finding.verifier} · conf {finding.confidence.toFixed(2)}
         </span>
       </div>
       {finding.description && (
-        <p className="mt-1.5 text-sm leading-relaxed text-muted text-pretty">{finding.description}</p>
+        <p className="mt-1.5 text-[13px] leading-relaxed text-muted text-pretty">
+          {finding.description}
+        </p>
       )}
       {fix && (
-        <p className="mt-1.5 text-sm text-ok/90 text-pretty">
+        <p className="mt-1.5 text-[13px] text-ok/90 text-pretty">
           <span className="text-faint">Fix:</span> {fix.action}
         </p>
       )}
-      <div className="mt-2.5 flex flex-wrap items-center gap-3 text-xs">
+      <div className="mt-2.5 flex flex-wrap items-center gap-3 text-[12px]">
         {finding.file_path && (
-          <span className="bg-surface-2 px-1.5 py-0.5 font-mono text-[11px] text-faint">
+          <span className="rounded-[2px] bg-surface-2 px-1.5 py-0.5 font-mono text-[11px] text-muted">
             {finding.file_path}
             {finding.line_start ? `:${finding.line_start}` : ""}
           </span>
         )}
         {blobUrl && (
-          <a href={blobUrl} target="_blank" rel="noreferrer" className="px-link">
-            view on GitHub ↗
+          <a href={blobUrl} target="_blank" rel="noreferrer" className="link inline-flex items-center gap-1">
+            view on GitHub
+            <Icon name="external" size={12} />
           </a>
         )}
         {canSnippet && (
-          <button onClick={() => setExpanded((v) => !v)} className="px-btn--quiet">
+          <button onClick={() => setExpanded((v) => !v)} className="btn btn--quiet">
             {expanded ? "hide code" : "show code"}
           </button>
         )}
@@ -228,15 +240,20 @@ function FindingRow({
         />
       </div>
       {expanded && canSnippet && (
-        <div className="mt-2.5">
-          {snippet.isLoading && <p className="text-xs text-faint">Loading snippet…</p>}
+        <m.div
+          className="mt-2.5 overflow-hidden"
+          initial={{ opacity: 0, height: 0 }}
+          animate={{ opacity: 1, height: "auto" }}
+          transition={{ duration: 0.26, ease: EASE }}
+        >
+          {snippet.isLoading && <p className="text-[12px] text-faint">Loading snippet…</p>}
           {snippet.data && (
-            <pre className="overflow-x-auto border border-line bg-surface-2 p-3 text-xs">
+            <pre className="scroll overflow-x-auto rounded-[2px] border border-line bg-surface-2 p-3 text-[12px]">
               {snippet.data.lines.map((line, i) => {
                 const lineNo = snippet.data!.from_line + i;
                 const isCited = lineNo === finding.line_start;
                 return (
-                  <div key={i} className={isCited ? "-mx-3 rounded bg-warn-soft px-3" : ""}>
+                  <div key={i} className={isCited ? "-mx-3 rounded-[4px] bg-warn-soft px-3" : ""}>
                     <span className="mr-3 select-none text-faint/60 tabular-nums">{lineNo}</span>
                     <span className="text-ink/85">{line}</span>
                   </div>
@@ -245,11 +262,11 @@ function FindingRow({
             </pre>
           )}
           {snippet.isError && (
-            <p className="text-xs text-faint">Snippet unavailable for this finding.</p>
+            <p className="text-[12px] text-faint">Snippet unavailable for this finding.</p>
           )}
-        </div>
+        </m.div>
       )}
-    </li>
+    </m.li>
   );
 }
 
@@ -265,7 +282,7 @@ function FindingList({
   analysisId: number;
 }) {
   return (
-    <ul className="space-y-2.5 overflow-x-auto px-scroll">
+    <ul className="scroll space-y-2.5 overflow-x-auto">
       {findings.map((finding, index) => (
         <FindingRow
           key={finding.id}
@@ -275,6 +292,7 @@ function FindingList({
           analysisId={analysisId}
           showSnippet
           striped={index % 2 === 1}
+          index={index}
         />
       ))}
     </ul>
@@ -323,17 +341,20 @@ export function FindingsTable({
   }, [filtered]);
 
   return (
-    <section className="px-panel p-5 sm:p-6">
+    <section className="panel p-6">
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-        <h3 className="font-semibold text-ink">
-          Findings <span className="text-sm font-normal text-faint tabular-nums">({filtered.length})</span>
+        <h3 className="text-[15px] font-semibold text-ink">
+          Findings{" "}
+          <span className="text-[13px] font-normal text-faint tabular-nums">
+            ({filtered.length})
+          </span>
         </h3>
-        <div className="flex flex-wrap items-center gap-2 text-sm">
-          <span className="px-select-wrap">
+        <div className="flex flex-wrap items-center gap-2 text-[13px]">
+          <span className="select-wrap">
             <select
               value={pillarFilter}
               onChange={(e) => setPillarFilter(e.target.value)}
-              className="px-input px-select w-auto"
+              className="input select w-auto"
               aria-label="Filter by pillar"
             >
               {PILLAR_OPTIONS.map((o) => (
@@ -342,13 +363,13 @@ export function FindingsTable({
                 </option>
               ))}
             </select>
-            <PixelIcon name="chevron-down" size={12} className="px-select-chevron" />
+            <Icon name="chevron-down" size={15} className="select-chevron" />
           </span>
-          <span className="px-select-wrap">
+          <span className="select-wrap">
             <select
               value={severityFilter}
               onChange={(e) => setSeverityFilter(e.target.value)}
-              className="px-input px-select w-auto"
+              className="input select w-auto"
               aria-label="Filter by severity"
             >
               <option value="">All severities</option>
@@ -358,9 +379,9 @@ export function FindingsTable({
                 </option>
               ))}
             </select>
-            <PixelIcon name="chevron-down" size={12} className="px-select-chevron" />
+            <Icon name="chevron-down" size={15} className="select-chevron" />
           </span>
-          <label className="flex cursor-pointer items-center gap-2 border border-line bg-surface-2 px-3 py-1.5 text-xs text-muted transition-colors duration-300 hover:text-ink">
+          <label className="flex cursor-pointer items-center gap-2 rounded-[2px] border border-line bg-surface-2 px-3 py-1.5 text-[12px] text-muted transition-colors hover:text-ink">
             <input
               type="checkbox"
               checked={!hideMeta}
@@ -382,11 +403,9 @@ export function FindingsTable({
         <div className="space-y-7">
           {grouped.map(([pillar, items]) => (
             <div key={pillar}>
-              <h4 className="mb-3 flex items-center gap-2 text-sm font-semibold text-ink">
+              <h4 className="mb-3 flex items-center gap-2 text-[13px] font-semibold text-ink">
                 {PILLAR_LABELS[pillar as Pillar] ?? pillar}
-                <span className="bg-surface-2 px-2 py-0.5 text-xs text-muted tabular-nums">
-                  {items.length}
-                </span>
+                <span className="chip chip--flat text-muted tabular-nums">{items.length}</span>
               </h4>
               <FindingList
                 findings={items}

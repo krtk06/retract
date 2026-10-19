@@ -35,3 +35,11 @@ docs/reviews/*.har
 # Local dev toolchain (redis build, machine-specific env)
 .local/*
 !.local/env.sh.example
+
+# Installed agent tooling (reproducible via `npx impeccable install`)
+.opencode/
+
+# Local design-review artifacts: screenshots, rolls. The recorded system
+# (DESIGN.md, .impeccable/design.json, surface briefs) does ship.
+.impeccable/review/
+.impeccable/questions/

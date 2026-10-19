@@ -4,6 +4,7 @@ import { StrictMode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { LoginPage } from "../pages/LoginPage";
+import { ThemeProvider } from "../components/ThemeProvider";
 
 vi.mock("@tanstack/react-query", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@tanstack/react-query")>();
@@ -24,9 +25,11 @@ afterEach(() => {
 function renderLogin() {
   const client = new QueryClient();
   return render(
-    <QueryClientProvider client={client}>
-      <LoginPage />
-    </QueryClientProvider>,
+    <ThemeProvider>
+      <QueryClientProvider client={client}>
+        <LoginPage />
+      </QueryClientProvider>
+    </ThemeProvider>,
   );
 }
 
@@ -91,9 +94,11 @@ describe("LoginPage", () => {
     withSearch("?auth_error=expired_state");
     render(
       <StrictMode>
-        <QueryClientProvider client={new QueryClient()}>
-          <LoginPage />
-        </QueryClientProvider>
+        <ThemeProvider>
+          <QueryClientProvider client={new QueryClient()}>
+            <LoginPage />
+          </QueryClientProvider>
+        </ThemeProvider>
       </StrictMode>,
     );
     expect(screen.getByText(/That sign-in attempt expired/)).toBeInTheDocument();

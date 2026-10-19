@@ -1,19 +1,18 @@
 import { useMemo } from "react";
+import { m } from "motion/react";
 import { Link, useNavigate } from "react-router-dom";
 
 import { ApiError } from "../api/client";
 import { useAnalyzeRepo, useRecentAnalyses, useRepos } from "../api/hooks";
+import { CountUp } from "../components/CountUp";
 import { EmptyState } from "../components/EmptyState";
+import { Icon } from "../components/Icon";
+import { Reveal } from "../components/Reveal";
+import { Sparkline } from "../components/Sparkline";
 import { StatusPill } from "../components/StatusPill";
-import { scoreTone, type Tone } from "../lib/palette";
+import { EASE, stagger } from "../lib/motion";
+import { scoreTone, TONE_VERDICT_WORD } from "../lib/palette";
 import type { AnalysisSummary } from "../api/types";
-
-const TONE_CLASS: Record<Tone, string> = {
-  ok: "text-ok",
-  info: "text-info",
-  warn: "text-warn",
-  danger: "text-danger",
-};
 
 function timeAgo(iso: string): string {
   const seconds = Math.floor((Date.now() - new Date(iso).getTime()) / 1000);
@@ -25,19 +24,24 @@ function timeAgo(iso: string): string {
   return `${Math.floor(hours / 24)}d ago`;
 }
 
-function Row({ analysis, onReanalyze, busy, active }: AnalysisRowProps) {
+function Row({ analysis, onReanalyze, busy, active, index }: AnalysisRowProps & { index: number }) {
   const navigate = useNavigate();
   return (
-    <li className="px-card-hover flex items-center gap-4 p-3">
+    <m.li
+      className="card card--hover lift flex items-center gap-4 p-3.5"
+      initial={{ opacity: 0, y: 6 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.36, ease: EASE, delay: stagger(index, 0.05, 0.3) }}
+    >
       <button
         onClick={() => navigate(`/analyses/${analysis.id}`)}
         className="min-w-0 flex-1 text-left"
         title="Open analysis"
       >
-        <p className="truncate font-ui text-[11px] text-ink">
+        <p className="truncate text-[13px] font-medium text-ink">
           {analysis.repo_owner}/{analysis.repo_name}
         </p>
-        <p className="mt-0.5 truncate font-mono text-[10px] text-faint">
+        <p className="mt-1 truncate font-mono text-[11px] text-faint">
           {analysis.commit_sha ? analysis.commit_sha.slice(0, 7) : "not cloned"} ·{" "}
           {analysis.finding_count} findings
           {analysis.loc != null && ` · ${analysis.loc.toLocaleString()} loc`} ·{" "}
@@ -46,31 +50,28 @@ function Row({ analysis, onReanalyze, busy, active }: AnalysisRowProps) {
       </button>
       <div className="flex shrink-0 items-center gap-3">
         {analysis.overall != null && (
-          <span className="px-well px-3 py-1" title="Overall repository health score">
-            <span
-              className={`font-ui text-[28px] tabular-nums ${TONE_CLASS[scoreTone(analysis.overall)]}`}
-            >
-              {analysis.overall}
+          <span className="inset px-3 py-1 text-center" title="Overall repository health score">
+            <span className="figure block text-2xl text-ink">
+              <CountUp value={analysis.overall} duration={0.7} delay={0.2 + stagger(index, 0.05, 0.3)} />
+            </span>
+            <span className="label block whitespace-nowrap">
+              {TONE_VERDICT_WORD[scoreTone(analysis.overall)]}
             </span>
           </span>
         )}
-        <button
-          onClick={() => navigate(`/analyses/${analysis.id}`)}
-          className="transition-transform duration-300 ease-step hover:-translate-y-0.5"
-          title="View analysis"
-        >
+        <button onClick={() => navigate(`/analyses/${analysis.id}`)} title="View analysis">
           <StatusPill status={analysis.status} />
         </button>
         <button
           onClick={() => onReanalyze(analysis.repository_id)}
           disabled={busy || active}
-          className="px-btn px-btn--ghost"
+          className="btn btn--ghost press"
           title={active ? "An analysis is already running" : "Re-analyze latest commit"}
         >
           Re-analyze
         </button>
       </div>
-    </li>
+    </m.li>
   );
 }
 
@@ -107,76 +108,106 @@ export function DashboardPage() {
     return active;
   }, [recent.data]);
 
+  // Chronological, so the line reads left-to-right as time moves forward.
+  const trend = useMemo(
+    () =>
+      (recent.data ?? [])
+        .map((row) => row.overall)
+        .filter((value): value is number => value != null)
+        .reverse(),
+    [recent.data],
+  );
+
   return (
-    <div className="space-y-12">
-      <section>
-        <div className="mb-4 flex items-end justify-between gap-4">
-          <div>
-            <p className="px-eyebrow">Activity</p>
-            <h1 className="mt-1 text-2xl font-bold tracking-tight">Recent analyses</h1>
+    <div className="space-y-10">
+      <Reveal>
+        <section>
+          <div className="mb-4 flex items-end justify-between gap-4">
+            <h1 className="text-xl font-semibold tracking-tight text-ink">Recent analyses</h1>
+            {trend.length >= 2 && (
+              <span className="flex items-center gap-3 text-[11px] text-faint">
+                score trend
+                {/* The values are the text equivalent; the line beside them is
+                    decoration and stays aria-hidden. */}
+                <span className="font-mono text-muted tabular-nums">
+                  {trend[0]} → {trend[trend.length - 1]}
+                </span>
+                {trend[0] !== trend[trend.length - 1] && (
+                  <Sparkline values={trend} width={96} height={28} />
+                )}
+              </span>
+            )}
           </div>
-          <span className="text-xs text-faint">newest first</span>
-        </div>
 
-        {recent.isLoading && <p className="text-sm text-muted">Loading…</p>}
+          {recent.isLoading && <p className="text-[13px] text-muted">Loading…</p>}
 
-        {recent.data?.length === 0 && (
-          <EmptyState
-            title="No analyses yet"
-            detail="Point Retract at a GitHub repository and it will score it."
-            action={{ label: "Add a repository", to: "/repos" }}
-          />
-        )}
+          {recent.data?.length === 0 && (
+            <EmptyState
+              title="No analyses yet"
+              detail="Point Retract at a GitHub repository and it will score it."
+              action={{ label: "Add a repository", to: "/repos" }}
+            />
+          )}
 
-        {recent.data && recent.data.length > 0 && (
-          <ul className="space-y-2.5">
-            {recent.data.map((analysis) => (
-              <Row
-                key={analysis.id}
-                analysis={analysis}
-                onReanalyze={reanalyze}
-                busy={analyzeRepo.isPending}
-                active={activeRepoIds.has(analysis.repository_id)}
-              />
-            ))}
-          </ul>
-        )}
+          {recent.data && recent.data.length > 0 && (
+            <ul className="space-y-2.5">
+              {recent.data.map((analysis, index) => (
+                <Row
+                  key={analysis.id}
+                  analysis={analysis}
+                  onReanalyze={reanalyze}
+                  busy={analyzeRepo.isPending}
+                  active={activeRepoIds.has(analysis.repository_id)}
+                  index={index}
+                />
+              ))}
+            </ul>
+          )}
 
-        {recent.isError && (
-          <EmptyState
-            title="Could not load your analyses"
-            detail="Is the API running?"
-            icon="cross"
-          />
-        )}
-      </section>
+          {recent.isError && (
+            <EmptyState
+              title="Could not load your analyses"
+              detail="Is the API running?"
+              icon="alert"
+            />
+          )}
+        </section>
+      </Reveal>
 
-      <section>
-        <div className="mb-4">
-          <p className="px-eyebrow">Inventory</p>
-          <h2 className="mt-1 text-2xl font-bold tracking-tight">Your repositories</h2>
-        </div>
-        {repos.data?.length === 0 && (
-          <p className="text-sm text-faint">
-            No repositories yet —{" "}
-            <Link to="/repos" className="px-link">
-              add one
-            </Link>
-            .
-          </p>
-        )}
-        {repos.data && repos.data.length > 0 && (
-          <div className="px-panel flex flex-wrap items-center justify-between gap-3 p-5">
-            <p className="text-sm text-muted">
-              <span className="font-ui text-[28px] text-ink tabular-nums">{repos.data.length}</span>{" "}
-              repositor{repos.data.length === 1 ? "y" : "ies"} tracked
+      <Reveal delay={0.06}>
+        <section>
+          <div className="mb-4">
+            <h2 className="text-xl font-semibold tracking-tight text-ink">Your repositories</h2>
+          </div>
+          {repos.data?.length === 0 && (
+            <p className="text-[13px] text-faint">
+              No repositories yet —{" "}
+              <Link to="/repos" className="link">
+                add one
+              </Link>
+              .
             </p>
-            <Link to="/repos" className="px-btn px-btn--ghost">
-              Manage repositories →
-            </Link>
-          </div>
-        )}
-      </section>
+          )}
+          {repos.data && repos.data.length > 0 && (
+            <div className="panel flex flex-wrap items-center justify-between gap-3 p-4">
+              <p className="text-[13px] text-muted">
+                <span className="figure text-2xl text-ink">
+                  <CountUp value={repos.data.length} duration={0.6} />
+                </span>{" "}
+                repositor{repos.data.length === 1 ? "y" : "ies"} tracked
+              </p>
+              <Link to="/repos" className="btn btn--ghost group press">
+                Manage repositories
+                <Icon
+                  name="arrow-right"
+                  size={14}
+                  className="transition-transform duration-200 group-hover:translate-x-0.5"
+                />
+              </Link>
+            </div>
+          )}
+        </section>
+      </Reveal>
     </div>
   );
 }

@@ -105,12 +105,12 @@ describe("FindingsTable — Fix with your agent", () => {
   it("badges every severity from the shared ramp", () => {
     renderTable([finding({ id: 7, severity: "critical" }), finding({ id: 8, severity: "low" })]);
 
-    expect(document.querySelectorAll(".px-badge").length).toBeGreaterThan(1);
+    expect(document.querySelectorAll(".chip").length).toBeGreaterThan(1);
   });
 
   it("stripes alternate rows", () => {
     renderTable([finding({ id: 7 }), finding({ id: 8 })]);
 
-    expect(document.querySelectorAll(".px-stripes").length).toBeGreaterThan(0);
+    expect(document.querySelectorAll(".stripes").length).toBeGreaterThan(0);
   });
 });

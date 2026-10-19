@@ -1,20 +1,20 @@
 @import "tailwindcss";
 
 /* Class-based theming: `dark:` utilities follow the `.dark` class on <html>,
-   which lib/theme.ts toggles (dark default, persisted to localStorage). */
+   which lib/theme.ts toggles. First paint follows the system preference; an
+   explicit choice persists and wins. */
 @custom-variant dark (&:where(.dark, .dark *));
 
 @theme {
-  /* Silkscreen carries every UI atom and every number. Pixelify Sans carries
-     prose. JetBrains Mono carries paths, SHAs and tool names.
-     `font-sans` stays the name so `body`'s @apply and any existing `font-sans`
-     utility keep resolving — only the family behind it changed. */
-  --font-sans: "Pixelify Sans", ui-sans-serif, system-ui, -apple-system, sans-serif;
-  --font-ui: "Silkscreen", "Pixelify Sans", ui-sans-serif, monospace;
-  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  /* The dossier: a screen serif carries the document's voice — headings and
+     every displayed numeral; the workhorse sans carries UI and prose; mono
+     carries evidence: paths, SHAs, file:line. */
+  --font-display: "Source Serif 4", Georgia, "Times New Roman", serif;
+  --font-sans: "Geist", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "Geist Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
 
-  /* Steps, not glides. Nothing in this system eases smoothly. */
-  --ease-step: steps(3, end);
+  /* One curve for everything. Mass, not bounce. */
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 @theme inline {
@@ -27,8 +27,6 @@
   --color-muted: var(--muted);
   --color-faint: var(--faint);
   --color-accent: var(--accent);
-  --color-accent-strong: var(--accent-strong);
-  --color-accent-ink: var(--accent-ink);
   --color-accent-soft: var(--accent-soft);
   --color-ok: var(--ok);
   --color-ok-soft: var(--ok-soft);
@@ -42,127 +40,114 @@
   --color-hypo-soft: var(--hypo-soft);
 }
 
-/* ---- Light: Game Boy paper. Same 16 colours, re-picked for contrast on cream. */
+/* ---- Light: warm paper. The dossier under a desk lamp. ---- */
 :root {
   color-scheme: light;
 
-  --canvas: #c2c3c7;
-  --surface: #fff1e8;
-  --surface-2: #c2c3c7;
+  --canvas: #faf9f7;
+  --surface: #ffffff;
+  --surface-2: #f4f2ee;
 
-  --line: #5f574f;
-  --line-strong: #1d2b53;
+  --line: #e6e3dd;
+  --line-strong: #cfcbc3;
 
-  --ink: #000000;
-  --muted: #5f574f;
-  --faint: #83769c;
+  --ink: #1d1a16;
+  --muted: #635d54;
+  --faint: #6a655d;
 
-  --accent: #1d2b53;
-  --accent-strong: #7e2553;
-  --accent-ink: #fff1e8;
+  /* Primary action is ink itself. There is no other accent. */
+  --accent: #1d1a16;
+  --accent-ink: #faf9f7;
 
-  --ok: #008751;
-  --warn: #ab5236;
-  --danger: #ff004d;
-  --info: #1d2b53;
-  --hypo: #7e2553;
+  /* Hue survives only where it is evidence: severity, status, verification. */
+  --ok: #1f7a4d;
+  --warn: #9a5b08;
+  --danger: #b0392c;
+  --info: #3568b8;
+  --hypo: #6b59c1;
 
-  --shadow: #5f574f;
-  --bevel-hi: rgba(255, 255, 255, 0.55);
-  --bevel-lo: rgba(0, 0, 0, 0.3);
+  --shadow: rgba(29, 26, 22, 0.08);
 
-  --pillar-security: #ff004d;
-  --pillar-code-quality: #ab5236;
-  --pillar-testing: #1d2b53;
-  --pillar-architecture: #7e2553;
-  --pillar-documentation: #008751;
-  --pillar-dependencies: #5f574f;
+  --grain-opacity: 0.03;
 
-  --sev-critical: #ff004d;
-  --sev-high: #ab5236;
-  --sev-medium: #7e2553;
-  --sev-low: #1d2b53;
-  --sev-info: #5f574f;
+  /* The six pillars are one ink ladder: position and label carry the
+     difference, not hue. */
+  --pillar-security: #1d1a16;
+  --pillar-code-quality: #3d3830;
+  --pillar-testing: #5d564c;
+  --pillar-architecture: #7d766a;
+  --pillar-documentation: #9d9689;
+  --pillar-dependencies: #beb7aa;
 
-  --status-pending: #5f574f;
-  --status-running: #ab5236;
-  --status-done: #008751;
-  --status-failed: #ff004d;
+  --sev-critical: #b0392c;
+  --sev-high: #9a5b08;
+  --sev-medium: #7a6a2a;
+  --sev-low: #3568b8;
+  --sev-info: #6d6860;
 
-  /* Dither needs two *different* entries, and in light mode --surface-2 and
-     --canvas are the same grey — so the pair is chosen per theme rather than
-     derived. Cream on grey reads on both a grey canvas and a cream panel. */
-  --dither-a: #fff1e8;
-  --dither-b: #c2c3c7;
+  --status-pending: #6d6860;
+  --status-running: #9a5b08;
+  --status-done: #1f7a4d;
+  --status-failed: #b0392c;
 }
 
-/* ---- Dark: pure black canvas, dark-blue panels. The default. */
+/* ---- Dark: the same dossier at night. Warm near-black, chalk ink. ---- */
 .dark {
   color-scheme: dark;
 
-  --canvas: #000000;
-  --surface: #1d2b53;
-  --surface-2: #000000;
+  --canvas: #131210;
+  --surface: #1b1917;
+  --surface-2: #232120;
 
-  --line: #5f574f;
-  --line-strong: #c2c3c7;
+  --line: #302d29;
+  --line-strong: #4a463f;
 
-  --ink: #fff1e8;
-  --muted: #c2c3c7;
-  --faint: #83769c;
+  --ink: #ece8e1;
+  --muted: #a59f95;
+  --faint: #8f8a80;
 
-  --accent: #29adff;
-  --accent-strong: #ffec27;
-  --accent-ink: #000000;
+  --accent: #ece8e1;
+  --accent-ink: #131210;
 
-  --ok: #00e436;
-  --warn: #ffa300;
-  --danger: #ff004d;
-  --info: #ffec27;
-  --hypo: #ff77a8;
+  --ok: #4fb07d;
+  --warn: #d99a3d;
+  --danger: #e06a5c;
+  --info: #6f9ade;
+  --hypo: #a294e0;
 
-  --shadow: #000000;
-  --bevel-hi: rgba(255, 241, 232, 0.1);
-  --bevel-lo: rgba(0, 0, 0, 0.55);
+  --shadow: rgba(0, 0, 0, 0.4);
 
-  --pillar-security: #ff004d;
-  --pillar-code-quality: #ffa300;
-  --pillar-testing: #29adff;
-  --pillar-architecture: #83769c;
-  --pillar-documentation: #ff77a8;
-  --pillar-dependencies: #00e436;
+  --grain-opacity: 0.055;
 
-  --sev-critical: #ff004d;
-  --sev-high: #ffa300;
-  --sev-medium: #ffec27;
-  --sev-low: #29adff;
-  --sev-info: #c2c3c7;
+  --pillar-security: #ece8e1;
+  --pillar-code-quality: #c5bfb4;
+  --pillar-testing: #9e978b;
+  --pillar-architecture: #7a7469;
+  --pillar-documentation: #585349;
+  --pillar-dependencies: #3a3731;
 
-  --status-pending: #83769c;
-  --status-running: #ffec27;
-  --status-done: #00e436;
-  --status-failed: #ff004d;
+  --sev-critical: #e06a5c;
+  --sev-high: #d99a3d;
+  --sev-medium: #c2a04d;
+  --sev-low: #6f9ade;
+  --sev-info: #8d887e;
 
-  --dither-a: #1d2b53;
-  --dither-b: #000000;
+  --status-pending: #8d887e;
+  --status-running: #d99a3d;
+  --status-done: #4fb07d;
+  --status-failed: #e06a5c;
 }
 
-/* Every `-soft` tint is a mix of exactly two palette entries — which is what a
-   PICO-8 dither between those two colours looks like averaged. This is the only
-   reason a tint is allowed to exist at all. */
+/* A `-soft` tint is evidence colour washed into the paper: enough to read as
+   a filled state, never enough to fight the text on top of it. */
 :root,
 .dark {
-  --accent-soft: color-mix(in srgb, var(--accent) 22%, var(--surface));
-  --ok-soft: color-mix(in srgb, var(--ok) 22%, var(--surface));
-  --warn-soft: color-mix(in srgb, var(--warn) 22%, var(--surface));
-  --danger-soft: color-mix(in srgb, var(--danger) 22%, var(--surface));
-  --info-soft: color-mix(in srgb, var(--info) 22%, var(--surface));
-  --hypo-soft: color-mix(in srgb, var(--hypo) 22%, var(--surface));
-
-  /* Pixel metrics. Every border is 2px; shadows are hard offsets with no blur. */
-  --px-border: 2px;
-  --px-offset: 4px;
-  --px-cell: 8px;
+  --accent-soft: color-mix(in srgb, var(--ink) 7%, var(--surface));
+  --ok-soft: color-mix(in srgb, var(--ok) 14%, var(--surface));
+  --warn-soft: color-mix(in srgb, var(--warn) 14%, var(--surface));
+  --danger-soft: color-mix(in srgb, var(--danger) 14%, var(--surface));
+  --info-soft: color-mix(in srgb, var(--info) 14%, var(--surface));
+  --hypo-soft: color-mix(in srgb, var(--hypo) 14%, var(--surface));
 }
 
 @layer base {
@@ -175,67 +160,27 @@
     @apply font-sans;
     margin: 0;
     min-height: 100dvh;
-    background: transparent;
+    background: var(--canvas);
     color: var(--ink);
-    -webkit-font-smoothing: none;
+    -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
   }
 
-  /* The hard guarantee behind constraint 2. A stray `rounded-full` left over from
-     the old design renders square rather than silently reintroducing a circle. */
-  *,
-  *::before,
-  *::after {
-    border-radius: 0;
-  }
-
-  /* 8px dot grid — the meter cell unit reused as texture. */
-  body::before {
-    content: "";
-    position: fixed;
-    inset: 0;
-    z-index: -2;
-    pointer-events: none;
-    background-image: radial-gradient(
-      circle,
-      color-mix(in srgb, var(--line) 22%, transparent) 1px,
-      transparent 1px
-    );
-    background-size: 8px 8px;
-  }
-
-  /* 2px scanlines, always on. Black at 4% is below the point where it measurably
-     costs contrast, and above the point where the screen stops reading as a
-     screen. */
-  body::after {
-    content: "";
-    position: fixed;
-    inset: 0;
-    z-index: -1;
-    pointer-events: none;
-    background: repeating-linear-gradient(
-      to bottom,
-      transparent 0 2px,
-      rgba(0, 0, 0, 0.04) 2px 4px
-    );
-  }
-
   ::selection {
-    background: var(--accent);
-    color: var(--accent-ink);
+    background: var(--ink);
+    color: var(--canvas);
   }
 
   :focus-visible {
-    outline: 2px solid var(--accent);
-    outline-offset: 0;
+    outline: 2px solid var(--ink);
+    outline-offset: 2px;
   }
 
-  /* On an accent-filled control the accent ring would vanish into it, so the ring
-     flips to ink. Focus is never removed — only moved. */
-  .px-btn--primary:focus-visible,
-  .px-btn--danger:focus-visible,
-  .px-tab[aria-selected="true"]:focus-visible {
-    outline-color: var(--ink);
+  /* On an ink-filled control the ink ring would vanish, so it flips. Focus is
+     never removed — only moved. */
+  .btn--primary:focus-visible,
+  .btn--solid:focus-visible {
+    outline-color: var(--canvas);
   }
 
   input,
@@ -250,375 +195,533 @@
     color: var(--ink);
   }
   input[type="checkbox"] {
-    accent-color: var(--accent);
+    accent-color: var(--ink);
+  }
+
+  /* Browser chrome ships with the design: selection, caret, scrollbars. */
+  * {
+    caret-color: var(--ink);
   }
 }
 
 @layer components {
-  /* ---- Surfaces ---------------------------------------------------------- */
+  /* ---- Paper ------------------------------------------------------------- */
 
-  .px-frame {
+  /* A panel is a page of the dossier: flat paper, one hairline. Print does not
+     float, so there is no shadow and no radius. */
+  .panel {
     background: var(--surface);
-    border: 2px solid var(--line);
-    box-shadow: 4px 4px 0 0 var(--shadow);
-  }
-
-  .px-panel {
-    background: var(--surface);
-    border: 2px solid var(--line);
-    box-shadow: 4px 4px 0 0 var(--shadow);
+    border: 1px solid var(--line);
+    border-radius: 2px;
   }
 
-  /* A card is a panel whose shadow is suppressed, because a shadow per row in a
-     list reads as noise once there are ten of them. */
-  .px-card {
+  .card {
     background: var(--surface);
-    border: 2px solid var(--line);
+    border: 1px solid var(--line);
+    border-radius: 2px;
+    transition: background 120ms var(--ease-out), border-color 120ms var(--ease-out);
   }
-  .px-card-hover {
-    background: var(--surface);
-    border: 2px solid var(--line);
-  }
-  .px-card-hover:hover {
+  .card--hover:hover {
     background: var(--surface-2);
     border-color: var(--line-strong);
   }
 
-  /* The inverse of a panel: an inset well, which is how this language says
-     "this is a screen, not a surface". */
-  .px-well {
+  /* A recessed region — evidence wells, metadata slabs. */
+  .inset {
     background: var(--surface-2);
-    border: 2px solid var(--line);
-    box-shadow:
-      inset 2px 2px 0 0 var(--bevel-lo),
-      inset -2px -2px 0 0 var(--bevel-hi);
+    border: 1px solid var(--line);
+    border-radius: 2px;
   }
 
-  .px-rule {
-    border-top: 2px solid var(--line);
+  /* The login plate. The only shadow in the system, one soft drop. */
+  .frame {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 2px;
+    box-shadow: 0 12px 40px var(--shadow);
   }
 
-  .px-titlebar {
+  /* Hairline rules. */
+  .rule {
+    border-top: 1px solid var(--line);
+  }
+
+  /* Document header: solid paper. The rule beneath is drawn by the shell's
+     motion span, so the border stays with that layer and the draw is real. */
+  .topbar {
     display: flex;
     align-items: center;
     gap: 12px;
-    height: 28px;
-    padding: 0 10px;
+    height: 52px;
+    padding: 0 20px;
     background: var(--surface);
-    border-bottom: 2px solid var(--line);
-    font-family: var(--font-ui);
-    font-size: 9px;
-    letter-spacing: 0.16em;
-    text-transform: uppercase;
   }
 
-  .px-eyebrow {
-    font-family: var(--font-ui);
-    font-size: 9px;
-    font-weight: 400;
-    letter-spacing: 0.16em;
+  /* A label names a field or attributes a transcript line — it carries
+     information, so it survives. Section kickers above headings do not. */
+  .label {
+    font-size: 10px;
+    font-weight: 500;
+    letter-spacing: 0.1em;
     text-transform: uppercase;
     color: var(--faint);
+  }
+
+  /* Displayed numerals: the report's figures are set in the serif. */
+  .figure {
+    font-family: var(--font-display);
+    font-variant-numeric: tabular-nums;
+    font-weight: 600;
+    letter-spacing: -0.01em;
   }
 
   /* ---- Controls ---------------------------------------------------------- */
 
-  .px-btn {
+  .btn {
     display: inline-flex;
     align-items: center;
     justify-content: center;
     gap: 6px;
-    padding: 7px 12px;
-    background: var(--surface-2);
-    border: 2px solid var(--line);
-    box-shadow: 3px 3px 0 0 var(--shadow);
-    font-family: var(--font-ui);
-    font-size: 9px;
-    font-weight: 700;
-    letter-spacing: 0.06em;
-    text-transform: uppercase;
+    height: 32px;
+    padding: 0 12px;
+    background: var(--surface);
+    border: 1px solid var(--line-strong);
+    border-radius: 2px;
+    color: var(--ink);
+    font-size: 13px;
+    font-weight: 500;
     line-height: 1;
     white-space: nowrap;
     cursor: pointer;
     user-select: none;
-    transition: transform 80ms steps(2, end), box-shadow 80ms steps(2, end);
+    transition: background 120ms var(--ease-out), border-color 120ms var(--ease-out),
+      color 120ms var(--ease-out), translate 80ms var(--ease-out);
   }
-  /* The press is physical: the button moves onto its own shadow. */
-  .px-btn:hover:not(:disabled) {
+  .btn:hover:not(:disabled) {
+    background: var(--surface-2);
+    border-color: var(--muted);
+  }
+  .btn:active:not(:disabled) {
+    translate: 0 1px;
+  }
+  .btn:disabled {
+    cursor: not-allowed;
+    opacity: 0.45;
+  }
+  .btn--icon {
+    width: 32px;
+    padding: 0;
+  }
+
+  /* Primary action: ink itself. */
+  .btn--primary {
+    background: var(--ink);
+    border-color: var(--ink);
+    color: var(--canvas);
+  }
+  .btn--primary:hover:not(:disabled) {
+    background: color-mix(in srgb, var(--ink) 88%, var(--canvas));
+    border-color: color-mix(in srgb, var(--ink) 88%, var(--canvas));
+  }
+
+  .btn--danger {
+    background: var(--danger);
+    border-color: var(--danger);
+    color: #ffffff;
+  }
+  .btn--danger:hover:not(:disabled) {
+    background: color-mix(in srgb, var(--danger) 85%, #000000);
+    border-color: color-mix(in srgb, var(--danger) 85%, #000000);
+  }
+
+  .btn--solid {
+    background: var(--surface-2);
     border-color: var(--line-strong);
   }
-  .px-btn:active:not(:disabled) {
-    transform: translate(2px, 2px);
-    box-shadow: 1px 1px 0 0 var(--shadow);
-  }
-  .px-btn:disabled {
-    cursor: not-allowed;
-    color: var(--faint);
-    background-image: repeating-conic-gradient(
-      var(--dither-a) 0% 25%,
-      var(--dither-b) 0% 50%
-    );
-    background-size: 4px 4px;
-    box-shadow: none;
-  }
-  .px-btn-icon {
-    padding: 6px;
-  }
 
-  .px-btn--primary {
-    background: var(--accent);
-    color: var(--accent-ink);
-    border-color: var(--accent);
-  }
-  .px-btn--primary:hover:not(:disabled) {
-    background: var(--accent-strong);
-    border-color: var(--accent-strong);
-  }
-
-  .px-btn--danger {
-    background: var(--danger);
-    color: var(--accent-ink);
-    border-color: var(--danger);
-  }
-
-  .px-btn--ink {
-    background: var(--ink);
-    color: var(--canvas);
-    border-color: var(--ink);
-  }
-
-  .px-btn--ghost {
-    background: transparent;
-    color: var(--ink);
-  }
-
-  .px-btn--quiet {
-    padding: 4px 6px;
+  .btn--ghost {
     background: transparent;
     border-color: transparent;
-    box-shadow: none;
+  }
+  .btn--ghost:hover:not(:disabled) {
+    background: var(--surface-2);
+    border-color: transparent;
+  }
+
+  .btn--quiet {
+    height: 28px;
+    padding: 0 8px;
+    background: transparent;
+    border-color: transparent;
     color: var(--muted);
     font-weight: 400;
   }
-  .px-btn--quiet:hover:not(:disabled) {
+  .btn--quiet:hover:not(:disabled) {
     color: var(--ink);
     background: var(--surface-2);
+    border-color: transparent;
   }
 
-  .px-input {
+  .input {
     width: 100%;
-    padding: 7px 9px;
-    background: var(--surface-2);
-    border: 2px solid var(--line);
+    height: 34px;
+    padding: 0 10px;
+    background: var(--surface);
+    border: 1px solid var(--line-strong);
+    border-radius: 2px;
     color: var(--ink);
-    font-family: var(--font-sans);
     font-size: 13px;
     line-height: 1.4;
+    transition: border-color 120ms var(--ease-out), box-shadow 120ms var(--ease-out);
   }
-  .px-input::placeholder {
+  .input::placeholder {
     color: var(--faint);
   }
-  .px-input:focus {
-    outline: 2px solid var(--accent);
-    outline-offset: -2px;
+  .input:focus {
+    outline: none;
+    border-color: var(--ink);
+    box-shadow: inset 0 0 0 1px var(--ink);
   }
-  .px-select {
+  textarea.input {
+    height: auto;
+    padding: 8px 10px;
+  }
+
+  .select {
     appearance: none;
-    padding-right: 28px;
-    font-family: var(--font-ui);
-    font-size: 9px;
-    letter-spacing: 0.06em;
+    padding-right: 30px;
+    cursor: pointer;
   }
-  /* The chevron that used to be a baked CSS data-URI is now a sprite overlay, so
-     it can inherit the palette instead of hardcoding #7f8f89. */
-  .px-select-wrap {
+  .select-wrap {
     position: relative;
   }
-  .px-select-wrap > .px-select-chevron {
+  .select-wrap > .select-chevron {
     position: absolute;
-    right: 7px;
+    right: 9px;
     top: 50%;
     translate: 0 -50%;
     pointer-events: none;
     color: var(--muted);
   }
 
-  /* ---- Badges ------------------------------------------------------------ */
+  /* ---- Tickets ----------------------------------------------------------- */
 
-  .px-badge {
+  /* Print tickets, not pills: square corners, hairline, tracked caps. */
+  .chip {
     display: inline-flex;
     align-items: center;
     gap: 5px;
-    padding: 3px 6px;
-    border: 2px solid var(--line);
-    background: var(--surface-2);
-    font-family: var(--font-ui);
-    font-size: 9px;
-    font-weight: 700;
-    letter-spacing: 0.06em;
-    text-transform: uppercase;
-    line-height: 1;
+    padding: 2px 8px;
+    border: 1px solid var(--line-strong);
+    border-radius: 2px;
+    background: var(--surface);
+    font-size: 11px;
+    font-weight: 500;
+    line-height: 1.6;
+    white-space: nowrap;
   }
-  /* Inside a list row a second shadow competes with the row's own. */
-  .px-badge--flat {
+  .chip--flat {
+    background: transparent;
+    border-color: transparent;
+    padding-left: 0;
+  }
+
+  /* The verdict stamp: a double-ruled verdict with a word and a glyph. Status
+     is never colour-only. */
+  .stamp {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 2px 8px;
+    border: 1px solid currentColor;
+    border-radius: 2px;
+    box-shadow: inset 0 0 0 1px var(--surface), inset 0 0 0 2px currentColor;
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.09em;
+    text-transform: uppercase;
+    line-height: 1.7;
+    white-space: nowrap;
+  }
+  .stamp--soft {
     box-shadow: none;
-    padding: 2px 5px;
+    background: color-mix(in srgb, currentColor 8%, transparent);
   }
 
   /* ---- Tabs -------------------------------------------------------------- */
 
-  .px-tabs {
+  .tabs {
     display: flex;
-    border-bottom: 2px solid var(--line);
+    gap: 2px;
+    border-bottom: 1px solid var(--line);
   }
-  .px-tab {
+  .tab {
     position: relative;
     padding: 8px 12px;
     background: transparent;
     border: none;
-    font-family: var(--font-ui);
-    font-size: 9px;
-    font-weight: 700;
-    letter-spacing: 0.06em;
-    text-transform: uppercase;
+    font-size: 13px;
+    font-weight: 500;
     color: var(--muted);
     cursor: pointer;
+    transition: color 120ms var(--ease-out), background 120ms var(--ease-out);
   }
-  .px-tab:hover {
+  .tab:hover {
     color: var(--ink);
     background: var(--surface-2);
   }
-  .px-tab[aria-selected="true"],
-  .px-tab[aria-current="page"],
-  .px-tab-active {
+  .tab[aria-selected="true"],
+  .tab[aria-current="page"],
+  .tab-active {
     color: var(--ink);
   }
-  /* An underline rule, not a sliding pill. The old indicator animated a rounded
-     capsule across four equal columns; there is nothing to animate here.
-     `aria-current` covers react-router's NavLink; `px-tab-active` covers the
-     two segmented controls that carry their own class until Task 10 turns them
-     into real tablists. */
-  .px-tab[aria-selected="true"]::after,
-  .px-tab[aria-current="page"]::after,
-  .px-tab-active::after {
+  /* The active indicator is an ink rule under the label, sliding via layoutId
+     where motion renders it; this ::after is the no-motion fallback. */
+  .tab[aria-selected="true"]::after,
+  .tab[aria-current="page"]::after,
+  .tab-active::after {
     content: "";
     position: absolute;
-    left: 0;
-    right: 0;
-    bottom: -2px;
+    left: 8px;
+    right: 8px;
+    bottom: -1px;
     height: 2px;
-    background: var(--accent);
+    background: var(--ink);
+  }
+  /* Where motion renders the sliding rule, the static fallback stands down. */
+  .tab--motion[aria-selected="true"]::after,
+  .tab--motion[aria-current="page"]::after,
+  .tab--side.tab--motion::after {
+    display: none;
   }
 
-  /* Sidebar variant: a left rule rather than a bottom one. */
-  .px-tab--side {
-    display: block;
+  /* Rail variant: the section index of the dossier. */
+  .tab--side {
+    display: flex;
+    align-items: center;
+    gap: 8px;
     width: 100%;
     text-align: left;
     padding: 8px 10px;
+    border-radius: 2px;
   }
-  .px-tab--side[aria-selected="true"],
-  .px-tab--side[aria-current="page"],
-  .px-tab--side.px-tab-active {
+  .tab--side[aria-selected="true"],
+  .tab--side[aria-current="page"],
+  .tab--side.tab-active {
     background: var(--surface-2);
+    color: var(--ink);
   }
-  .px-tab--side[aria-selected="true"]::after,
-  .px-tab--side[aria-current="page"]::after,
-  .px-tab--side.px-tab-active::after {
+  .tab--side[aria-selected="true"]::after,
+  .tab--side[aria-current="page"]::after,
+  .tab--side.tab-active::after {
     left: 0;
     right: auto;
-    top: 0;
-    bottom: 0;
-    width: 2px;
+    top: 6px;
+    bottom: 6px;
+    width: 1px;
     height: auto;
   }
 
-  /* ---- Texture ----------------------------------------------------------- */
+  /* ---- Evidence furniture ------------------------------------------------ */
 
-  /* A 2px checkerboard of two palette entries: how PICO-8 shades art, and here
-     how a surface says "disabled", "loading", or "nobody measured this". */
-  .px-dither {
-    background-image: repeating-conic-gradient(
-      var(--dither-a) 0% 25%,
-      var(--dither-b) 0% 50%
-    );
-    background-size: 4px 4px;
+  /* A tick rule: the hairline a value lands on. */
+  .tick-rule {
+    position: relative;
+    height: 3px;
+    background: var(--surface-2);
+    border-radius: 0;
   }
-  /* The 1px variant, for table row striping. */
-  .px-stripes {
-    background-image: repeating-conic-gradient(
-      color-mix(in srgb, var(--line) 30%, transparent) 0% 25%,
-      transparent 0% 50%
+  .tick-rule::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background-image: repeating-linear-gradient(
+      90deg,
+      var(--line) 0 1px,
+      transparent 1px 10%
     );
-    background-size: 2px 2px;
+    pointer-events: none;
+  }
+
+  /* Loading. A slow shimmer over the paper. */
+  .skeleton {
+    display: block;
+    background: linear-gradient(
+      90deg,
+      var(--surface-2) 25%,
+      var(--surface) 37%,
+      var(--surface-2) 63%
+    );
+    background-size: 400% 100%;
+    border-radius: 2px;
+    animation: shimmer 1400ms linear infinite;
+  }
+
+  /* Alternating ledger rows. */
+  .stripes {
+    background: var(--surface-2);
   }
 
   /* ---- Scrollbars -------------------------------------------------------- */
 
-  .px-scroll {
+  .scroll {
     scrollbar-width: thin;
-    scrollbar-color: var(--line-strong) var(--surface-2);
+    scrollbar-color: var(--line-strong) transparent;
   }
-  .px-scroll::-webkit-scrollbar {
-    width: 12px;
-    height: 12px;
+  .scroll::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
   }
-  .px-scroll::-webkit-scrollbar-track {
-    background: var(--surface-2);
-    border: 2px solid var(--line);
+  .scroll::-webkit-scrollbar-track {
+    background: transparent;
   }
-  .px-scroll::-webkit-scrollbar-thumb {
+  .scroll::-webkit-scrollbar-thumb {
     background: var(--line-strong);
-    border: 2px solid var(--surface-2);
+    border-radius: 0;
+    border: 3px solid transparent;
+    background-clip: padding-box;
   }
-  .px-scroll::-webkit-scrollbar-corner {
-    background: var(--surface-2);
+  .scroll::-webkit-scrollbar-corner {
+    background: transparent;
   }
 
-  .px-skip {
+  .skip {
     position: absolute;
     left: 8px;
     top: -64px;
     z-index: 60;
     padding: 6px 10px;
     background: var(--surface);
-    border: 2px solid var(--accent);
-    font-family: var(--font-ui);
-    font-size: 9px;
-    letter-spacing: 0.06em;
-    text-transform: uppercase;
+    border: 1px solid var(--ink);
+    font-size: 13px;
   }
-  .px-skip:focus {
+  .skip:focus {
     top: 8px;
   }
 
-  .px-link {
-    color: var(--accent);
+  .link {
+    color: var(--ink);
     text-decoration: underline;
-    text-underline-offset: 2px;
+    text-decoration-color: var(--line-strong);
+    text-underline-offset: 3px;
   }
-  .px-link:hover {
-    color: var(--accent-strong);
+  .link:hover {
+    text-decoration-color: var(--ink);
+  }
+
+  /* ---- Interaction ------------------------------------------------------ */
+
+  /* A docket row lifts one pixel under the cursor: the smallest change that
+     makes "this is a target" unmistakable. Soft shadow, offset — never a hard
+     offset block. */
+  .lift {
+    transition:
+      translate 160ms var(--ease-out),
+      box-shadow 160ms var(--ease-out),
+      border-color 120ms var(--ease-out),
+      background-color 120ms var(--ease-out);
+  }
+  /* `translate` rather than `transform`: motion components carry an inline
+     transform once their entrance settles, and an inline transform would win
+     over this rule. The independent translate property composes with it. */
+  .lift:hover {
+    translate: 0 -1px;
+    box-shadow: 0 6px 18px var(--shadow);
+  }
+
+  /* An ink press answers immediately. */
+  .press:active:not(:disabled) {
+    translate: 0 1px;
+  }
+
+  /* The sheen: a single canvas-toned sweep across ink-filled controls, on
+     hover only. Monochrome — it is light moving across the ink, not colour. */
+  .sheen {
+    position: relative;
+    overflow: hidden;
+  }
+  .sheen::after {
+    content: "";
+    position: absolute;
+    inset: -1px;
+    pointer-events: none;
+    background: linear-gradient(
+      105deg,
+      transparent 38%,
+      color-mix(in srgb, var(--canvas) 26%, transparent) 50%,
+      transparent 62%
+    );
+    transform: translateX(-130%);
+    transition: transform 620ms var(--ease-out);
+  }
+  .sheen:hover::after {
+    transform: translateX(130%);
   }
 }
 
 @layer utilities {
-  /* No blur, no scale, no 18px rise. A 4px hop in three steps. */
-  .anim-step-in {
-    animation: step-in 240ms steps(3, end) both;
+  .anim-in {
+    animation: fade-in 240ms var(--ease-out) both;
   }
-  .anim-blink {
-    animation: blink 1100ms steps(2, end) infinite;
+  .anim-pulse {
+    animation: pulse 1600ms ease-in-out infinite;
   }
-  .anim-slide-up {
-    animation: slide-up 900ms steps(6, end) infinite;
+  /* A nonessential loop: only while the element is on screen (the browser
+     pauses it offscreen), gentle enough to read as paper breathing. */
+  .anim-float {
+    animation: float 5.5s ease-in-out infinite alternate;
+  }
+  /* The streaming caret in the agent transcript. */
+  .caret {
+    display: inline-block;
+    width: 0.55em;
+    height: 1em;
+    vertical-align: -0.15em;
+    margin-left: 2px;
+    background: var(--ink);
+    animation: caret-blink 1s steps(2) infinite;
+  }
+  /* Paper: a fixed grain and a soft vignette over the whole surface. Static —
+     texture, not motion. Registry-level, so every page sits on the same paper. */
+  .paper::before,
+  .paper::after {
+    content: "";
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: 100;
+  }
+  .paper::before {
+    opacity: var(--grain-opacity);
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)'/%3E%3C/svg%3E");
+  }
+  .paper::after {
+    background: radial-gradient(
+      130% 100% at 50% 0%,
+      transparent 58%,
+      color-mix(in srgb, var(--ink) 4%, transparent) 100%
+    );
+  }
+  /* The theme flip is one continuous inversion, not a repaint. Applied for the
+     duration of the switch only. */
+  .theme-transition,
+  .theme-transition *,
+  .theme-transition *::before,
+  .theme-transition *::after {
+    transition:
+      background-color 320ms var(--ease-out),
+      border-color 320ms var(--ease-out),
+      color 320ms var(--ease-out),
+      fill 320ms var(--ease-out),
+      stroke 320ms var(--ease-out),
+      box-shadow 320ms var(--ease-out) !important;
   }
 }
 
-@keyframes step-in {
+@keyframes fade-in {
   from {
     opacity: 0;
-    transform: translateY(-4px);
+    transform: translateY(4px);
   }
   to {
     opacity: 1;
@@ -626,27 +729,8 @@
   }
 }
 
-@keyframes blink {
-  0%,
-  49% {
-    opacity: 1;
-  }
-  50%,
-  100% {
-    opacity: 0.35;
-  }
-}
-
-@keyframes slide-up {
-  from {
-    transform: translateX(0);
-  }
-  to {
-    transform: translateX(20px);
-  }
-}
-
-@keyframes cell-on {
+/* The reduced-motion twin: same arrival, no travel. */
+@keyframes fade-in-static {
   from {
     opacity: 0;
   }
@@ -655,12 +739,78 @@
   }
 }
 
+@keyframes pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.4;
+  }
+}
+
+@keyframes shimmer {
+  from {
+    background-position: 100% 0;
+  }
+  to {
+    background-position: 0 0;
+  }
+}
+
+@keyframes float {
+  from {
+    transform: translateY(0);
+  }
+  to {
+    transform: translateY(-4px);
+  }
+}
+
+@keyframes caret-blink {
+  0%,
+  49% {
+    opacity: 1;
+  }
+  50%,
+  100% {
+    opacity: 0;
+  }
+}
+
+/* Reduced motion means fewer and gentler, never none: feedback that confirms an
+   action stays legible (a 140ms colour or opacity answer), travel, loops and
+   choreography stop. Transform and layout animation in the motion library is
+   dropped separately by MotionConfig reducedMotion="user". */
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
   *::after {
-    animation-duration: 0.001ms !important;
+    animation-duration: 140ms !important;
     animation-iteration-count: 1 !important;
-    transition-duration: 0.001ms !important;
+    transition-duration: 140ms !important;
+  }
+  .anim-pulse,
+  .anim-float,
+  .caret,
+  .skeleton,
+  .sheen::after {
+    animation: none !important;
+  }
+  /* The entrance keeps its fade, loses its 4px travel: the promise in
+     PRODUCT.md — travel stops, feedback stays — matches the pixels. */
+  .anim-in {
+    animation-name: fade-in-static !important;
+  }
+  .lift:hover {
+    translate: none;
+  }
+  /* Press is travel too: stop it, keep the colour answer. */
+  .btn:active:not(:disabled),
+  .press:active:not(:disabled) {
+    translate: none;
+  }
+  .sheen:hover::after {
+    transform: translateX(-130%);
   }
 }

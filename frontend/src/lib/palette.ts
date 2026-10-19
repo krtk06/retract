@@ -4,14 +4,19 @@
  * Before this module, PILLAR_LABELS was defined four times (ScoreHero,
  * FindingsTable, RemediationPlan, HistoryCompare), SEVERITY_STYLES three times
  * (FindingsTable, ApprovalQueue, RemediationPlan), and the score-threshold table
- * twice with *different* cutoffs — DashboardPage broke at 50 where ScoreHero broke
- * at 40, so the same score rendered in two colours. Three copies of a lookup that
- * disagrees with itself is how a palette drifts off-palette.
+ * twice with *different* cutoffs. Three copies of a lookup that disagrees with
+ * itself is how a palette drifts off-palette.
  *
- * Every colour here is one of the 16 canonical PICO-8 entries. Nothing else.
+ * Every value here has a light and a dark entry. Changing the dossier is a
+ * values change, not a structure change: the shape of this module is stable
+ * across redesigns.
  */
 
-export type Theme = "dark" | "light";
+import type { Theme } from "./theme";
+
+/** The theme shape lives in lib/theme.ts; re-exported here because palette.ts
+    is the module every colour consumer already imports. */
+export type { Theme };
 
 export type Severity = "critical" | "high" | "medium" | "low" | "info";
 
@@ -44,16 +49,14 @@ export const PILLAR_LABELS: Record<Pillar, string> = {
   dependencies: "Dependencies",
 };
 
-/** Light mode has no yellow that survives on cream, so its ramp steps through
- *  brown → purple rather than orange → yellow. Warmth still increases with
- *  severity, which is the property carrying the meaning. */
+/** The six pillars are one ink ladder: position and label carry the difference. */
 const PILLAR_HEX: Record<Pillar, Record<Theme, string>> = {
-  security: { dark: "#FF004D", light: "#FF004D" },
-  "code-quality": { dark: "#FFA300", light: "#AB5236" },
-  testing: { dark: "#29ADFF", light: "#1D2B53" },
-  architecture: { dark: "#83769C", light: "#7E2553" },
-  documentation: { dark: "#FF77A8", light: "#008751" },
-  dependencies: { dark: "#00E436", light: "#5F574F" },
+  security: { dark: "#ece8e1", light: "#1d1a16" },
+  "code-quality": { dark: "#c5bfb4", light: "#3d3830" },
+  testing: { dark: "#9e978b", light: "#5d564c" },
+  architecture: { dark: "#7a7469", light: "#7d766a" },
+  documentation: { dark: "#585349", light: "#9d9689" },
+  dependencies: { dark: "#3a3731", light: "#beb7aa" },
 };
 
 export const PILLAR_COLOR_VAR: Record<Pillar, string> = Object.fromEntries(
@@ -61,14 +64,14 @@ export const PILLAR_COLOR_VAR: Record<Pillar, string> = Object.fromEntries(
 ) as Record<Pillar, string>;
 
 const SEVERITY_HEX: Record<Severity, Record<Theme, string>> = {
-  critical: { dark: "#FF004D", light: "#FF004D" },
-  high: { dark: "#FFA300", light: "#AB5236" },
-  medium: { dark: "#FFEC27", light: "#7E2553" },
-  low: { dark: "#29ADFF", light: "#1D2B53" },
-  info: { dark: "#C2C3C7", light: "#5F574F" },
+  critical: { dark: "#e06a5c", light: "#b0392c" },
+  high: { dark: "#d99a3d", light: "#9a5b08" },
+  medium: { dark: "#c2a04d", light: "#7a6a2a" },
+  low: { dark: "#6f9ade", light: "#3568b8" },
+  info: { dark: "#8d887e", light: "#6d6860" },
 };
 
-/** Warm means worse: red → orange → yellow → blue → grey. */
+/** Warm means worse: red → orange → amber → blue → grey. */
 export const SEVERITIES: readonly Severity[] = ["critical", "high", "medium", "low", "info"];
 
 export const SEVERITY_COLOR_VAR: Record<Severity, string> = Object.fromEntries(
@@ -76,10 +79,10 @@ export const SEVERITY_COLOR_VAR: Record<Severity, string> = Object.fromEntries(
 ) as Record<Severity, string>;
 
 const STATUS_HEX: Record<RunStatus, Record<Theme, string>> = {
-  pending: { dark: "#83769C", light: "#5F574F" },
-  running: { dark: "#FFEC27", light: "#AB5236" },
-  done: { dark: "#00E436", light: "#008751" },
-  failed: { dark: "#FF004D", light: "#FF004D" },
+  pending: { dark: "#8d887e", light: "#6d6860" },
+  running: { dark: "#d99a3d", light: "#9a5b08" },
+  done: { dark: "#4fb07d", light: "#1f7a4d" },
+  failed: { dark: "#e06a5c", light: "#b0392c" },
 };
 
 export const STATUS_COLOR_VAR: Record<RunStatus, string> = Object.fromEntries(
@@ -103,10 +106,19 @@ export function scoreTone(score: number): Tone {
   return "danger";
 }
 
+/** The verdict in words, so a tone is never colour alone. One table, two
+    surfaces: the analysis verdict stamp and the dashboard docket row. */
+export const TONE_VERDICT_WORD: Record<Tone, string> = {
+  ok: "healthy",
+  info: "adequate",
+  warn: "at risk",
+  danger: "critical",
+};
+
 /**
  * Maps a `--pillar-*` / `--sev-*` / `--status-*` / tone reference to its two
- * themes. The four tone references are here too because ScoreRing is the one
- * component that needs a literal, and it receives a tone, not a pillar.
+ * themes. The four tone references are here too because the score gauge is the
+ * one component that needs a literal, and it receives a tone, not a pillar.
  */
 const BY_REF: Record<string, Record<Theme, string>> = {
   ...Object.fromEntries(
@@ -119,21 +131,20 @@ const BY_REF: Record<string, Record<Theme, string>> = {
   "--status-running": STATUS_HEX.running,
   "--status-done": STATUS_HEX.done,
   "--status-failed": STATUS_HEX.failed,
-  "--ok": { dark: "#00E436", light: "#008751" },
-  "--warn": { dark: "#FFA300", light: "#AB5236" },
-  "--info": { dark: "#FFEC27", light: "#1D2B53" },
-  "--danger": { dark: "#FF004D", light: "#FF004D" },
+  "--ok": { dark: "#4fb07d", light: "#1f7a4d" },
+  "--warn": { dark: "#d99a3d", light: "#9a5b08" },
+  "--info": { dark: "#6f9ade", light: "#3568b8" },
+  "--danger": { dark: "#e06a5c", light: "#b0392c" },
 };
 
 /**
  * Resolves `var(--name)` to a literal hex for `theme`. Components that paint into
  * SVG attributes cannot use CSS variables in a `fill` that also needs to be
- * read back, and `<animate>`-style gradients need the value at build time.
- * An unknown reference resolves to the canvas so a typo degrades to background
- * rather than to an invisible element.
+ * read back. An unknown reference resolves to the canvas so a typo degrades to
+ * background rather than to an invisible element.
  */
 export function colorFor(reference: string, theme: Theme): string {
   const name = reference.replace(/^var\(/, "").replace(/\)$/, "").trim();
   const entry = BY_REF[name];
-  return entry ? entry[theme] : theme === "dark" ? "#000000" : "#C2C3C7";
+  return entry ? entry[theme] : theme === "dark" ? "#131210" : "#faf9f7";
 }

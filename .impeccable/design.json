@@ -1,0 +1,739 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-10-19T12:25:41Z",
+  "title": "Design System: Retract",
+  "extensions": {
+    "colorMeta": {
+      "canvas": {
+        "role": "neutral",
+        "displayName": "Warm Paper",
+        "canonical": "#faf9f7",
+        "dark": "#131210",
+        "tonalRamp": [
+          "oklch(15.0% 0.0029 84.6)",
+          "oklch(26.4% 0.0029 84.6)",
+          "oklch(37.9% 0.0029 84.6)",
+          "oklch(49.3% 0.0029 84.6)",
+          "oklch(60.7% 0.0029 84.6)",
+          "oklch(72.1% 0.0029 84.6)",
+          "oklch(83.6% 0.0029 84.6)",
+          "oklch(95.0% 0.0029 84.6)"
+        ]
+      },
+      "surface": {
+        "role": "neutral",
+        "displayName": "Report White",
+        "canonical": "#ffffff",
+        "dark": "#1b1917",
+        "tonalRamp": [
+          "oklch(15.0% 0.0000 89.9)",
+          "oklch(26.4% 0.0000 89.9)",
+          "oklch(37.9% 0.0000 89.9)",
+          "oklch(49.3% 0.0000 89.9)",
+          "oklch(60.7% 0.0000 89.9)",
+          "oklch(72.1% 0.0000 89.9)",
+          "oklch(83.6% 0.0000 89.9)",
+          "oklch(95.0% 0.0000 89.9)"
+        ]
+      },
+      "surface-2": {
+        "role": "neutral",
+        "displayName": "Recessed Paper",
+        "canonical": "#f4f2ee",
+        "dark": "#232120",
+        "tonalRamp": [
+          "oklch(15.0% 0.0057 84.6)",
+          "oklch(26.4% 0.0057 84.6)",
+          "oklch(37.9% 0.0057 84.6)",
+          "oklch(49.3% 0.0057 84.6)",
+          "oklch(60.7% 0.0057 84.6)",
+          "oklch(72.1% 0.0057 84.6)",
+          "oklch(83.6% 0.0057 84.6)",
+          "oklch(95.0% 0.0057 84.6)"
+        ]
+      },
+      "line": {
+        "role": "neutral",
+        "displayName": "Hairline",
+        "canonical": "#e6e3dd",
+        "dark": "#302d29",
+        "tonalRamp": [
+          "oklch(15.0% 0.0087 84.6)",
+          "oklch(26.4% 0.0087 84.6)",
+          "oklch(37.9% 0.0087 84.6)",
+          "oklch(49.3% 0.0087 84.6)",
+          "oklch(60.7% 0.0087 84.6)",
+          "oklch(72.1% 0.0087 84.6)",
+          "oklch(83.6% 0.0087 84.6)",
+          "oklch(95.0% 0.0087 84.6)"
+        ]
+      },
+      "line-strong": {
+        "role": "neutral",
+        "displayName": "Rule Ink",
+        "canonical": "#cfcbc3",
+        "dark": "#4a463f",
+        "tonalRamp": [
+          "oklch(15.0% 0.0118 84.6)",
+          "oklch(26.4% 0.0118 84.6)",
+          "oklch(37.9% 0.0118 84.6)",
+          "oklch(49.3% 0.0118 84.6)",
+          "oklch(60.7% 0.0118 84.6)",
+          "oklch(72.1% 0.0118 84.6)",
+          "oklch(83.6% 0.0118 84.6)",
+          "oklch(95.0% 0.0118 84.6)"
+        ]
+      },
+      "ink": {
+        "role": "primary",
+        "displayName": "Dossier Ink",
+        "canonical": "#1d1a16",
+        "dark": "#ece8e1",
+        "tonalRamp": [
+          "oklch(15.0% 0.0089 75.1)",
+          "oklch(26.4% 0.0089 75.1)",
+          "oklch(37.9% 0.0089 75.1)",
+          "oklch(49.3% 0.0089 75.1)",
+          "oklch(60.7% 0.0089 75.1)",
+          "oklch(72.1% 0.0089 75.1)",
+          "oklch(83.6% 0.0089 75.1)",
+          "oklch(95.0% 0.0089 75.1)"
+        ]
+      },
+      "muted": {
+        "role": "neutral",
+        "displayName": "Second Ink",
+        "canonical": "#635d54",
+        "dark": "#a59f95",
+        "tonalRamp": [
+          "oklch(15.0% 0.0161 78.2)",
+          "oklch(26.4% 0.0161 78.2)",
+          "oklch(37.9% 0.0161 78.2)",
+          "oklch(49.3% 0.0161 78.2)",
+          "oklch(60.7% 0.0161 78.2)",
+          "oklch(72.1% 0.0161 78.2)",
+          "oklch(83.6% 0.0161 78.2)",
+          "oklch(95.0% 0.0161 78.2)"
+        ]
+      },
+      "faint": {
+        "role": "neutral",
+        "displayName": "Margin Grey",
+        "canonical": "#6a655d",
+        "dark": "#8f8a80",
+        "tonalRamp": [
+          "oklch(15.0% 0.0139 79.7)",
+          "oklch(26.4% 0.0139 79.7)",
+          "oklch(37.9% 0.0139 79.7)",
+          "oklch(49.3% 0.0139 79.7)",
+          "oklch(60.7% 0.0139 79.7)",
+          "oklch(72.1% 0.0139 79.7)",
+          "oklch(83.6% 0.0139 79.7)",
+          "oklch(95.0% 0.0139 79.7)"
+        ]
+      },
+      "accent": {
+        "role": "primary",
+        "displayName": "Action Ink",
+        "canonical": "#1d1a16",
+        "dark": "#ece8e1",
+        "tonalRamp": [
+          "oklch(15.0% 0.0089 75.1)",
+          "oklch(26.4% 0.0089 75.1)",
+          "oklch(37.9% 0.0089 75.1)",
+          "oklch(49.3% 0.0089 75.1)",
+          "oklch(60.7% 0.0089 75.1)",
+          "oklch(72.1% 0.0089 75.1)",
+          "oklch(83.6% 0.0089 75.1)",
+          "oklch(95.0% 0.0089 75.1)"
+        ]
+      },
+      "accent-ink": {
+        "role": "primary",
+        "displayName": "Paper on Ink",
+        "canonical": "#faf9f7",
+        "dark": "#131210",
+        "tonalRamp": [
+          "oklch(15.0% 0.0029 84.6)",
+          "oklch(26.4% 0.0029 84.6)",
+          "oklch(37.9% 0.0029 84.6)",
+          "oklch(49.3% 0.0029 84.6)",
+          "oklch(60.7% 0.0029 84.6)",
+          "oklch(72.1% 0.0029 84.6)",
+          "oklch(83.6% 0.0029 84.6)",
+          "oklch(95.0% 0.0029 84.6)"
+        ]
+      },
+      "ok": {
+        "role": "secondary",
+        "displayName": "Verified Green",
+        "canonical": "#1f7a4d",
+        "dark": "#4fb07d",
+        "tonalRamp": [
+          "oklch(15.0% 0.1102 156.8)",
+          "oklch(26.4% 0.1102 156.8)",
+          "oklch(37.9% 0.1102 156.8)",
+          "oklch(49.3% 0.1102 156.8)",
+          "oklch(60.7% 0.1102 156.8)",
+          "oklch(72.1% 0.1102 156.8)",
+          "oklch(83.6% 0.1102 156.8)",
+          "oklch(95.0% 0.1102 156.8)"
+        ]
+      },
+      "warn": {
+        "role": "secondary",
+        "displayName": "Unverified Amber",
+        "canonical": "#9a5b08",
+        "dark": "#d99a3d",
+        "tonalRamp": [
+          "oklch(15.0% 0.1172 64.2)",
+          "oklch(26.4% 0.1172 64.2)",
+          "oklch(37.9% 0.1172 64.2)",
+          "oklch(49.3% 0.1172 64.2)",
+          "oklch(60.7% 0.1172 64.2)",
+          "oklch(72.1% 0.1172 64.2)",
+          "oklch(83.6% 0.1172 64.2)",
+          "oklch(95.0% 0.1172 64.2)"
+        ]
+      },
+      "danger": {
+        "role": "secondary",
+        "displayName": "Critical Red",
+        "canonical": "#b0392c",
+        "dark": "#e06a5c",
+        "tonalRamp": [
+          "oklch(15.0% 0.1570 29.6)",
+          "oklch(26.4% 0.1570 29.6)",
+          "oklch(37.9% 0.1570 29.6)",
+          "oklch(49.3% 0.1570 29.6)",
+          "oklch(60.7% 0.1570 29.6)",
+          "oklch(72.1% 0.1570 29.6)",
+          "oklch(83.6% 0.1570 29.6)",
+          "oklch(95.0% 0.1570 29.6)"
+        ]
+      },
+      "info": {
+        "role": "secondary",
+        "displayName": "Reference Blue",
+        "canonical": "#3568b8",
+        "dark": "#6f9ade",
+        "tonalRamp": [
+          "oklch(15.0% 0.1377 259.1)",
+          "oklch(26.4% 0.1377 259.1)",
+          "oklch(37.9% 0.1377 259.1)",
+          "oklch(49.3% 0.1377 259.1)",
+          "oklch(60.7% 0.1377 259.1)",
+          "oklch(72.1% 0.1377 259.1)",
+          "oklch(83.6% 0.1377 259.1)",
+          "oklch(95.0% 0.1377 259.1)"
+        ]
+      },
+      "hypo": {
+        "role": "secondary",
+        "displayName": "Hypothesis Violet",
+        "canonical": "#6b59c1",
+        "dark": "#a294e0",
+        "tonalRamp": [
+          "oklch(15.0% 0.1565 287.9)",
+          "oklch(26.4% 0.1565 287.9)",
+          "oklch(37.9% 0.1565 287.9)",
+          "oklch(49.3% 0.1565 287.9)",
+          "oklch(60.7% 0.1565 287.9)",
+          "oklch(72.1% 0.1565 287.9)",
+          "oklch(83.6% 0.1565 287.9)",
+          "oklch(95.0% 0.1565 287.9)"
+        ]
+      },
+      "sev-medium": {
+        "role": "secondary",
+        "displayName": "Medium Amber",
+        "canonical": "#7a6a2a",
+        "dark": "#c2a04d",
+        "tonalRamp": [
+          "oklch(15.0% 0.0856 95.2)",
+          "oklch(26.4% 0.0856 95.2)",
+          "oklch(37.9% 0.0856 95.2)",
+          "oklch(49.3% 0.0856 95.2)",
+          "oklch(60.7% 0.0856 95.2)",
+          "oklch(72.1% 0.0856 95.2)",
+          "oklch(83.6% 0.0856 95.2)",
+          "oklch(95.0% 0.0856 95.2)"
+        ]
+      },
+      "status-pending": {
+        "role": "neutral",
+        "displayName": "Pending Grey",
+        "canonical": "#6d6860",
+        "dark": "#8d887e",
+        "tonalRamp": [
+          "oklch(15.0% 0.0138 79.7)",
+          "oklch(26.4% 0.0138 79.7)",
+          "oklch(37.9% 0.0138 79.7)",
+          "oklch(49.3% 0.0138 79.7)",
+          "oklch(60.7% 0.0138 79.7)",
+          "oklch(72.1% 0.0138 79.7)",
+          "oklch(83.6% 0.0138 79.7)",
+          "oklch(95.0% 0.0138 79.7)"
+        ]
+      },
+      "pillar-security": {
+        "role": "neutral",
+        "displayName": "Ladder 1 — Security Ink",
+        "canonical": "#1d1a16",
+        "dark": "#ece8e1",
+        "tonalRamp": [
+          "oklch(15.0% 0.0089 75.1)",
+          "oklch(26.4% 0.0089 75.1)",
+          "oklch(37.9% 0.0089 75.1)",
+          "oklch(49.3% 0.0089 75.1)",
+          "oklch(60.7% 0.0089 75.1)",
+          "oklch(72.1% 0.0089 75.1)",
+          "oklch(83.6% 0.0089 75.1)",
+          "oklch(95.0% 0.0089 75.1)"
+        ]
+      },
+      "pillar-code-quality": {
+        "role": "neutral",
+        "displayName": "Ladder 2 — Code Quality Ink",
+        "canonical": "#3d3830",
+        "dark": "#c5bfb4",
+        "tonalRamp": [
+          "oklch(15.0% 0.0152 79.6)",
+          "oklch(26.4% 0.0152 79.6)",
+          "oklch(37.9% 0.0152 79.6)",
+          "oklch(49.3% 0.0152 79.6)",
+          "oklch(60.7% 0.0152 79.6)",
+          "oklch(72.1% 0.0152 79.6)",
+          "oklch(83.6% 0.0152 79.6)",
+          "oklch(95.0% 0.0152 79.6)"
+        ]
+      },
+      "pillar-testing": {
+        "role": "neutral",
+        "displayName": "Ladder 3 — Testing Ink",
+        "canonical": "#5d564c",
+        "dark": "#9e978b",
+        "tonalRamp": [
+          "oklch(15.0% 0.0183 76.9)",
+          "oklch(26.4% 0.0183 76.9)",
+          "oklch(37.9% 0.0183 76.9)",
+          "oklch(49.3% 0.0183 76.9)",
+          "oklch(60.7% 0.0183 76.9)",
+          "oklch(72.1% 0.0183 76.9)",
+          "oklch(83.6% 0.0183 76.9)",
+          "oklch(95.0% 0.0183 76.9)"
+        ]
+      },
+      "pillar-architecture": {
+        "role": "neutral",
+        "displayName": "Ladder 4 — Architecture Ink",
+        "canonical": "#7d766a",
+        "dark": "#7a7469",
+        "tonalRamp": [
+          "oklch(15.0% 0.0199 81.3)",
+          "oklch(26.4% 0.0199 81.3)",
+          "oklch(37.9% 0.0199 81.3)",
+          "oklch(49.3% 0.0199 81.3)",
+          "oklch(60.7% 0.0199 81.3)",
+          "oklch(72.1% 0.0199 81.3)",
+          "oklch(83.6% 0.0199 81.3)",
+          "oklch(95.0% 0.0199 81.3)"
+        ]
+      },
+      "pillar-documentation": {
+        "role": "neutral",
+        "displayName": "Ladder 5 — Documentation Ink",
+        "canonical": "#9d9689",
+        "dark": "#585349",
+        "tonalRamp": [
+          "oklch(15.0% 0.0204 83.1)",
+          "oklch(26.4% 0.0204 83.1)",
+          "oklch(37.9% 0.0204 83.1)",
+          "oklch(49.3% 0.0204 83.1)",
+          "oklch(60.7% 0.0204 83.1)",
+          "oklch(72.1% 0.0204 83.1)",
+          "oklch(83.6% 0.0204 83.1)",
+          "oklch(95.0% 0.0204 83.1)"
+        ]
+      },
+      "pillar-dependencies": {
+        "role": "neutral",
+        "displayName": "Ladder 6 — Dependencies Ink",
+        "canonical": "#beb7aa",
+        "dark": "#3a3731",
+        "tonalRamp": [
+          "oklch(15.0% 0.0197 83.1)",
+          "oklch(26.4% 0.0197 83.1)",
+          "oklch(37.9% 0.0197 83.1)",
+          "oklch(49.3% 0.0197 83.1)",
+          "oklch(60.7% 0.0197 83.1)",
+          "oklch(72.1% 0.0197 83.1)",
+          "oklch(83.6% 0.0197 83.1)",
+          "oklch(95.0% 0.0197 83.1)"
+        ]
+      }
+    },
+    "typographyMeta": {
+      "display": {
+        "displayName": "Display figure",
+        "purpose": "The stamped verdict score and every report figure — serif with tabular figures."
+      },
+      "headline": {
+        "displayName": "Headline",
+        "purpose": "The login masthead — display type for the one page that argues."
+      },
+      "title": {
+        "displayName": "Title",
+        "purpose": "Plate titles and the topbar wordmark."
+      },
+      "body": {
+        "displayName": "Body",
+        "purpose": "UI prose and controls; the workhorse sans."
+      },
+      "label": {
+        "displayName": "Label",
+        "purpose": "Field labels and transcript attributions — uppercase, tracked, faint."
+      },
+      "evidence": {
+        "displayName": "Evidence",
+        "purpose": "SHAs, file:line citations, counts ledgers, tool names — quoted from the machine."
+      }
+    },
+    "shadows": [
+      {
+        "name": "plate-drop",
+        "value": "0 12px 40px var(--shadow)",
+        "purpose": "The login plate's single soft drop — the only drop shadow at rest (light rgba(29, 26, 22, 0.08), dark rgba(0, 0, 0, 0.4))."
+      },
+      {
+        "name": "stamp-seal",
+        "value": "inset 0 0 0 1px var(--surface), inset 0 0 0 2px currentColor",
+        "purpose": "The verdict stamp's tone-locked inner rule — a printed seal, not a drop shadow."
+      },
+      {
+        "name": "row-lift",
+        "value": "0 6px 18px var(--shadow)",
+        "purpose": "The hover shadow under an actionable row, paired with a 1px rise (translate 0 -1px). Repositories, analyses and transcript suggestions only; static exhibits, findings rows and plan steps never lift."
+      }
+    ],
+    "texture": [
+      {
+        "name": "paper-grain",
+        "value": "fixed SVG feTurbulence noise (fractalNoise, saturate 0), --grain-opacity 0.03 light / 0.055 dark",
+        "purpose": "The sheet's tooth: a monochrome grain over every page, applied via the .paper utility on the shell and login. Fixed and static — texture, not motion."
+      },
+      {
+        "name": "ink-vignette",
+        "value": "radial-gradient(130% 100% at 50% 0%, transparent 58%, color-mix(in srgb, var(--ink) 4%, transparent) 100%)",
+        "purpose": "A 4% ink fall-off at the page's edges, fixed with the grain in the same paper layer. Monochrome, static, never tinted."
+      }
+    ],
+    "motion": [
+      {
+        "name": "ease-settle",
+        "value": "cubic-bezier(0.16, 1, 0.3, 1)",
+        "purpose": "The system's one curve (EASE in lib/motion.ts, --ease-out in CSS): values land, nothing bounces. Every transition, entrance and count."
+      },
+      {
+        "name": "score-count",
+        "value": "900ms",
+        "purpose": "The verdict numeral counts to its value once (ScoreHero)."
+      },
+      {
+        "name": "stamp-land",
+        "value": "240ms at a 900ms delay",
+        "purpose": "The verdict stamp lands (opacity/scale 1.12 to 1) as the count finishes; skipped under reduced motion."
+      },
+      {
+        "name": "meter-settle",
+        "value": "520ms fill; per-pillar delay 200ms + 60ms x index, triggered on first view",
+        "purpose": "Pillar meter fills settle onto their tick rules in sequence, once."
+      },
+      {
+        "name": "meter-figure",
+        "value": "700ms count-up beside the fill",
+        "purpose": "The meter's serif figure counts up with its bar — one gesture."
+      },
+      {
+        "name": "state-shift",
+        "value": "120ms",
+        "purpose": "Hover, colour, and border transitions on controls and rows."
+      },
+      {
+        "name": "press",
+        "value": "1px down on :active (80ms)",
+        "purpose": "An ink press answers immediately (.press and the base button)."
+      },
+      {
+        "name": "sheen-sweep",
+        "value": "620ms light band, hover only",
+        "purpose": "A monochrome canvas-toned sweep across filled controls."
+      },
+      {
+        "name": "row-lift",
+        "value": "160ms; translate 0 -1px + box-shadow 0 6px 18px var(--shadow)",
+        "purpose": "The cursor's answer on actionable rows only — never static exhibits, findings rows or plan steps."
+      },
+      {
+        "name": "reveal",
+        "value": "420ms, 8px rise, once",
+        "purpose": "Sections arrive on their own scroll (Reveal); travel drops under reduced motion."
+      },
+      {
+        "name": "row-enter",
+        "value": "340-360ms, 5-6px rise, delayed by stagger()",
+        "purpose": "Ledger rows and exhibits arrive as a list, tail capped."
+      },
+      {
+        "name": "stagger",
+        "value": "step 35-50ms, cap 0.24-0.34s (default cap 0.34s)",
+        "purpose": "Sibling stagger is capped so long lists arrive as one quiet block."
+      },
+      {
+        "name": "indicator-slide",
+        "value": "240-280ms layoutId rules",
+        "purpose": "Rail, mobile strip and analysis-tab ink rules slide between destinations; the static rule is the no-motion fallback."
+      },
+      {
+        "name": "theme-flip",
+        "value": "320ms colour transition, applied for the switch only (class removed after 420ms)",
+        "purpose": "One continuous colour inversion, not a repaint."
+      },
+      {
+        "name": "masthead-rule",
+        "value": "scaleX 0 to 1, 500ms",
+        "purpose": "The topbar's 1px rule is drawn on arrival; full width instantly under reduced motion."
+      },
+      {
+        "name": "caret",
+        "value": "1000ms steps(2) blink",
+        "purpose": "The streaming caret in the agent transcript, only while an answer arrives."
+      },
+      {
+        "name": "sparkline-draw",
+        "value": "900ms pathLength; head dot 200ms at a 700ms delay",
+        "purpose": "The trend line draws itself once and is aria-hidden decoration; duration 0 under reduced motion."
+      },
+      {
+        "name": "login-choreography",
+        "value": "masked lines 650ms (delays 0 / 0.09s); plate 550ms at 0.16s; paragraph 500ms at 0.24s; sample exhibit 500ms at 0.32s; exhibit lines 400ms at 0.5s / 0.6s",
+        "purpose": "The login masthead's staged arrival: lines out of their masks, everything else behind them."
+      },
+      {
+        "name": "expand-height",
+        "value": "240-340ms height auto",
+        "purpose": "Expanding surfaces open in place: the approval form, finding snippets, plan steps."
+      },
+      {
+        "name": "shimmer",
+        "value": "1400ms linear infinite",
+        "purpose": "Loading skeleton sweep; stopped under reduced motion."
+      },
+      {
+        "name": "pulse",
+        "value": "1600ms ease-in-out infinite",
+        "purpose": "In-flight dots while work is actually running; stopped under reduced motion."
+      },
+      {
+        "name": "float",
+        "value": "5500ms ease-in-out infinite alternate",
+        "purpose": "The empty-state mark's gentle drift; stopped under reduced motion."
+      },
+      {
+        "name": "reduced-motion",
+        "value": "MotionConfig reducedMotion=user drops transform/scale/layout; CSS caps durations at 140ms and iterations at 1, stops loops, opacity-only entrance, lift rise removed",
+        "purpose": "Fewer and gentler, not none: feedback that confirms an action stays legible; the sparkline renders finished (duration 0)."
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "sm",
+        "value": "640px",
+        "purpose": "Denser rows open up: ledger counts, the login name, and the log-out label appear."
+      },
+      {
+        "name": "lg",
+        "value": "1024px",
+        "purpose": "The rail appears beside the content; the mobile tab strip and the login masthead retire."
+      }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "The ink-filled primary action — analyze, sign in, approve; carries the sheen and the press.",
+      "html": "<button class=\"ds-btn-primary\" type=\"button\">Analyze repository</button>",
+      "css": ".ds-btn-primary { position: relative; overflow: hidden; display: inline-flex; align-items: center; justify-content: center; gap: 6px; height: 32px; padding: 0 12px; background: var(--ink); border: 1px solid var(--ink); border-radius: 2px; color: var(--canvas); font-family: inherit; font-size: 13px; font-weight: 500; line-height: 1; white-space: nowrap; cursor: pointer; transition: background 120ms cubic-bezier(0.16, 1, 0.3, 1), border-color 120ms cubic-bezier(0.16, 1, 0.3, 1), transform 80ms cubic-bezier(0.16, 1, 0.3, 1); } .ds-btn-primary::after { content: \"\"; position: absolute; inset: -1px; pointer-events: none; background: linear-gradient(105deg, transparent 38%, color-mix(in srgb, var(--canvas) 26%, transparent) 50%, transparent 62%); transform: translateX(-130%); transition: transform 620ms cubic-bezier(0.16, 1, 0.3, 1); } .ds-btn-primary:hover:not(:disabled) { background: color-mix(in srgb, var(--ink) 88%, var(--canvas)); border-color: color-mix(in srgb, var(--ink) 88%, var(--canvas)); } .ds-btn-primary:hover::after { transform: translateX(130%); } .ds-btn-primary:active:not(:disabled) { transform: translateY(1px); } .ds-btn-primary:focus-visible { outline: 2px solid var(--canvas); outline-offset: 2px; } .ds-btn-primary:disabled { opacity: 0.45; cursor: not-allowed; }"
+    },
+    {
+      "name": "Default Button",
+      "kind": "button",
+      "refersTo": "button",
+      "description": "The hairline button for secondary actions.",
+      "html": "<button class=\"ds-btn\" type=\"button\">Re-analyze</button>",
+      "css": ".ds-btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; height: 32px; padding: 0 12px; background: var(--surface); border: 1px solid var(--line-strong); border-radius: 2px; color: var(--ink); font-family: inherit; font-size: 13px; font-weight: 500; line-height: 1; white-space: nowrap; cursor: pointer; transition: background 120ms cubic-bezier(0.16, 1, 0.3, 1), border-color 120ms cubic-bezier(0.16, 1, 0.3, 1), color 120ms cubic-bezier(0.16, 1, 0.3, 1), transform 80ms cubic-bezier(0.16, 1, 0.3, 1); } .ds-btn:hover:not(:disabled) { background: var(--surface-2); border-color: var(--muted); } .ds-btn:active:not(:disabled) { transform: translateY(1px); } .ds-btn:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; } .ds-btn:disabled { opacity: 0.45; cursor: not-allowed; }"
+    },
+    {
+      "name": "Ghost Button",
+      "kind": "button",
+      "description": "Borderless button for chrome actions such as log out.",
+      "html": "<button class=\"ds-btn-ghost\" type=\"button\">Log out</button>",
+      "css": ".ds-btn-ghost { display: inline-flex; align-items: center; justify-content: center; gap: 6px; height: 32px; padding: 0 12px; background: transparent; border: 1px solid transparent; border-radius: 2px; color: var(--ink); font-family: inherit; font-size: 13px; font-weight: 500; line-height: 1; white-space: nowrap; cursor: pointer; transition: background 120ms cubic-bezier(0.16, 1, 0.3, 1), border-color 120ms cubic-bezier(0.16, 1, 0.3, 1); } .ds-btn-ghost:hover:not(:disabled) { background: var(--surface-2); } .ds-btn-ghost:active:not(:disabled) { transform: translateY(1px); } .ds-btn-ghost:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }"
+    },
+    {
+      "name": "Text Input",
+      "kind": "input",
+      "refersTo": "input",
+      "description": "The one text field: 34px, one hairline, ruled-not-glowing focus.",
+      "html": "<input class=\"ds-input\" placeholder=\"https://github.com/owner/repo\" />",
+      "css": ".ds-input { width: 100%; height: 34px; padding: 0 10px; background: var(--surface); border: 1px solid var(--line-strong); border-radius: 2px; color: var(--ink); font-family: inherit; font-size: 13px; line-height: 1.4; transition: border-color 120ms cubic-bezier(0.16, 1, 0.3, 1), box-shadow 120ms cubic-bezier(0.16, 1, 0.3, 1); } .ds-input::placeholder { color: var(--faint); } .ds-input:focus { outline: none; border-color: var(--ink); box-shadow: inset 0 0 0 1px var(--ink); }"
+    },
+    {
+      "name": "Chip",
+      "kind": "chip",
+      "refersTo": "chip",
+      "description": "A print ticket, not a pill — tonal variants carry the status vocabulary (shown: hypothesis).",
+      "html": "<span class=\"ds-chip ds-chip--hypo\">3 hypotheses</span>",
+      "css": ".ds-chip { display: inline-flex; align-items: center; gap: 5px; padding: 2px 8px; background: var(--surface); border: 1px solid var(--line-strong); border-radius: 2px; color: var(--ink); font-family: inherit; font-size: 11px; font-weight: 500; line-height: 1.6; white-space: nowrap; } .ds-chip--hypo { color: var(--hypo); border-color: color-mix(in srgb, var(--hypo) 40%, transparent); background: var(--hypo-soft); }"
+    },
+    {
+      "name": "Panel",
+      "kind": "card",
+      "refersTo": "panel",
+      "description": "A dossier page: flat paper, one hairline, 24px padding, serif figure.",
+      "html": "<section class=\"ds-panel\"><p class=\"ds-figure\">72<span class=\"ds-figure-unit\">/100</span></p><p class=\"ds-label\">Repository health</p></section>",
+      "css": ".ds-panel { background: var(--surface); border: 1px solid var(--line); border-radius: 2px; padding: 24px; } .ds-figure { margin: 0; font-family: var(--font-display); font-variant-numeric: tabular-nums; font-weight: 600; letter-spacing: -0.01em; font-size: 2.25rem; line-height: 1; color: var(--ink); } .ds-figure-unit { font-family: var(--font-sans); font-size: 1rem; font-weight: 400; color: var(--faint); } .ds-label { margin: 6px 0 0; font-size: 10px; font-weight: 500; letter-spacing: 0.1em; text-transform: uppercase; color: var(--faint); }"
+    },
+    {
+      "name": "Hoverable Row Card",
+      "kind": "card",
+      "refersTo": "card",
+      "description": "An actionable ledger row that recesses to Recessed Paper and lifts 1px under the cursor — repositories and analyses only.",
+      "html": "<div class=\"ds-card\"><span class=\"ds-card-title\">owner/repo</span><span class=\"ds-card-meta\">fa4c1d2 · 191 findings · 2h ago</span></div>",
+      "css": ".ds-card { background: var(--surface); border: 1px solid var(--line); border-radius: 2px; padding: 14px; transition: background 120ms cubic-bezier(0.16, 1, 0.3, 1), border-color 120ms cubic-bezier(0.16, 1, 0.3, 1), translate 160ms cubic-bezier(0.16, 1, 0.3, 1), box-shadow 160ms cubic-bezier(0.16, 1, 0.3, 1); } .ds-card:hover { background: var(--surface-2); border-color: var(--line-strong); translate: 0 -1px; box-shadow: 0 6px 18px var(--shadow); } .ds-card-title { display: block; font-size: 13px; font-weight: 500; color: var(--ink); } .ds-card-meta { display: block; margin-top: 4px; font-family: var(--font-mono); font-size: 11px; color: var(--faint); }"
+    },
+    {
+      "name": "Rail Nav Item",
+      "kind": "nav",
+      "description": "A rail section-index item; the active item takes Recessed Paper and a 1px ink left rule.",
+      "html": "<a class=\"ds-nav ds-nav--active\" href=\"#\"><svg width=\"16\" height=\"16\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.75\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><rect x=\"3\" y=\"3\" width=\"7\" height=\"7\" rx=\"1\"/><rect x=\"14\" y=\"3\" width=\"7\" height=\"7\" rx=\"1\"/><rect x=\"3\" y=\"14\" width=\"7\" height=\"7\" rx=\"1\"/><rect x=\"14\" y=\"14\" width=\"7\" height=\"7\" rx=\"1\"/></svg>Dashboard</a>",
+      "css": ".ds-nav { position: relative; display: flex; align-items: center; gap: 8px; width: 100%; padding: 8px 10px; border-radius: 2px; color: var(--muted); font-size: 13px; font-weight: 500; text-decoration: none; transition: color 120ms cubic-bezier(0.16, 1, 0.3, 1), background 120ms cubic-bezier(0.16, 1, 0.3, 1); } .ds-nav:hover { color: var(--ink); background: var(--surface-2); } .ds-nav--active { color: var(--ink); background: var(--surface-2); } .ds-nav--active::after { content: \"\"; position: absolute; left: 0; top: 6px; bottom: 6px; width: 1px; background: var(--ink); } .ds-nav:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }"
+    },
+    {
+      "name": "Verdict Stamp",
+      "kind": "custom",
+      "refersTo": "stamp",
+      "description": "The verdict seal: glyph + word + hue, with a tone-locked currentColor double rule.",
+      "html": "<span class=\"ds-stamp\"><svg width=\"11\" height=\"11\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.75\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M20 6 9 17l-5-5\"/></svg>healthy</span>",
+      "css": ".ds-stamp { display: inline-flex; align-items: center; gap: 5px; padding: 2px 8px; color: var(--ok); border: 1px solid currentColor; border-radius: 2px; box-shadow: inset 0 0 0 1px var(--surface), inset 0 0 0 2px currentColor; font-family: inherit; font-size: 10px; font-weight: 600; letter-spacing: 0.09em; text-transform: uppercase; line-height: 1.7; white-space: nowrap; }"
+    },
+    {
+      "name": "Tick-Rule Meter",
+      "kind": "custom",
+      "description": "The one bar primitive; the value lands on a tick lattice, and unmeasured states hatch instead of filling.",
+      "html": "<div class=\"ds-meter\" role=\"progressbar\" aria-label=\"Security\" aria-valuenow=\"72\" aria-valuemin=\"0\" aria-valuemax=\"100\"><span class=\"ds-meter-track\"><span class=\"ds-meter-fill\" style=\"width: 72%\"></span></span><span class=\"ds-meter-value\">72</span></div>",
+      "css": ".ds-meter { display: flex; align-items: center; gap: 10px; } .ds-meter-track { position: relative; flex: 1; height: 3px; min-width: 0; background: var(--surface-2); overflow: hidden; } .ds-meter-track::after { content: \"\"; position: absolute; inset: 0; background-image: repeating-linear-gradient(90deg, var(--line) 0 1px, transparent 1px 10%); pointer-events: none; } .ds-meter-fill { position: absolute; top: 0; bottom: 0; left: 0; background: var(--pillar-security); } .ds-meter-value { min-width: 32px; text-align: right; font-family: var(--font-display); font-variant-numeric: tabular-nums; font-weight: 600; font-size: 14px; color: var(--ink); }"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Verification Dossier",
+    "overview": "Every screen in Retract is a numbered inspection dossier: exhibits with verdicts and cited evidence. The interface refuses the dashboard-of-identical-cards default — the report is the interface, and reading it is the product. Scores arrive as stamped verdicts, pillars as a numbered schedule, findings as cited exhibits, and approvals as signatures on the record.\n\nThe material world is warm paper and ink. One monochrome ladder carries the light theme (paper under a desk lamp) and the dark theme (the same dossier at night, chalk ink on warm near-black); the two are co-equal. Structure is drawn with hairline rules, not shadows; display numerals are set in a screen serif with tabular figures; evidence — SHAs, file:line, tool names, counts — is set in Geist Mono so it reads as quoted from the machine. Hue is held in reserve and appears only where it is evidence: severity, run status, verification, hypotheses — and never without its word and its glyph.\n\nThe reading posture is calm density: quiet chrome, short declaratives, one accent's worth of expression. Primary actions are filled with ink itself, and every page sits on the same sheet: a fixed monochrome grain and a 4% ink vignette over the whole surface. Motion is one settling curve, and it carries feedback and continuity, not decoration — verdicts stamp once, indicators slide between destinations, rows answer the cursor, and the rest of the print stays still.",
+    "keyCharacteristics": [
+      "Warm paper-and-ink monochrome ladder; light and dark are co-equal, every token dual-valued.",
+      "Hairlines and 2px corners; surfaces are flat — print does not float.",
+      "Serif display numerals with tabular figures over a workhorse UI sans; Geist Mono for evidence.",
+      "Numbered exhibits and stamp states; sequence carries information.",
+      "Status is word + glyph + hue, never colour alone; hue is evidence only.",
+      "Ink-filled primary actions; there is no second accent.",
+      "One settling curve carries all motion; named moments land once and nothing loops for attention.",
+      "A fixed monochrome grain and a 4% ink vignette sit on every page; texture never animates and never carries hue.",
+      "Reduced motion is fewer and gentler, not none: travel, scale and layout stop; 140ms opacity and colour answers stay."
+    ],
+    "rules": [
+      {
+        "name": "The One Accent Rule",
+        "body": "Primary actions are filled with ink itself; there is no second accent. Hue never appears as decoration.",
+        "section": "colors"
+      },
+      {
+        "name": "The Hue-Is-Evidence Rule",
+        "body": "Colour survives only where it is evidence — severity, run status, verification, hypotheses — and always arrives with its word and its glyph.",
+        "section": "colors"
+      },
+      {
+        "name": "The Ink Ladder Rule",
+        "body": "The six pillars share one ink ladder; sequence and label carry the difference. Never colour the pillars.",
+        "section": "colors"
+      },
+      {
+        "name": "The Figure Rule",
+        "body": "Every displayed numeral is set in the serif with tabular figures (.figure); figures are typeset, and units follow in faint sans (/100).",
+        "section": "typography"
+      },
+      {
+        "name": "The Evidence-Mono Rule",
+        "body": "Geist Mono is for evidence only — paths, SHAs, file:line, counts, tool names. Prose and controls stay in the workhorse sans; the serif never carries body text.",
+        "section": "typography"
+      },
+      {
+        "name": "The One Scroll Rule",
+        "body": "The content column keeps page scroll; only the rail and the two data regions (the findings table, the agent transcript) scroll inside themselves.",
+        "section": "layout"
+      },
+      {
+        "name": "The Print-Does-Not-Float Rule",
+        "body": "Surfaces are flat; depth is paper tone, hairlines, and a static grain. The login plate is the only shadow at rest, and the row lift is the only shadow that answers a cursor.",
+        "section": "elevation"
+      },
+      {
+        "name": "The Paper-Texture Rule",
+        "body": "The grain and the vignette are monochrome, fixed, and static — texture, not motion. They are never animated, never tinted, and never brightened into a glow.",
+        "section": "elevation"
+      },
+      {
+        "name": "The Hairline Rule",
+        "body": "Structure is drawn with 1px rules and paper tone; corners stop at 2px. Heavier edges are a different surface, not a thicker border.",
+        "section": "shapes"
+      },
+      {
+        "name": "The One-Curve Rule",
+        "body": "Every transition, entrance and count uses cubic-bezier(0.16, 1, 0.3, 1). There is no second curve, nothing bounces, and nothing loops for attention.",
+        "section": "components"
+      },
+      {
+        "name": "The Fewer-And-Gentler Rule",
+        "body": "Under prefers-reduced-motion the system drops travel, scale and layout — never feedback: entrances keep their fade, answers cap at 140ms, loops stop, and the sparkline arrives finished.",
+        "section": "components"
+      },
+      {
+        "name": "The Lift-Is-Actionable Rule",
+        "body": "The 1px lift belongs to rows that do something — repositories, analyses, transcript suggestions. Static exhibits, findings rows and plan steps never lift.",
+        "section": "components"
+      }
+    ],
+    "dos": [
+      "Do set every displayed numeral in the serif figure style with tabular figures, and follow it with its unit in faint sans.",
+      "Do carry status as word + glyph + hue together; the word is the source of truth.",
+      "Do fill primary actions with ink and keep hue out of the action layer.",
+      "Do draw structure with 1px hairlines and paper-tone recesses; corners stop at 2px.",
+      "Do render unmeasured as the hatched track and the em dash — \"not measured\" is not zero.",
+      "Do define every colour token in both themes and route the theme through the .dark class; a stored explicit choice wins over the system preference, which owns first paint.",
+      "Do move with the one curve (cubic-bezier(0.16, 1, 0.3, 1)) and let values land once; under prefers-reduced-motion travel, scale and layout stop while a 140ms opacity/colour answer stays.",
+      "Do lift only rows that act — repositories, analyses, transcript suggestions — and leave static exhibits and findings rows still.",
+      "Do keep the grain and vignette fixed, monochrome and static; texture is the world, not an animation.",
+      "Do keep the sheen hover-only and monochrome — light across ink, never colour."
+    ],
+    "donts": [
+      "Don't add shadows beyond the login plate's soft drop, the stamp's inset seal rule, and the row lift's hover shadow.",
+      "Don't use blur, glass, or translucency; paper is opaque.",
+      "Don't colour a severity or status without its word and its glyph.",
+      "Don't introduce hue as decoration — hue is evidence only.",
+      "Don't round past 2px or reach for pill shapes; tickets are print tickets.",
+      "Don't put prose in Geist Mono or body text in the serif; each face has one job.",
+      "Don't animate or tint the grain and vignette; texture is static paper, not a light effect.",
+      "Don't run loops for attention; repeating motion is reserved for live states (in-flight dots, the streaming caret, loading shimmer) and stops under reduced motion."
+    ]
+  }
+}

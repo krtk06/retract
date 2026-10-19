@@ -1,14 +1,17 @@
 import { useQueryClient } from "@tanstack/react-query";
+import { m } from "motion/react";
 import { Suspense, lazy, useEffect, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 
 import { useAnalysis, useFindings, useScore } from "../api/hooks";
 import type { Analysis, AnalysisEvent } from "../api/types";
+import { EASE } from "../lib/motion";
 import { ApprovalQueue } from "../components/ApprovalQueue";
 import { Loading } from "../components/EmptyState";
 import { ExploreTab } from "../components/ExploreTab";
 import { FindingsTable } from "../components/FindingsTable";
 import { HistoryCompare } from "../components/HistoryCompare";
+import { Icon } from "../components/Icon";
 import { ScoreHero } from "../components/ScoreHero";
 import { StatusPill } from "../components/StatusPill";
 import { TrustPanel } from "../components/TrustPanel";
@@ -65,9 +68,9 @@ function agentEventText(payload: Record<string, unknown>): string {
 
 function Stat({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <div className="px-well px-3 py-2">
-      <dt className="px-eyebrow">{label}</dt>
-      <dd className="mt-1 truncate text-sm text-ink">{children}</dd>
+    <div className="inset px-3 py-2">
+      <dt className="label">{label}</dt>
+      <dd className="mt-1 truncate text-[13px] text-ink">{children}</dd>
     </div>
   );
 }
@@ -84,25 +87,37 @@ function AnalysisHeader({
   onSelectTab: (tab: TabName) => void;
 }) {
   return (
-    <section className="px-panel p-5">
-      <Link to="/" className="px-btn px-btn--quiet px-tab mb-3">
-        ← Back
+    <section className="panel p-6">
+      <Link to="/" className="btn btn--quiet mb-3">
+        <Icon name="arrow-left" size={15} />
+        Back
       </Link>
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="font-ui text-[20px] font-bold text-ink text-balance">{title}</h1>
+        <h1 className="text-xl font-semibold tracking-tight text-ink text-balance">{title}</h1>
         <div className="flex items-center gap-2">
           {data.status === "done" && !data.published && data.pending_approvals > 0 && (
-            <span className="px-badge border border-warn/30 bg-warn-soft text-warn">
+            <span className="chip border-warn/40 bg-warn-soft text-warn">
               {data.pending_approvals} pending review
             </span>
           )}
           <StatusPill status={data.status} />
+          {/* The report's remedy: the primary action of a finished analysis is
+              the fix plan, and it lives in this rail. */}
+          {data.status === "done" && (
+            <button
+              type="button"
+              onClick={() => onSelectTab("fixes")}
+              className="btn btn--primary sheen press"
+            >
+              View fix plan
+            </button>
+          )}
         </div>
       </div>
 
       <dl className="mt-5 grid grid-cols-2 gap-2.5 md:grid-cols-4">
         <Stat label="Commit">
-          <span className="font-mono text-xs">{data.commit_sha?.slice(0, 8) ?? "—"}</span>
+          <span className="font-mono text-[12px]">{data.commit_sha?.slice(0, 8) ?? "—"}</span>
         </Stat>
         <Stat label="Started">
           {data.started_at ? new Date(data.started_at).toLocaleString() : "—"}
@@ -116,22 +131,29 @@ function AnalysisHeader({
       </dl>
 
       {data.error && (
-        <p className="mt-4 border border-danger/25 bg-danger-soft px-4 py-2.5 text-sm text-danger">
+        <p className="mt-4 rounded-[2px] border border-danger/40 bg-danger-soft px-4 py-2.5 text-[13px] text-danger">
           {data.error}
         </p>
       )}
 
       {data.status === "done" && (
-        <div role="tablist" aria-label="Analysis views" className="px-tabs mt-5 grid-cols-4">
+        <div role="tablist" aria-label="Analysis views" className="tabs mt-5">
           {TABS.map((value) => (
             <button
               key={value}
               role="tab"
               aria-selected={tab === value}
               onClick={() => onSelectTab(value)}
-              className="px-tab capitalize"
+              className="tab tab--motion capitalize"
             >
               {value}
+              {tab === value && (
+                <m.span
+                  layoutId="analysis-tab-underline"
+                  className="absolute inset-x-2 -bottom-px h-0.5 bg-ink"
+                  transition={{ duration: 0.24, ease: [0.16, 1, 0.3, 1] }}
+                />
+              )}
             </button>
           ))}
         </div>
@@ -150,28 +172,29 @@ function eventTone(type: string): string {
 
 function ProgressFeed({ events, isActive }: { events: AnalysisEvent[]; isActive: boolean }) {
   return (
-    <section className="px-panel p-5 sm:p-6">
+    <section className="panel p-6">
       <div className="mb-3 flex items-center gap-2.5">
-        <h3 className="font-semibold text-ink">Progress</h3>
+        <h3 className="text-[15px] font-semibold text-ink">Progress</h3>
         {isActive && (
-          <span className="flex items-center gap-1.5 text-xs text-accent">
-            <span aria-hidden="true" className="anim-blink h-1.5 w-1.5 bg-accent" />
+          <span className="flex items-center gap-1.5 text-[11px] text-accent">
+            <span aria-hidden="true" className="anim-pulse h-1.5 w-1.5 bg-accent" />
             live
           </span>
         )}
       </div>
-      {events.length === 0 && isActive && <p className="text-sm text-faint">Waiting for events…</p>}
-      {events.length === 0 && !isActive && (
-        <p className="text-sm text-faint">No events recorded.</p>
-      )}
-      <ul className="px-scroll max-h-96 space-y-1 overflow-y-auto font-mono text-xs">
+      {events.length === 0 && isActive && <p className="text-[13px] text-faint">Waiting for events…</p>}
+      {events.length === 0 && !isActive && <p className="text-[13px] text-faint">No events recorded.</p>}
+      <ul className="scroll max-h-96 space-y-1 overflow-y-auto font-mono text-[11px]">
         {events.map((event, index) => (
           <li
             key={index}
-            className="px-well anim-step-in flex items-start gap-3 px-2 py-1"
+            className="inset anim-in flex items-start gap-3 px-2.5 py-1.5"
             style={{ animationDuration: "0.4s" }}
           >
-            <span aria-hidden="true" className={`mt-1 h-[8px] w-[8px] shrink-0 ${eventTone(event.type)}`} />
+            <span
+              aria-hidden="true"
+              className={`mt-1 h-2 w-2 shrink-0 ${eventTone(event.type)}`}
+            />
             <span className="shrink-0 text-faint">{formatTime(event.ts)}</span>
             <span className="w-24 shrink-0 text-ink/80">
               {event.type === "tool"
@@ -251,7 +274,7 @@ export function AnalysisDetailPage() {
     return <Loading label="Loading analysis…" />;
   }
   if (analysis.isError || !analysis.data) {
-    return <p className="text-sm text-danger">Analysis not found.</p>;
+    return <p className="text-[13px] text-danger">Analysis not found.</p>;
   }
 
   const data = analysis.data;
@@ -262,65 +285,75 @@ export function AnalysisDetailPage() {
     <div className="space-y-6">
       <AnalysisHeader data={data} title={title} tab={tab} onSelectTab={setTab} />
 
-      {tab === "overview" && (
-        <div className="space-y-6">
-          {/* /score recomputes and persists a missing score, so an analysis whose
-              finalize step never cached one still shows its health score. */}
-          {data.status === "done" && <ScoreHero score={score.data ?? data.score_json} />}
+      {/* A view switch is a page turn: the new panel settles in, once. The
+          key remounts on switch, which is exactly how the panels mounted
+          before — the wrapper adds the arrival, nothing else. */}
+      <m.div
+        key={tab}
+        initial={{ opacity: 0, y: 6 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.28, ease: EASE }}
+      >
+        {tab === "overview" && (
+          <div className="space-y-6">
+            {/* /score recomputes and persists a missing score, so an analysis whose
+                finalize step never cached one still shows its health score. */}
+            {data.status === "done" && <ScoreHero score={score.data ?? data.score_json} />}
 
-          {data.status === "done" && <ApprovalQueue analysisId={analysisId} />}
+            {data.status === "done" && <ApprovalQueue analysisId={analysisId} />}
 
-          <ProgressFeed events={events} isActive={isActive} />
+            <ProgressFeed events={events} isActive={isActive} />
 
-          {data.status === "done" && (
-            <FindingsTable
-              findings={findings.data ?? []}
+            {data.status === "done" && (
+              <FindingsTable
+                findings={findings.data ?? []}
+                repository={repo}
+                commitSha={data.commit_sha}
+                analysisId={analysisId}
+              />
+            )}
+
+            {data.status === "done" && <TrustPanel analysisId={analysisId} />}
+
+            {data.status === "done" && <HistoryCompare analysisId={analysisId} />}
+
+            {/* Last on the overview, because it is the answer to the question the
+                rest of the page raises: what do I actually do about all this? */}
+            {data.status === "done" && (
+              <Suspense fallback={null}>
+                <RemediationSummaryCard analysisId={analysisId} onOpen={() => setTab("fixes")} />
+              </Suspense>
+            )}
+          </div>
+        )}
+
+        {tab === "explore" && data.status === "done" && <ExploreTab analysisId={analysisId} />}
+
+        {tab === "fixes" && data.status === "done" && (
+          <Suspense fallback={<Loading label="Building the fix plan…" />}>
+            <RemediationPlanPanel
+              analysisId={analysisId}
               repository={repo}
               commitSha={data.commit_sha}
-              analysisId={analysisId}
+              onOpenAgent={() =>
+                openAgentWith(
+                  "Produce a deep fix plan for this analysis. The dashboard already shows the " +
+                    "deterministic remediation catalog; read the findings it did not cover well, " +
+                    "and record a repo-specific remediation for each with record_remediation. " +
+                    "Cite file:line for every one, and do not invent steps the evidence does not " +
+                    "support.",
+                )
+              }
             />
-          )}
+          </Suspense>
+        )}
 
-          {data.status === "done" && <TrustPanel analysisId={analysisId} />}
-
-          {data.status === "done" && <HistoryCompare analysisId={analysisId} />}
-
-          {/* Last on the overview, because it is the answer to the question the
-              rest of the page raises: what do I actually do about all this? */}
-          {data.status === "done" && (
-            <Suspense fallback={null}>
-              <RemediationSummaryCard analysisId={analysisId} onOpen={() => setTab("fixes")} />
-            </Suspense>
-          )}
-        </div>
-      )}
-
-      {tab === "explore" && data.status === "done" && <ExploreTab analysisId={analysisId} />}
-
-      {tab === "fixes" && data.status === "done" && (
-        <Suspense fallback={<Loading label="Building the fix plan…" />}>
-          <RemediationPlanPanel
-            analysisId={analysisId}
-            repository={repo}
-            commitSha={data.commit_sha}
-            onOpenAgent={() =>
-              openAgentWith(
-                "Produce a deep fix plan for this analysis. The dashboard already shows the " +
-                  "deterministic remediation catalog; read the findings it did not cover well, " +
-                  "and record a repo-specific remediation for each with record_remediation. " +
-                  "Cite file:line for every one, and do not invent steps the evidence does not " +
-                  "support.",
-              )
-            }
-          />
-        </Suspense>
-      )}
-
-      {tab === "agent" && data.status === "done" && (
-        <Suspense fallback={<Loading label="Loading the agent…" />}>
-          <AgentChat analysisId={analysisId} initialPrompt={agentPrompt} />
-        </Suspense>
-      )}
+        {tab === "agent" && data.status === "done" && (
+          <Suspense fallback={<Loading label="Loading the agent…" />}>
+            <AgentChat analysisId={analysisId} initialPrompt={agentPrompt} />
+          </Suspense>
+        )}
+      </m.div>
     </div>
   );
 }

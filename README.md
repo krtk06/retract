@@ -413,7 +413,7 @@ Set `RETRACT_JUDGE_MODEL` if the judge should use the same provider as the agent
 
 - `agent/` — eve agent: instructions, tools, subagents, evals (Node 24)
 - `backend/` — FastAPI API, Celery analysis pipeline, Alembic migrations
-- `frontend/` — React + Vite dashboard; PICO-8 pixel UI, window chrome + sidebar
+- `frontend/` — React + Vite dashboard; instrument-console UI, top bar + nav rail
 - `infra/` — Docker Compose services
 - `benchmark/` — evaluation repos + ground truth
 - `docs/` — research notes, architecture decisions, per-phase review logs
