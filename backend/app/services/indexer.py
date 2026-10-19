@@ -256,6 +256,48 @@ def index_file(root: Path, rel_path: str) -> IndexResult | None:
     return out
 
 
+def _relative_candidates(remainder: str, src_module: str, dot_count: int) -> list[str]:
+    """Candidate module names for a relative import (`from ..pkg import x`)."""
+    src_parts = [part for part in src_module.split(".") if part]
+    base = src_parts[: len(src_parts) - dot_count] if dot_count <= len(src_parts) else []
+    rem_parts = remainder.split(".") if remainder else []
+    if not rem_parts:
+        return [".".join(base)]
+    return [".".join([*base, *rem_parts[:i]]) for i in range(len(rem_parts), 0, -1)]
+
+
+def _absolute_candidates(dst: str, src_module: str) -> list[str]:
+    """Candidate module names for an absolute import, longest-prefix first."""
+    parts = dst.split(".")
+    candidates = [".".join(parts[:i]) for i in range(len(parts), 0, -1)]
+    # same-package fallback for absolute-looking same-file imports
+    if "." in src_module:
+        package = src_module.rsplit(".", 1)[0]
+        candidates.append(f"{package}.{dst}")
+        candidates.extend(f"{package}.{'.'.join(parts[:i])}" for i in range(len(parts), 0, -1))
+    return candidates
+
+
+def _first_module(candidates: list[str], module_names: set[str]) -> str | None:
+    for candidate in candidates:
+        if candidate and candidate in module_names:
+            return candidate
+    return None
+
+
+def _suffix_module(candidates: list[str], module_names: set[str]) -> str | None:
+    """Suffix fallback for src-layout repos: `requests.models` -> `src.requests.models`."""
+    for candidate in candidates:
+        if not candidate:
+            continue
+        matches = [
+            name for name in module_names if name == candidate or name.endswith("." + candidate)
+        ]
+        if matches:
+            return min(matches, key=len)
+    return None
+
+
 def resolve_import(dst: str, src_module: str, module_names: set[str]) -> str | None:
     """Best-effort resolution of an import target to a module in this repo.
 
@@ -268,42 +310,11 @@ def resolve_import(dst: str, src_module: str, module_names: set[str]) -> str | N
 
     dot_count = len(dst) - len(dst.lstrip("."))
     remainder = dst.lstrip(".")
-    src_parts = [part for part in src_module.split(".") if part]
-    candidates: list[str] = []
-
     if dot_count:
-        # Relative import: level 1 = parent package of the source module.
-        base = src_parts[: len(src_parts) - dot_count] if dot_count <= len(src_parts) else []
-        rem_parts = remainder.split(".") if remainder else []
-        if not rem_parts:
-            candidates.append(".".join(base))
-        for i in range(len(rem_parts), 0, -1):
-            candidates.append(".".join([*base, *rem_parts[:i]]))
+        candidates = _relative_candidates(remainder, src_module, dot_count)
     else:
-        parts = dst.split(".")
-        for i in range(len(parts), 0, -1):
-            candidates.append(".".join(parts[:i]))
-        # same-package fallback for absolute-looking same-file imports
-        if "." in src_module:
-            package = src_module.rsplit(".", 1)[0]
-            candidates.append(f"{package}.{dst}")
-            for i in range(len(parts), 0, -1):
-                candidates.append(f"{package}.{'.'.join(parts[:i])}")
-
-    for candidate in candidates:
-        if candidate and candidate in module_names:
-            return candidate
-    # Suffix fallback for src-layout repos: "requests.models" -> "src.requests.models".
-    # Prefer the shortest matching module name to reduce ambiguity.
-    for candidate in candidates:
-        if not candidate:
-            continue
-        matches = [
-            name for name in module_names if name == candidate or name.endswith("." + candidate)
-        ]
-        if matches:
-            return min(matches, key=len)
-    return None
+        candidates = _absolute_candidates(dst, src_module)
+    return _first_module(candidates, module_names) or _suffix_module(candidates, module_names)
 
 
 def persist_index(session: Session, analysis_id: int, repo_root: Path, files: list[str]) -> int:

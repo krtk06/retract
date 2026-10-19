@@ -164,22 +164,94 @@ def _group_action(category: str, count: int) -> str:
     }.get(category, f"Resolve {count} finding{plural}")
 
 
-def build_plan(session: Session, analysis_id: int) -> RemediationPlan:
-    """Assemble the fix plan for one analysis.
-
-    Derived on demand rather than stored, so a plan cannot go stale: the moment a
-    reviewer dismisses a finding in the approval queue, the next read reflects it.
-    """
+def _considered_findings(session: Session, analysis_id: int) -> tuple[list[Finding], int | None]:
+    """Findings the planner may act on, plus the analysis' LOC (when measured)."""
     analysis = session.get(Analysis, analysis_id)
     loc = analysis.loc if analysis is not None and analysis.loc else None
-
     rows = session.scalars(
         select(Finding).where(
             Finding.analysis_id == analysis_id,
             Finding.status != FindingStatus.DISMISSED,
         )
     ).all()
-    considered = [f for f in rows if f.category not in UNSCORED_CATEGORIES]
+    return [f for f in rows if f.category not in UNSCORED_CATEGORIES], loc
+
+
+def _empty_plan(analysis_id: int, loc: int | None) -> RemediationPlan:
+    """The explicit "nothing to fix" plan; projected stays None, never 100."""
+    return RemediationPlan(
+        analysis_id=analysis_id,
+        current_overall=aggregate([], loc)["overall"],
+        projected_overall=None,
+        loc=loc,
+        work_items=[],
+        findings_considered=0,
+        unverified_items=0,
+    )
+
+
+def _group_findings(considered: list[Finding]) -> dict[tuple[str, str], list[Finding]]:
+    groups: dict[tuple[str, str], list[Finding]] = {}
+    for finding in considered:
+        groups.setdefault(_group_key(finding.category, remediation_for(finding).effort), []).append(
+            finding
+        )
+    return groups
+
+
+def _make_work_item(
+    members: list[Finding],
+    considered: list[Finding],
+    baseline: dict,
+    loc: int | None,
+) -> WorkItem:
+    """One plan item, priced against the same curve as the overall score."""
+    # The lead finding supplies the steps. Members of a group share a category by
+    # construction, so their catalog entries agree; an LLM entry can differ, so
+    # prefer an authored one when the group has one.
+    lead = next((f for f in members if (f.evidence_json or {}).get("remediation")), members[0])
+    remediation = remediation_for(lead)
+    penalty = sum(_penalty_of(f) for f in members)
+    pillar = CATEGORY_PILLAR.get(lead.category) or "other"
+    # A single finding gets its own specific action ("upgrade flask 0.12.2 to
+    # clear CVE-2023-30861"), which is the most useful thing on the card. A batch
+    # gets a headline that describes the batch; the specifics move into the
+    # findings list underneath, where nothing is lost.
+    action = remediation.action if len(members) == 1 else _group_action(lead.category, len(members))
+    # Keyed by identity because SQLAlchemy models compare by database row.
+    member_ids = {id(f) for f in members}
+    remaining = [f for f in considered if id(f) not in member_ids]
+    return WorkItem(
+        key=lead.category,
+        pillar=pillar,
+        action=action,
+        severity=_top_severity(members),
+        effort=remediation.effort,
+        findings=members,
+        steps=remediation.steps,
+        verify=remediation.verify,
+        references=remediation.references,
+        weighted_penalty_removed=round(penalty, 2),
+        pillar_points=_pillar_gain(baseline, remaining, pillar, loc),
+        llm_authored=any((f.evidence_json or {}).get("remediation") for f in members),
+    )
+
+
+def _truncate_items(items: list[WorkItem]) -> tuple[list[WorkItem], int]:
+    """Cap the visible plan; the Markdown export keeps the full ranking."""
+    if len(items) <= MAX_WORK_ITEMS:
+        return items, 0
+    truncated = sum(item.finding_count for item in items[MAX_WORK_ITEMS:])
+    return items[:MAX_WORK_ITEMS], truncated
+
+
+def build_plan(session: Session, analysis_id: int) -> RemediationPlan:
+    """Assemble the fix plan for one analysis.
+
+    Derived on demand rather than stored, so a plan cannot go stale: the moment a
+    reviewer dismisses a finding in the approval queue, the next read reflects it.
+    """
+    considered, loc = _considered_findings(session, analysis_id)
 
     # A repository with nothing to fix must still say so: the page needs an
     # explicit empty state rather than a silently absent list. `projected_overall`
@@ -187,66 +259,15 @@ def build_plan(session: Session, analysis_id: int) -> RemediationPlan:
     # when there was something to fix.
     if not considered:
         # Scored live, for the same reason as the non-empty branch below.
-        return RemediationPlan(
-            analysis_id=analysis_id,
-            current_overall=aggregate([], loc)["overall"],
-            projected_overall=None,
-            loc=loc,
-            work_items=[],
-            findings_considered=0,
-            unverified_items=0,
-        )
-
-    groups: dict[tuple[str, str], list[Finding]] = {}
-    for finding in considered:
-        groups.setdefault(_group_key(finding.category, remediation_for(finding).effort), []).append(
-            finding
-        )
+        return _empty_plan(analysis_id, loc)
 
     baseline = aggregate(considered, loc)
-
-    items: list[WorkItem] = []
-    for members in groups.values():
-        # The lead finding supplies the steps. Members of a group share a category by
-        # construction, so their catalog entries agree; an LLM entry can differ, so
-        # prefer an authored one when the group has one.
-        lead = next((f for f in members if (f.evidence_json or {}).get("remediation")), members[0])
-        remediation = remediation_for(lead)
-        penalty = sum(_penalty_of(f) for f in members)
-        pillar = CATEGORY_PILLAR.get(lead.category) or "other"
-        # A single finding gets its own specific action ("upgrade flask 0.12.2 to
-        # clear CVE-2023-30861"), which is the most useful thing on the card. A batch
-        # gets a headline that describes the batch; the specifics move into the
-        # findings list underneath, where nothing is lost.
-        action = (
-            remediation.action if len(members) == 1 else _group_action(lead.category, len(members))
-        )
-        # Keyed by identity because SQLAlchemy models compare by database row.
-        member_ids = {id(f) for f in members}
-        remaining = [f for f in considered if id(f) not in member_ids]
-        items.append(
-            WorkItem(
-                key=lead.category,
-                pillar=pillar,
-                action=action,
-                severity=_top_severity(members),
-                effort=remediation.effort,
-                findings=members,
-                steps=remediation.steps,
-                verify=remediation.verify,
-                references=remediation.references,
-                weighted_penalty_removed=round(penalty, 2),
-                pillar_points=_pillar_gain(baseline, remaining, pillar, loc),
-                llm_authored=any((f.evidence_json or {}).get("remediation") for f in members),
-            )
-        )
-
+    items = [
+        _make_work_item(members, considered, baseline, loc)
+        for members in _group_findings(considered).values()
+    ]
     items.sort(key=lambda item: (-item.payoff(), -_SEVERITY_RANK.get(item.severity, 0)))
-
-    truncated = 0
-    if len(items) > MAX_WORK_ITEMS:
-        truncated = sum(item.finding_count for item in items[MAX_WORK_ITEMS:])
-        items = items[:MAX_WORK_ITEMS]
+    items, truncated = _truncate_items(items)
 
     # Scored from the live findings rather than read from `analysis.score_json`.
     # The plan is derived on every request precisely so it cannot go stale, and its

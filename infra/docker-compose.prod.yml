@@ -190,7 +190,7 @@ services:
       # proxy in — which is the documented production topology, since the session
       # cookie is `Secure` and therefore requires TLS. The default stays 0.0.0.0 so
       # nothing about the existing single-box setup changes.
-      - "${BIND_ADDR:-0.0.0.0}:${HTTP_PORT:-80}:80"
+      - "${BIND_ADDR:-0.0.0.0}:${HTTP_PORT:-80}:8080"
     depends_on:
       retract-api:
         condition: service_healthy

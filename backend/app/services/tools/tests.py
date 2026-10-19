@@ -87,7 +87,29 @@ def _read(path: Path) -> str:
 
 
 def _source_packages(code_files: list[FileEntry]) -> list[str]:
-    packages = {
-        Path(f.path).parts[0] for f in code_files if f.ext == ".py" and len(Path(f.path).parts) > 1
-    } - NON_SOURCE_DIRS
+    """The importable package names, not the repository's top-level directories.
+
+    A package root may be nested (`backend/app`), and the tests import it by its
+    package name (`app`), not by the checkout folder (`backend`). A directory is
+    a package root when it holds an `__init__.py`; the highest such ancestor is
+    the name tests are expected to reference. Namespace packages without
+    `__init__.py` fall back to their first path segment.
+    """
+    package_dirs = {
+        str(Path(f.path).parent)
+        for f in code_files
+        if f.ext == ".py" and Path(f.path).name == "__init__.py"
+    }
+    packages: set[str] = set()
+    for entry in code_files:
+        if entry.ext != ".py":
+            continue
+        parts = Path(entry.path).parts
+        if len(parts) < 2 or parts[0] in NON_SOURCE_DIRS:
+            continue
+        name = parts[0]
+        for index in range(1, len(parts)):
+            if str(Path(*parts[:index])) in package_dirs:
+                name = parts[index - 1]
+        packages.add(name)
     return sorted(packages)

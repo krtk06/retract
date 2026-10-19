@@ -45,14 +45,20 @@ def main() -> int:
                 continue
             context = (compose_file.parent / match.group(1)).resolve()
             if not context.is_dir():
-                print(f"   FAIL {compose_file.name}:{name} build context {match.group(1)} (missing)")
+                print(
+                    f"   FAIL {compose_file.name}:{name} build context "
+                    f"{match.group(1)} (missing)"
+                )
                 continue
             print(f"   ok   {compose_file.name}:{name} build context {match.group(1)}")
 
             dockerfile = context / "Dockerfile"
             if not dockerfile.is_file():
                 if target is not None:
-                    print(f"   FAIL {compose_file.name}:{name} names a target but has no Dockerfile")
+                    print(
+                        f"   FAIL {compose_file.name}:{name} names a target but "
+                        "has no Dockerfile"
+                    )
                 continue
 
             stages = stages_in(dockerfile)
@@ -70,11 +76,16 @@ def main() -> int:
                         f"({stages[-1]}), which is silent to reorder"
                     )
                 else:
-                    print(f"   ok   {compose_file.name}:{name} single-stage build, no target needed")
+                    print(
+                        f"   ok   {compose_file.name}:{name} single-stage build, "
+                        "no target needed"
+                    )
                 continue
 
             if target.group(1) in stages:
-                print(f"   ok   {compose_file.name}:{name} build target {target.group(1)}")
+                print(
+                    f"   ok   {compose_file.name}:{name} build target {target.group(1)}"
+                )
             else:
                 print(
                     f"   FAIL {compose_file.name}:{name} build target {target.group(1)} "

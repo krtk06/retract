@@ -162,6 +162,43 @@ def compute_score(session: Session, analysis_id: int) -> dict:
     return aggregate(findings, loc)
 
 
+def _tally_pillars(
+    findings: Iterable[Finding],
+) -> tuple[dict[str, float], dict[str, int], dict[str, int], dict[str, int], dict[str, int]]:
+    """Weighted penalty and status counts per pillar for a finding set."""
+    penalty: dict[str, float] = {p: 0.0 for p in PILLARS}
+    counts: dict[str, int] = {p: 0 for p in PILLARS}
+    verified: dict[str, int] = {p: 0 for p in PILLARS}
+    hypotheses: dict[str, int] = {p: 0 for p in PILLARS}
+    dismissed: dict[str, int] = {p: 0 for p in PILLARS}
+    for finding in findings:
+        pillar = CATEGORY_PILLAR.get(finding.category)
+        if pillar is None:
+            continue
+        weight = SEVERITY_WEIGHT.get(finding.severity.value, 0)
+        factor = STATUS_FACTOR.get(finding.status, 1.0)
+        penalty[pillar] += weight * factor
+        counts[pillar] += 1
+        if finding.status == FindingStatus.VERIFIED:
+            verified[pillar] += 1
+        elif finding.status == FindingStatus.HYPOTHESIS:
+            hypotheses[pillar] += 1
+        elif finding.status == FindingStatus.DISMISSED:
+            dismissed[pillar] += 1
+    return penalty, counts, verified, hypotheses, dismissed
+
+
+def _pillar_score_for(penalty: float, kloc: float | None) -> float:
+    """One pillar's score, with the floor that keeps "terrible" distinct from "clean"."""
+    score = _pillar_score(penalty, kloc) if kloc is not None else _pillar_score_by_count(penalty)
+    # A pillar with findings never reports 0. The curve is asymptotic, so a strict
+    # calibration rounds the worst cases down to 0, which reads as "clean" rather
+    # than "catastrophic" and is indistinguishable from a pillar nothing was measured
+    # on unless the reader also checks the finding count. 1 is the floor: still
+    # terrible, still ordered, never ambiguous.
+    return max(1, score) if penalty > 0 else score
+
+
 def aggregate(findings: Iterable[Finding], loc: int | None) -> dict:
     """Score an arbitrary set of findings as if it were a repository's finding set.
 
@@ -171,25 +208,7 @@ def aggregate(findings: Iterable[Finding], loc: int | None) -> dict:
     different formula than the score it is predicting would be a second opinion
     dressed up as arithmetic.
     """
-    pillar_penalty: dict[str, float] = {p: 0.0 for p in PILLARS}
-    pillar_counts: dict[str, int] = {p: 0 for p in PILLARS}
-    pillar_verified: dict[str, int] = {p: 0 for p in PILLARS}
-    pillar_hypotheses: dict[str, int] = {p: 0 for p in PILLARS}
-    pillar_dismissed: dict[str, int] = {p: 0 for p in PILLARS}
-    for finding in findings:
-        pillar = CATEGORY_PILLAR.get(finding.category)
-        if pillar is None:
-            continue
-        weight = SEVERITY_WEIGHT.get(finding.severity.value, 0)
-        factor = STATUS_FACTOR.get(finding.status, 1.0)
-        pillar_penalty[pillar] += weight * factor
-        pillar_counts[pillar] += 1
-        if finding.status == FindingStatus.VERIFIED:
-            pillar_verified[pillar] += 1
-        elif finding.status == FindingStatus.HYPOTHESIS:
-            pillar_hypotheses[pillar] += 1
-        elif finding.status == FindingStatus.DISMISSED:
-            pillar_dismissed[pillar] += 1
+    penalty, counts, verified, hypotheses, dismissed = _tally_pillars(findings)
 
     # A measured LOC means density is meaningful. An absent one does not, and the old
     # MIN_KLOC floor turned "unmeasured" into a density of tens of thousands, so
@@ -198,25 +217,13 @@ def aggregate(findings: Iterable[Finding], loc: int | None) -> dict:
     kloc = (loc / 1000) if loc else None
     pillars = {}
     for pillar in PILLARS:
-        penalty = pillar_penalty[pillar]
-        if kloc is not None:
-            pillar_score = _pillar_score(penalty, kloc)
-        else:
-            pillar_score = _pillar_score_by_count(penalty)
-        # A pillar with findings never reports 0. The curve is asymptotic, so a strict
-        # calibration rounds the worst cases down to 0, which reads as "clean" rather
-        # than "catastrophic" and is indistinguishable from a pillar nothing was measured
-        # on unless the reader also checks the finding count. 1 is the floor: still
-        # terrible, still ordered, never ambiguous.
-        if penalty > 0:
-            pillar_score = max(1, pillar_score)
         pillars[pillar] = {
-            "score": pillar_score,
-            "findings": pillar_counts[pillar],
-            "verified": pillar_verified[pillar],
-            "hypotheses": pillar_hypotheses[pillar],
-            "dismissed": pillar_dismissed[pillar],
-            "weighted_penalty": round(penalty, 2),
+            "score": _pillar_score_for(penalty[pillar], kloc),
+            "findings": counts[pillar],
+            "verified": verified[pillar],
+            "hypotheses": hypotheses[pillar],
+            "dismissed": dismissed[pillar],
+            "weighted_penalty": round(penalty[pillar], 2),
         }
 
     weighted_mean = sum(pillars[p]["score"] * PILLAR_WEIGHTS[p] for p in PILLARS)

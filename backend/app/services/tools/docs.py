@@ -55,6 +55,8 @@ def _docstring_coverage(ctx: ToolContext) -> list[FindingDraft]:
     drafts: list[FindingDraft] = []
     py_files = [f for f in ctx.code_files if f.ext == ".py"][:MAX_MODULES_PER_RUN]
     for entry in py_files:
+        if _docstring_exempt(entry.path):
+            continue
         path = ctx.repo_root / entry.path
         try:
             tree = ast.parse(path.read_text())
@@ -108,10 +110,34 @@ def _docstring_coverage(ctx: ToolContext) -> list[FindingDraft]:
     return drafts
 
 
+def _docstring_exempt(path: str) -> bool:
+    """Tests and generated migrations are not public API documentation targets.
+
+    Test functions are named for the case they pin and carry their intent in the
+    name; a uniform docstring on them adds noise, not information. Alembic
+    revisions are generated scaffolding whose message lives in the revision
+    metadata.
+    """
+    parts = Path(path).parts
+    name = parts[-1]
+    return (
+        any(part in {"tests", "test"} for part in parts)
+        or name.startswith("test_")
+        or name.endswith("_test.py")
+        or name == "conftest.py"
+        or ("alembic" in parts and "versions" in parts)
+    )
+
+
 def _find_readme(root: Path) -> Path | None:
-    for name in README_NAMES:
-        candidate = root / name
-        if candidate.exists():
+    # Case-insensitive on purpose: the tool runs on Linux, where README.md is a
+    # different path from readme.md, and the capitalised form is the common one.
+    try:
+        entries = sorted(root.iterdir())
+    except OSError:
+        return None
+    for candidate in entries:
+        if candidate.is_file() and candidate.name.lower() in README_NAMES:
             return candidate
     return None
 

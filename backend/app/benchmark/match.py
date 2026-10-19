@@ -184,6 +184,78 @@ def _score(expectation: Expectation, findings: Sequence[Finding]) -> Match:
     return Match.WRONG_LINE
 
 
+def _record_planted(result: BenchmarkResult, expectation, open_findings: Sequence[Finding]) -> None:
+    """A planted false positive is "found" only while it is still open."""
+    still_open = [
+        f
+        for f in open_findings
+        if _paths_match(f.file_path, expectation.file) and f.category == expectation.category
+    ]
+    outcome = ExpectationOutcome(expectation, Match.EXACT if still_open else Match.UNMATCHED)
+    result.outcomes.append(outcome)
+    if still_open:
+        result.untriaged_planted.append(outcome)
+        score = result.categories.setdefault(
+            expectation.category, CategoryScore(expectation.category)
+        )
+        score.open_findings += len(still_open)
+
+
+def _record_expectation(
+    result: BenchmarkResult, expectation, open_findings: Sequence[Finding]
+) -> None:
+    """Score one planted expectation and link the finding it matched, if any."""
+    score = result.categories.setdefault(expectation.category, CategoryScore(expectation.category))
+    score.expected += 1
+    match = _score(expectation, open_findings)
+    outcome = ExpectationOutcome(expectation, match)
+    result.outcomes.append(outcome)
+
+    candidates = [
+        f
+        for f in open_findings
+        if f.category == expectation.category and _paths_match(f.file_path, expectation.file)
+    ]
+    if match is Match.EXACT:
+        score.recalled += 1
+        best = min(
+            candidates,
+            key=lambda f: abs((f.line_start or 0) - (expectation.line or 0)),
+        )
+        outcome.finding_id = best.id
+        result.matched_finding_ids.add(best.id)
+    elif match is Match.WRONG_LINE and candidates:
+        # Reported, but not at the line the ground truth names.
+        outcome.finding_id = candidates[0].id
+
+
+def _classify_findings(
+    result: BenchmarkResult,
+    findings: list[Finding],
+    open_findings: Sequence[Finding],
+    counted: set[str],
+) -> None:
+    """Bucket every open finding: matched, duplicate, unenumerated, or unreviewed."""
+    # A finding repeats a condition when another matched finding already covers
+    # the same category and file — the same real problem reported twice.
+    matched_locus = {
+        (f.category, f.file_path) for f in findings if f.id in result.matched_finding_ids
+    }
+    for finding in open_findings:
+        score = result.categories.setdefault(finding.category, CategoryScore(finding.category))
+        if finding.category not in counted:
+            score.unreviewed_findings += 1
+            result.unreviewed_categories.add(finding.category)
+            continue
+        if finding.id in result.matched_finding_ids:
+            score.matched_findings += 1
+        elif (finding.category, finding.file_path) in matched_locus:
+            result.duplicate_findings.append(finding.id)
+        else:
+            result.unenumerated_findings.append(finding.id)
+        score.open_findings += 1
+
+
 def score_findings(
     ground_truth: GroundTruth | None,
     findings: list[Finding],
@@ -211,69 +283,14 @@ def score_findings(
     )
 
     for expectation in ground_truth.expectations if ground_truth else []:
-        score = result.categories.setdefault(
-            expectation.category, CategoryScore(expectation.category)
-        )
         if expectation.expect_dismissed:
-            # Inverted: a planted false positive is "found" only if it is still open.
-            still_open = [
-                f
-                for f in open_findings
-                if _paths_match(f.file_path, expectation.file)
-                and f.category == expectation.category
-            ]
-            outcome = ExpectationOutcome(
-                expectation, Match.EXACT if still_open else Match.UNMATCHED
-            )
-            result.outcomes.append(outcome)
-            if still_open:
-                result.untriaged_planted.append(outcome)
-                score.open_findings += len(still_open)
-            continue
-
-        score.expected += 1
-        match = _score(expectation, open_findings)
-        outcome = ExpectationOutcome(expectation, match)
-        result.outcomes.append(outcome)
-
-        candidates = [
-            f
-            for f in open_findings
-            if f.category == expectation.category and _paths_match(f.file_path, expectation.file)
-        ]
-        if match is Match.EXACT:
-            score.recalled += 1
-            best = min(
-                candidates,
-                key=lambda f: abs((f.line_start or 0) - (expectation.line or 0)),
-            )
-            outcome.finding_id = best.id
-            result.matched_finding_ids.add(best.id)
-        elif match is Match.WRONG_LINE and candidates:
-            # Reported, but not at the line the ground truth names.
-            outcome.finding_id = candidates[0].id
+            _record_planted(result, expectation, open_findings)
+        else:
+            _record_expectation(result, expectation, open_findings)
 
     enumerated = {e.category for e in ground_truth.detectable} if ground_truth else set()
     planted_categories = (
         {e.category for e in ground_truth.planted_false_positives} if ground_truth else set()
     )
-    counted = enumerated | planted_categories
-    # A finding repeats a condition when another matched finding already covers
-    # the same category and file — the same real problem reported twice.
-    matched_locus = {
-        (f.category, f.file_path) for f in findings if f.id in result.matched_finding_ids
-    }
-    for finding in open_findings:
-        score = result.categories.setdefault(finding.category, CategoryScore(finding.category))
-        if finding.category in counted:
-            if finding.id in result.matched_finding_ids:
-                score.matched_findings += 1
-            elif (finding.category, finding.file_path) in matched_locus:
-                result.duplicate_findings.append(finding.id)
-            else:
-                result.unenumerated_findings.append(finding.id)
-            score.open_findings += 1
-        else:
-            score.unreviewed_findings += 1
-            result.unreviewed_categories.add(finding.category)
+    _classify_findings(result, findings, open_findings, enumerated | planted_categories)
     return result

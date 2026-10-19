@@ -91,7 +91,9 @@ def _window_hashes(lines: list[str], start: int) -> str | None:
     joined = "\n".join(window)
     if len(joined) < MIN_WINDOW_LEN:
         return None
-    return hashlib.sha1(joined.encode()).hexdigest()
+    # sha256 rather than sha1: this is a content fingerprint, not a signature,
+    # and a broken hash has no place in a security tool's own code.
+    return hashlib.sha256(joined.encode()).hexdigest()
 
 
 def run_duplication(ctx: ToolContext) -> list[FindingDraft]:

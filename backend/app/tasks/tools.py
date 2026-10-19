@@ -14,6 +14,7 @@ from app.services.tools import TOOL_RUNNERS
 from app.services.tools.context import ToolContext
 from app.services.tools.findings import FindingDraft, persist_findings
 from app.tasks.celery_app import celery_app
+from app.tasks.failures import fail_stalled_analysis
 
 logger = logging.getLogger(__name__)
 
@@ -81,8 +82,6 @@ def _on_tool_failure(
         analysis_id,
         reason.__name__ if isinstance(reason, type) else reason,
     )
-    from app.tasks.analysis import fail_stalled_analysis
-
     fail_stalled_analysis(
         analysis_id,
         f"tool '{tool_name}' exceeded its {TOOL_HARD_TIME_LIMIT}s hard time limit and was "
