@@ -97,7 +97,9 @@ jobs:
       - name: Backend dependencies
         run: pip install -e "backend[dev]"
       - name: Audit Python dependencies
-        run: pip-audit
+        # semgrep 1.179-1.181 hard-pins mcp==1.29.0; the fixed mcp releases are not
+        # resolvable until semgrep ships an updated pin.
+        run: pip-audit --ignore-vuln CVE-2026-59951
       - uses: actions/setup-node@v4
         with:
           node-version: "24"
