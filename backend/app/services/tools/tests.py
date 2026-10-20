@@ -91,9 +91,11 @@ def _source_packages(code_files: list[FileEntry]) -> list[str]:
 
     A package root may be nested (`backend/app`), and the tests import it by its
     package name (`app`), not by the checkout folder (`backend`). A directory is
-    a package root when it holds an `__init__.py`; the highest such ancestor is
-    the name tests are expected to reference. Namespace packages without
-    `__init__.py` fall back to their first path segment.
+    a package root when it holds an `__init__.py`; the *shallowest* such ancestor
+    is the name tests are expected to reference — taking a deeper one would report
+    `tools` for `app.services.tools`, which no test ever imports. Files outside a
+    package (Alembic scripts, fixtures, test trees) contribute nothing: guessing a
+    package for them produced unfixable findings against the checkout directory.
     """
     package_dirs = {
         str(Path(f.path).parent)
@@ -105,11 +107,10 @@ def _source_packages(code_files: list[FileEntry]) -> list[str]:
         if entry.ext != ".py":
             continue
         parts = Path(entry.path).parts
-        if len(parts) < 2 or parts[0] in NON_SOURCE_DIRS:
+        if len(parts) < 2 or any(part in NON_SOURCE_DIRS for part in parts[:-1]):
             continue
-        name = parts[0]
         for index in range(1, len(parts)):
             if str(Path(*parts[:index])) in package_dirs:
-                name = parts[index - 1]
-        packages.add(name)
+                packages.add(parts[index - 1])
+                break
     return sorted(packages)

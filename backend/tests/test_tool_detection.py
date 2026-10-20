@@ -73,3 +73,22 @@ def test_package_detection_uses_the_importable_package(tmp_path: Path) -> None:
     findings = run_tests(_context(tmp_path))
 
     assert not [f for f in findings if f.category == "missing-tests"]
+
+
+def test_package_detection_reports_the_shallowest_package_once(tmp_path: Path) -> None:
+    """A nested package must not be reported under its deepest component."""
+    _write(tmp_path, "backend/app/__init__.py", "")
+    _write(tmp_path, "backend/app/services/__init__.py", "")
+    _write(tmp_path, "backend/app/services/tools/__init__.py", "")
+    _write(tmp_path, "backend/app/services/tools/run.py", "def work():\n    return 1\n")
+    # Alembic scripts sit outside any package and must not become a package name.
+    _write(tmp_path, "backend/alembic/env.py", "print('migrations')\n")
+    _write(
+        tmp_path,
+        "backend/tests/test_run.py",
+        "from app.services.tools.run import work\n\ndef test_work():\n    assert work() == 1\n",
+    )
+
+    findings = run_tests(_context(tmp_path))
+
+    assert not [f for f in findings if f.category == "missing-tests"]

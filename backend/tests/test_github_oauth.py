@@ -50,7 +50,7 @@ def oauth(monkeypatch: pytest.MonkeyPatch):
     store = fakeredis.FakeRedis(decode_responses=True)
     monkeypatch.setattr(auth, "_state_store", lambda: store)
     monkeypatch.setenv("RETRACT_GITHUB_CLIENT_ID", "Iv1.0123456789abcdef")
-    monkeypatch.setenv("RETRACT_GITHUB_CLIENT_SECRET", "0123456789abcdef" * 2 + "01234567")
+    monkeypatch.setenv("RETRACT_GITHUB_CLIENT_SECRET", "test-github-client-secret-not-real")
     # Same host as FRONTEND, deliberately: the callback issues the session cookie,
     # so a callback on a different spelling of loopback than the frontend cannot
     # hand it back. Settings refuses that pair, which is what caught it.

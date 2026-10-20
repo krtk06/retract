@@ -98,7 +98,7 @@ def _dev_oauth_settings(**overrides) -> Settings:
         "environment": "dev",
         "jwt_secret": GOOD_SECRET,
         "github_client_id": "Iv1.0123456789abcdef",
-        "github_client_secret": "0123456789abcdef" * 2 + "01234567",
+        "github_client_secret": "test-github-client-secret-not-real",
         "github_oauth_redirect_uri": "http://localhost:8110/api/auth/github/callback",
         "frontend_url": "http://localhost:5175",
     }
