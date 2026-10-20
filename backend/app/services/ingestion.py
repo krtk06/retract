@@ -33,7 +33,7 @@ def ignored_prefixes(root: Path) -> list[str]:
     return prefixes
 
 
-def _is_ignored(relative: str, prefixes: list[str]) -> bool:
+def is_ignored(relative: str, prefixes: list[str]) -> bool:
     return any(relative == p or relative.startswith(f"{p}/") for p in prefixes)
 
 
@@ -156,7 +156,7 @@ def build_inventory(root: Path) -> tuple[list[FileEntry], int, bool]:
         for filename in filenames:
             full = Path(dirpath) / filename
             rel = full.relative_to(root).as_posix()
-            if _is_ignored(rel, ignored):
+            if is_ignored(rel, ignored):
                 continue
             total += 1
             if len(entries) >= MAX_INVENTORY_FILES:
@@ -170,6 +170,7 @@ def build_inventory(root: Path) -> tuple[list[FileEntry], int, bool]:
             lines = count_lines(full) if is_code_file(ext) else 0
             entries.append(FileEntry(path=rel, size=size, ext=ext, lines=lines))
     return entries, total, truncated
+
 
 def detect_languages(files: list[FileEntry]) -> dict[str, int]:
     counts: dict[str, int] = {}

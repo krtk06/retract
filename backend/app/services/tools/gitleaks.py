@@ -5,6 +5,7 @@ import tempfile
 from pathlib import Path
 
 from app.models import Severity
+from app.services.ingestion import ignored_prefixes, is_ignored
 from app.services.tools.context import ToolContext
 from app.services.tools.findings import FindingDraft
 from app.services.tools.semgrep import resolve_binary
@@ -45,10 +46,11 @@ def run_gitleaks(ctx: ToolContext) -> list[FindingDraft]:
     finally:
         report.unlink(missing_ok=True)
 
+    ignored = ignored_prefixes(ctx.repo_root)
     drafts: list[FindingDraft] = []
     for item in results:
         file_path = _rel(ctx.repo_root, str(item.get("File", "")))
-        if not file_path:
+        if not file_path or is_ignored(file_path, ignored):
             continue
         rule = str(item.get("RuleID", "secret"))
         drafts.append(

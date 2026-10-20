@@ -87,6 +87,10 @@ def _normalize_lines(source: str) -> list[str]:
         )
         cleaned = _NUMBER.sub("#", cleaned)
         cleaned = re.sub(r"\s+", "", cleaned)
+        # Docstring/prose lines contain no preserved keyword and normalize to
+        # punctuation only; two similar paragraphs are not duplicated logic.
+        if not re.search(r"[A-Za-z]", cleaned):
+            cleaned = ""
         lines.append(cleaned if len(cleaned) >= 5 else "")
     return lines
 

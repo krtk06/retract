@@ -8,7 +8,7 @@ from pathlib import Path
 
 from app.config import get_settings
 from app.models import Severity
-from app.services.ingestion import SKIP_DIRS
+from app.services.ingestion import SKIP_DIRS, ignored_prefixes, is_ignored
 from app.services.tools.context import ToolContext
 from app.services.tools.findings import FindingDraft
 
@@ -78,13 +78,14 @@ def run_semgrep(ctx: ToolContext) -> list[FindingDraft]:
     ]
     proc = _execute(cmd, ctx.repo_root)
     data = json.loads(proc.stdout or "{}")
+    ignored = ignored_prefixes(ctx.repo_root)
     drafts: list[FindingDraft] = []
     for result in data.get("results", []):
         check_id = result.get("check_id", "semgrep")
         extra = result.get("extra", {})
         severity = _SEVERITY_MAP.get(str(extra.get("severity", "WARNING")).upper(), Severity.MEDIUM)
         path = _rel(ctx.repo_root, result.get("path", ""))
-        if not path:
+        if not path or is_ignored(path, ignored):
             continue
         start = (result.get("start") or {}).get("line")
         end = (result.get("end") or {}).get("line")
