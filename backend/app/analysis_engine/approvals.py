@@ -17,6 +17,8 @@ GATING_SEVERITIES = {Severity.HIGH, Severity.CRITICAL}
 
 @dataclass
 class ApprovalSummary:
+    """How many findings are waiting on, and settled by, human review."""
+
     pending: int
     approved: int
     dismissed: int
@@ -24,6 +26,7 @@ class ApprovalSummary:
 
 
 def pending_findings(session: Session, analysis_id: int) -> list[Finding]:
+    """High-severity hypotheses still awaiting an explicit decision."""
     return list(
         session.scalars(
             select(Finding)

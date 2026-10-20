@@ -37,6 +37,8 @@ REGISTRY_DEADLINE_SECONDS = 45.0
 
 @dataclass
 class Dep:
+    """One declared dependency with its pinned version."""
+
     name: str
     version: str  # empty when not pinned
     ecosystem: str  # "PyPI" | "npm"
@@ -45,6 +47,7 @@ class Dep:
 
 
 def collect_dependencies(ctx: ToolContext) -> list[Dep]:
+    """Parse dependency manifests into a flat list."""
     deps: list[Dep] = []
     for entry in ctx.files:
         path = ctx.repo_root / entry.path

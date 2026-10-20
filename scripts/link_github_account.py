@@ -30,11 +30,12 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "backend"))
 
+from sqlalchemy import func, select
+from sqlalchemy.orm import Session
+
 from app.config import get_settings
 from app.db import get_engine
 from app.models import Approval, Repository, User, UserRepository
-from sqlalchemy import func, select
-from sqlalchemy.orm import Session
 
 
 def _count(db: Session, user_id: int) -> dict[str, int]:
@@ -43,21 +44,15 @@ def _count(db: Session, user_id: int) -> dict[str, int]:
             select(UserRepository).where(UserRepository.user_id == user_id).limit(1)
         )
         is not None,
-        "approvals": db.scalar(
-            select(Approval).where(Approval.user_id == user_id).limit(1)
-        )
+        "approvals": db.scalar(select(Approval).where(Approval.user_id == user_id).limit(1))
         is not None,
     }
 
 
 def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument(
-        "--github-id", type=int, required=True, help="GitHub numeric user id"
-    )
-    parser.add_argument(
-        "--email", required=True, help="email of the account to attach to"
-    )
+    parser.add_argument("--github-id", type=int, required=True, help="GitHub numeric user id")
+    parser.add_argument("--email", required=True, help="email of the account to attach to")
     parser.add_argument(
         "--move-from",
         action="append",
@@ -109,14 +104,11 @@ def _release_holder(db: Session, args: argparse.Namespace, target: User) -> None
     if holder is None or holder.id == target.id:
         return
     owns_repos = (
-        db.scalar(
-            select(UserRepository).where(UserRepository.user_id == holder.id).limit(1)
-        )
+        db.scalar(select(UserRepository).where(UserRepository.user_id == holder.id).limit(1))
         is not None
     )
     owns_approvals = (
-        db.scalar(select(Approval).where(Approval.user_id == holder.id).limit(1))
-        is not None
+        db.scalar(select(Approval).where(Approval.user_id == holder.id).limit(1)) is not None
     )
     print(
         f"\ngitHub id {args.github_id} is currently on user #{holder.id} "
@@ -146,14 +138,10 @@ def _resolve_sources(db: Session, args: argparse.Namespace, target: User) -> lis
     return sources
 
 
-def _move_sources(
-    db: Session, args: argparse.Namespace, target: User, sources: list[User]
-) -> None:
+def _move_sources(db: Session, args: argparse.Namespace, target: User, sources: list[User]) -> None:
     for source in sources:
         repos = db.scalars(
-            select(Repository)
-            .join(UserRepository)
-            .where(UserRepository.user_id == source.id)
+            select(Repository).join(UserRepository).where(UserRepository.user_id == source.id)
         ).all()
         print(f"\nmoving from user #{source.id} {source.login}:")
         print(f"  {len(repos)} repositories, {len(_count(db, source.id))} approvals")
@@ -187,9 +175,7 @@ def _delete_empty_sources(db: Session, sources: list[User]) -> None:
         remaining = db.scalar(
             select(UserRepository).where(UserRepository.user_id == source.id).limit(1)
         )
-        approvals = db.scalar(
-            select(Approval).where(Approval.user_id == source.id).limit(1)
-        )
+        approvals = db.scalar(select(Approval).where(Approval.user_id == source.id).limit(1))
         if remaining is None and approvals is None:
             db.delete(source)
             print(f"deleted user #{source.id} {source.login} (owned nothing)")
@@ -223,15 +209,16 @@ def main() -> int:
         owned = db.scalar(
             select(UserRepository).where(UserRepository.user_id == target.id).limit(1)
         )
-        total = db.scalar(
-            select(func.count())
-            .select_from(Repository)
-            .join(UserRepository)
-            .where(UserRepository.user_id == target.id)
-        ) or 0
-        print(
-            f"\nuser #{target.id} now owns {total} repositories (access={owned is not None})"
+        total = (
+            db.scalar(
+                select(func.count())
+                .select_from(Repository)
+                .join(UserRepository)
+                .where(UserRepository.user_id == target.id)
+            )
+            or 0
         )
+        print(f"\nuser #{target.id} now owns {total} repositories (access={owned is not None})")
 
     if not args.apply:
         print("\nre-run with --apply to make these changes")

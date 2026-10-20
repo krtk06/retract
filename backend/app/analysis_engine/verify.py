@@ -56,6 +56,8 @@ class VerificationResult:
 
 @dataclass
 class VerificationSummary:
+    """Totals from re-checking every finding in an analysis."""
+
     checked: int = 0
     promoted: int = 0
     failed: int = 0

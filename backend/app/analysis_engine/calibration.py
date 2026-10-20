@@ -25,6 +25,8 @@ MAX_CONFIDENCE = 0.99
 
 @dataclass
 class CalibrationResult:
+    """Confidence adjustment derived from historical human decisions."""
+
     raw_confidence: float
     history_rate: float
     effective: float
@@ -33,6 +35,7 @@ class CalibrationResult:
 
 
 def historical_acceptance_rate(session: Session, agent: str, category: str) -> tuple[float, int]:
+    """Acceptance rate and sample size for one agent/category pair."""
     stat = session.scalar(
         select(CalibrationStat).where(
             CalibrationStat.agent == agent, CalibrationStat.category == category

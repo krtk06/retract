@@ -34,6 +34,7 @@ def ignored_prefixes(root: Path) -> list[str]:
 
 
 def is_ignored(relative: str, prefixes: list[str]) -> bool:
+    """Whether a repository-relative path is excluded by .aislopignore."""
     return any(relative == p or relative.startswith(f"{p}/") for p in prefixes)
 
 
@@ -73,6 +74,8 @@ SKIP_DIRS = {".git", "node_modules", "__pycache__", ".venv", "venv", "dist", "bu
 
 @dataclass
 class FileEntry:
+    """One inventoried file and its size/line counts."""
+
     path: str
     size: int
     ext: str
@@ -128,6 +131,7 @@ def _git(*args: str, cwd: Path | None = None) -> str:
 
 
 def clone_repo(url: str, dest: Path) -> None:
+    """Shallow-clone a repository into the destination directory."""
     dest.parent.mkdir(parents=True, exist_ok=True)
     if dest.exists():
         # Clean previous attempt for idempotent re-runs.
@@ -182,6 +186,7 @@ def detect_languages(files: list[FileEntry]) -> dict[str, int]:
 
 
 def ingest(url: str, dest: Path) -> IngestionResult:
+    """Clone and inventory a repository, returning the analysis input."""
     if url.startswith("local://"):
         return _ingest_local(url, dest)
     clone_repo(url, dest)

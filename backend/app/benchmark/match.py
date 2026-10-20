@@ -27,6 +27,8 @@ LINE_TOLERANCE = 3
 
 
 class Match(StrEnum):
+    """How closely a finding matched one ground-truth expectation."""
+
     EXACT = "exact"
     WRONG_LINE = "wrong-line"
     WRONG_FILE = "wrong-file"
@@ -64,6 +66,8 @@ class CategoryScore:
 
 @dataclass
 class BenchmarkResult:
+    """Scores and per-expectation outcomes for one benchmark run."""
+
     repo: str
     analysis_id: int
     loc: int | None = None

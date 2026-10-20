@@ -49,6 +49,7 @@ def create_repo(
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ) -> RepoOut:
+    """Register a repository for the signed-in user."""
     settings = get_settings()
     try:
         owner, name = parse_github_url(payload.url)

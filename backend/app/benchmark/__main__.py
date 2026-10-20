@@ -56,6 +56,7 @@ def _latest_analysis(session: Session, repo_name: str) -> Analysis:
 
 
 def build_parser() -> argparse.ArgumentParser:
+    """Command-line parser for the benchmark report."""
     parser = argparse.ArgumentParser(prog="app.benchmark", description=__doc__)
     parser.add_argument("--repo", help="Repository as owner/name, or just name")
     parser.add_argument("--analysis-id", type=int, help="Score this analysis instead of the latest")

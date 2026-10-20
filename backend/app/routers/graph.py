@@ -27,6 +27,7 @@ def graph_summary(
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ) -> GraphSummaryOut:
+    """Symbol and edge counts for one analysis."""
     _ensure_analysis(db, analysis_id, user)
     return GraphSummaryOut.model_validate(graph.summary(db, analysis_id))
 
@@ -40,6 +41,7 @@ def graph_symbols(
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ) -> list[SymbolOut]:
+    """Search indexed symbols by name."""
     _ensure_analysis(db, analysis_id, user)
     return [
         SymbolOut.model_validate(item, from_attributes=True)
@@ -55,6 +57,7 @@ def graph_neighborhood(
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ) -> GraphNeighborhoodOut:
+    """Symbols within `depth` hops of the named symbol."""
     _ensure_analysis(db, analysis_id, user)
     result = graph.neighborhood(db, analysis_id, symbol, depth=depth)
     return GraphNeighborhoodOut.model_validate(result, from_attributes=True)
@@ -112,6 +115,7 @@ def graph_path(
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ) -> list[SymbolOut]:
+    """Shortest path between two symbols in the graph."""
     _ensure_analysis(db, analysis_id, user)
     return [
         SymbolOut.model_validate(item, from_attributes=True)

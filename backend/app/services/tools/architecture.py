@@ -11,7 +11,7 @@ from app.services.tools.context import ToolContext
 from app.services.tools.findings import FindingDraft
 
 MAX_CYCLES_REPORTED = 10
-FAN_IN_FLOOR = 10
+FAN_IN_FLOOR = 25
 FAN_IN_FACTOR = 3
 
 # The search below restarts a DFS from every module, and the per-path length cap (10)

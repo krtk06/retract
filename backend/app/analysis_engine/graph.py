@@ -18,6 +18,8 @@ MAX_PATH_NODES = 200
 
 @dataclass
 class SymbolRef:
+    """Repository-relative reference to one indexed symbol."""
+
     id: int
     name: str
     kind: str

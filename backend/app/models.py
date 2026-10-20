@@ -56,6 +56,8 @@ class ApprovalDecision(enum.StrEnum):
 
 
 class User(Base):
+    """An authenticated account, linked to GitHub or an email address."""
+
     __tablename__ = "users"
 
     id: Mapped[int] = mapped_column(primary_key=True)
@@ -169,6 +171,8 @@ class EdgeKind(enum.StrEnum):
 
 
 class Analysis(Base):
+    """One analysis run of a repository at a specific commit."""
+
     __tablename__ = "analyses"
 
     id: Mapped[int] = mapped_column(primary_key=True)
@@ -192,6 +196,8 @@ class Analysis(Base):
 
 
 class Finding(Base):
+    """A single issue reported by one agent within an analysis."""
+
     __tablename__ = "findings"
 
     id: Mapped[int] = mapped_column(primary_key=True)
@@ -220,6 +226,8 @@ class Finding(Base):
 
 
 class Approval(Base):
+    """A human decision recorded against one finding."""
+
     __tablename__ = "approvals"
 
     id: Mapped[int] = mapped_column(primary_key=True)
@@ -265,6 +273,8 @@ class EmailVerificationToken(Base):
 
 
 class Symbol(Base):
+    """An indexed definition from the repository's symbol graph."""
+
     __tablename__ = "symbols"
     __table_args__ = (
         UniqueConstraint(
@@ -289,6 +299,8 @@ class Symbol(Base):
 
 
 class Edge(Base):
+    """A relationship between two indexed symbols."""
+
     __tablename__ = "edges"
     __table_args__ = (UniqueConstraint("src_symbol_id", "dst_name", "kind", name="uq_edge"),)
 

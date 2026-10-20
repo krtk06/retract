@@ -46,12 +46,12 @@ the pin.
 
 ## Code quality — weight 0.20
 
-### `complexity` — radon, cyclomatic complexity ≥ 10 (≥ 20 = high)
+### `complexity` — radon, cyclomatic complexity ≥ 15 (≥ 25 = high)
 Extract branch groups into named functions, flatten guards with early returns.
 Pin current behaviour with a test first. Aim below the threshold, not merely
 lower — the re-run re-measures the same function with the same rule.
 
-### `maintainability` — radon, maintainability index < 65
+### `maintainability` — radon, maintainability index < 35
 Complexity drives the index: shrink the longest functions, remove dead code,
 collapse duplicated blocks. Re-measure after the structure changes, not after
 formatting.
@@ -107,9 +107,9 @@ that is too large, make one edge a local (function-level) import. Retract
 verifies by re-walking the graph for a 2- or 3-cycle among the named modules —
 the cycle must actually be gone, not shorter.
 
-### `god-module` — fan-in ≥ 10 modules importing it (threshold from evidence)
+### `god-module` — fan-in ≥ 25 modules importing it (threshold from evidence)
 Group symbols by responsibility, move each group out, keep the original as a
-thin re-export while callers move over. Retract verifies fan-in ≥ 10 on the
+thin re-export while callers move over. Retract verifies fan-in ≥ 25 on the
 named module, so the count must genuinely drop.
 
 ## Displayed but unscored

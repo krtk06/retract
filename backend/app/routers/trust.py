@@ -25,6 +25,7 @@ def get_queue(
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ) -> QueueOut:
+    """Approval queue for one analysis."""
     analysis = _ensure_analysis(db, analysis_id, user)
     pending = approvals.pending_findings(db, analysis_id)
     summary = approvals.summarize(db, analysis_id)
@@ -45,6 +46,7 @@ def decide_approval(
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ) -> ApprovalOut:
+    """Record a human approve-or-dismiss decision."""
     _ensure_analysis(db, analysis_id, user)
     if payload.decision not in ("approve", "dismiss"):
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, detail="invalid decision")

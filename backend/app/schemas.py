@@ -10,6 +10,8 @@ from app.models import Severity
 
 
 class UserOut(BaseModel):
+    """Public representation of the signed-in user."""
+
     model_config = ConfigDict(from_attributes=True)
 
     id: int
@@ -46,6 +48,8 @@ class RepoCreate(BaseModel):
 
 
 class RepoOut(BaseModel):
+    """Public representation of a tracked repository."""
+
     model_config = ConfigDict(from_attributes=True)
 
     id: int
@@ -59,6 +63,8 @@ class RepoOut(BaseModel):
 
 
 class AnalysisOut(BaseModel):
+    """Summary of one analysis run."""
+
     model_config = ConfigDict(from_attributes=True)
 
     id: int
@@ -95,6 +101,8 @@ class AgentFindingIn(BaseModel):
 
 
 class AgentFindingsIn(BaseModel):
+    """Findings posted by the eve agent for verification."""
+
     agent: str = Field(min_length=1, max_length=64, pattern=r"^eve(:[a-z0-9-]+)?$")
     findings: list[AgentFindingIn] = Field(default_factory=list, max_length=100)
     triage: list[dict[str, Any]] = Field(default_factory=list, max_length=100)
@@ -181,6 +189,8 @@ class RemediationIn(BaseModel):
 
 
 class RemediationSubmitIn(BaseModel):
+    """A repo-specific remediation recorded by the agent."""
+
     agent: str = Field(min_length=1, max_length=64, pattern=r"^eve(:[a-z0-9-]+)?$")
     remediations: list[RemediationIn] = Field(default_factory=list, max_length=100)
 
@@ -194,11 +204,15 @@ class RemediationSubmitOut(BaseModel):
 
 
 class EveTokenOut(BaseModel):
+    """Short-lived token the browser exchanges for an eve session."""
+
     token: str
     expires_in: int
 
 
 class FindingOut(BaseModel):
+    """One finding as returned to the dashboard."""
+
     model_config = ConfigDict(from_attributes=True)
 
     id: int
@@ -255,6 +269,8 @@ class AnalysisEvent(BaseModel):
 
 
 class ScoreOut(BaseModel):
+    """Computed repository health score and its pillars."""
+
     version: int
     overall: int
     loc: int | None
@@ -322,6 +338,8 @@ class ApprovalRequest(BaseModel):
 
 
 class ApprovalOut(BaseModel):
+    """One recorded approval decision."""
+
     finding_id: int
     decision: str
     finding_status: str
@@ -332,6 +350,8 @@ class ApprovalOut(BaseModel):
 
 
 class QueueOut(BaseModel):
+    """Approval queue shown to a reviewer."""
+
     analysis_id: int
     published: bool
     pending_count: int
@@ -398,6 +418,8 @@ class TrustTotalsOut(BaseModel):
 
 
 class TrustSummaryOut(BaseModel):
+    """Verification and acceptance statistics for an analysis."""
+
     analysis_id: int
     totals: TrustTotalsOut
     verification_coverage: float | None = None
@@ -424,6 +446,8 @@ class PillarCompareOut(BaseModel):
 
 
 class CompareOut(BaseModel):
+    """Two analyses compared side by side."""
+
     left: CompareSideOut
     right: CompareSideOut
     overall_delta: int | None
@@ -431,6 +455,8 @@ class CompareOut(BaseModel):
 
 
 class HealthOut(BaseModel):
+    """Service health for the API process."""
+
     status: str
     db: str
     redis: str

@@ -103,9 +103,7 @@ def _check_categories(check, categories: dict[str, object], categories_md: str) 
     scored = [c for c, pillar in categories.items() if pillar is not None]
     unscored = [c for c, pillar in categories.items() if pillar is None]
     for category in scored:
-        check(
-            f"`{category}`" in categories_md, f"scored category {category} documented"
-        )
+        check(f"`{category}`" in categories_md, f"scored category {category} documented")
     check("not in `CATEGORY_PILLAR`" in categories_md, "unscored categories documented")
     for category in unscored:
         check(category in categories_md, f"unscored category {category} documented")
@@ -115,9 +113,7 @@ def _check_thresholds(check, both_refs: str) -> None:
     """Each tool threshold is matched in context, beside the word the doc uses."""
 
     def tool_constant(module: str, name: str):
-        return ast.literal_eval(
-            _value_of(ast.parse((TOOLS / module).read_text()), name)
-        )
+        return ast.literal_eval(_value_of(ast.parse((TOOLS / module).read_text()), name))
 
     thresholds = [
         (
@@ -203,9 +199,7 @@ def main() -> int:
     )
     _check_behaviour_claims(check, both_refs, verification_md)
 
-    print(
-        f"{'all skill/scoring checks passed' if failures == 0 else f'{failures} FAIL lines'}"
-    )
+    print(f"{'all skill/scoring checks passed' if failures == 0 else f'{failures} FAIL lines'}")
     return 1 if failures else 0
 
 

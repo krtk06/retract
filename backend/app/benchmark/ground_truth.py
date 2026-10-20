@@ -25,6 +25,8 @@ class GroundTruthError(ValueError):
 
 @dataclass(frozen=True)
 class Expectation:
+    """One planted issue the benchmark expects to be found."""
+
     category: str
     file: str | None = None
     line: int | None = None
@@ -38,6 +40,8 @@ class Expectation:
 
 @dataclass(frozen=True)
 class GroundTruth:
+    """Parsed benchmark expectations for one repository."""
+
     repo: str
     expectations: list[Expectation] = field(default_factory=list)
     source: str = ""

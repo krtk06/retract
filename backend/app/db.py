@@ -9,6 +9,8 @@ from app.config import get_settings
 
 
 class Base(DeclarativeBase):
+    """Declarative base shared by every ORM model."""
+
     pass
 
 
@@ -17,6 +19,7 @@ _SessionLocal: sessionmaker[Session] | None = None
 
 
 def get_engine() -> Engine:
+    """Process-wide SQLAlchemy engine, created on first use."""
     global _engine
     if _engine is None:
         settings = get_settings()

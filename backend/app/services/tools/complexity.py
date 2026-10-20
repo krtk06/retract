@@ -9,9 +9,9 @@ from app.models import Severity
 from app.services.tools.context import ToolContext
 from app.services.tools.findings import FindingDraft
 
-CC_MEDIUM = 10
-CC_HIGH = 20
-MI_LOW = 65
+CC_MEDIUM = 15
+CC_HIGH = 25
+MI_LOW = 35
 
 
 def _generated_source(path: str) -> bool:

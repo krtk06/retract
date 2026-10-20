@@ -42,6 +42,8 @@ MAX_INDEX_FILES = 3000
 
 @dataclass
 class SymbolRec:
+    """One extracted symbol before it is persisted."""
+
     file_path: str
     name: str
     kind: SymbolKind

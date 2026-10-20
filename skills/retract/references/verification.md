@@ -60,7 +60,7 @@ The deterministic analyzers run again from scratch on the fresh clone:
   finding even though the value stays in past commits). Purging history is
   still worth doing — it is real exposure, not score — but it is not what makes
   this finding disappear.
-- **radon** re-measures every function: complexity ≥ 10 re-files immediately;
+- **radon** re-measures every function: complexity ≥ 15 re-files immediately;
 - the **duplication** detector re-walks the tree — a copy you left behind
   re-files;
 - the **tests** checker re-scans for imports of every package;

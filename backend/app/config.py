@@ -43,6 +43,8 @@ def is_loopback(hostname: str | None) -> bool:
 
 
 class Settings(BaseSettings):
+    """Runtime configuration resolved from RETRACT_* environment variables."""
+
     model_config = SettingsConfigDict(env_prefix="RETRACT_", env_file=".env", extra="ignore")
 
     environment: str = "dev"
