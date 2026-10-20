@@ -8,6 +8,35 @@ from pathlib import Path
 MAX_INVENTORY_FILES = 5000
 MAX_FILE_SIZE_BYTES = 1_000_000
 
+IGNORE_FILE = ".aislopignore"
+
+
+def ignored_prefixes(root: Path) -> list[str]:
+    """Paths the repository itself declares out of scope.
+
+    The repo already carries `.aislopignore` for deliberately vulnerable fixture
+    code; scoring those files reports the fixture as a defect in the product.
+    Only plain path prefixes are supported (no glob matching): that is what the
+    file uses, and a subtly wrong glob implementation would quietly exclude real
+    code.
+    """
+    try:
+        lines = (root / IGNORE_FILE).read_text().splitlines()
+    except (OSError, UnicodeDecodeError):
+        return []
+    prefixes: list[str] = []
+    for raw in lines:
+        line = raw.strip()
+        if not line or line.startswith("#"):
+            continue
+        prefixes.append(line.rstrip("/"))
+    return prefixes
+
+
+def _is_ignored(relative: str, prefixes: list[str]) -> bool:
+    return any(relative == p or relative.startswith(f"{p}/") for p in prefixes)
+
+
 EXTENSION_LANGUAGES: dict[str, str] = {
     ".py": "Python",
     ".js": "JavaScript",
@@ -119,26 +148,28 @@ def repo_branch(dest: Path) -> str:
 def build_inventory(root: Path) -> tuple[list[FileEntry], int, bool]:
     """Walk the repo; return (entries, total_files, truncated)."""
     entries: list[FileEntry] = []
+    ignored = ignored_prefixes(root)
     total = 0
     truncated = False
     for dirpath, dirnames, filenames in os.walk(root):
         dirnames[:] = [d for d in dirnames if d not in SKIP_DIRS]
         for filename in filenames:
+            full = Path(dirpath) / filename
+            rel = full.relative_to(root).as_posix()
+            if _is_ignored(rel, ignored):
+                continue
             total += 1
             if len(entries) >= MAX_INVENTORY_FILES:
                 truncated = True
                 continue
-            full = Path(dirpath) / filename
             try:
                 size = full.stat().st_size
             except OSError:
                 continue
-            rel = full.relative_to(root).as_posix()
             ext = full.suffix.lower()
             lines = count_lines(full) if is_code_file(ext) else 0
             entries.append(FileEntry(path=rel, size=size, ext=ext, lines=lines))
     return entries, total, truncated
-
 
 def detect_languages(files: list[FileEntry]) -> dict[str, int]:
     counts: dict[str, int] = {}

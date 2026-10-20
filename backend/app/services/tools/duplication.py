@@ -72,6 +72,13 @@ _KEYWORDS = {
 def _normalize_lines(source: str) -> list[str]:
     lines = []
     for raw in source.splitlines():
+        # Import statements normalize to the same shape across files (`from ~
+        # import ~`), so an eight-line import block reads as duplication in every
+        # pair of modules that share dependencies. They are not duplicated logic.
+        stripped = raw.strip()
+        if stripped.startswith(("import ", "from ")) and not stripped.endswith("("):
+            lines.append("")
+            continue
         cleaned = _COMMENT.sub("", raw)
         cleaned = _STRING.sub('"S"', cleaned)
         cleaned = _IDENT.sub(

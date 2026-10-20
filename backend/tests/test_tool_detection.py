@@ -14,7 +14,7 @@ tests and generated migrations.
 
 from pathlib import Path
 
-from app.services.ingestion import FileEntry
+from app.services.ingestion import FileEntry, count_lines
 from app.services.tools.context import ToolContext
 from app.services.tools.docs import run_docs
 from app.services.tools.tests import run_tests
@@ -22,7 +22,12 @@ from app.services.tools.tests import run_tests
 
 def _context(root: Path) -> ToolContext:
     files = [
-        FileEntry(path=p.relative_to(root).as_posix(), size=p.stat().st_size, ext=p.suffix.lower())
+        FileEntry(
+            path=p.relative_to(root).as_posix(),
+            size=p.stat().st_size,
+            ext=p.suffix.lower(),
+            lines=count_lines(p),
+        )
         for p in root.rglob("*")
         if p.is_file()
     ]
@@ -92,3 +97,56 @@ def test_package_detection_reports_the_shallowest_package_once(tmp_path: Path) -
     findings = run_tests(_context(tmp_path))
 
     assert not [f for f in findings if f.category == "missing-tests"]
+
+
+def test_inventory_honours_the_repository_ignore_file(tmp_path: Path) -> None:
+    """A fixture the repo declares out of scope must not be scored as product code."""
+    _write(tmp_path, ".aislopignore", "# intentional fixture\nfixture/\n")
+    _write(tmp_path, "fixture/vulnerable.py", "SECRET = 'AKIAIOSFODNN7EXAMPLE'\n")
+    _write(tmp_path, "app/main.py", "print('ok')\n")
+
+    from app.services.ingestion import build_inventory
+
+    files, _total, _truncated = build_inventory(tmp_path)
+
+    assert [f.path for f in files if f.path.endswith(".py")] == ["app/main.py"]
+
+
+def test_duplicate_import_blocks_are_not_duplication(tmp_path: Path) -> None:
+    """Shared imports normalize identically and used to be reported as duplication."""
+    imports = "\n".join(
+        [
+            "import os",
+            "import sys",
+            "import json",
+            "import logging",
+            "from pathlib import Path",
+            "from typing import Any",
+            "from collections import defaultdict",
+            "from dataclasses import dataclass",
+        ]
+    )
+    body_a = "\n".join(f"def alpha_{i}(value):\n    return value + {i}" for i in range(5))
+    body_b = "\n".join(f"def beta_{i}(value):\n    return value * {i}" for i in range(5))
+    _write(tmp_path, "a.py", imports + "\n\n" + body_a + "\n")
+    _write(tmp_path, "b.py", imports + "\n\n" + body_b + "\n")
+
+    from app.services.tools.duplication import run_duplication
+
+    assert run_duplication(_context(tmp_path)) == []
+
+
+def test_generated_migrations_are_not_maintainability_findings(tmp_path: Path) -> None:
+    branchy = "def upgrade():\n" + "".join(
+        f"    if {i} > 0:\n        print({i})\n" for i in range(14)
+    )
+    _write(tmp_path, "alembic/versions/0001_initial.py", branchy)
+    _write(tmp_path, "app/hot.py", branchy)
+
+    from app.services.tools.complexity import run_complexity
+
+    findings = run_complexity(_context(tmp_path))
+
+    # The migration contributes nothing; the equivalent hand-written module does.
+    assert {f.file_path for f in findings} == {"app/hot.py"}
+    assert any(f.category == "complexity" for f in findings)

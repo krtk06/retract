@@ -1,5 +1,7 @@
 """Complexity/maintainability runner (radon)."""
 
+from pathlib import PurePosixPath
+
 from radon.complexity import cc_visit
 from radon.metrics import mi_visit
 
@@ -12,10 +14,21 @@ CC_HIGH = 20
 MI_LOW = 65
 
 
+def _generated_source(path: str) -> bool:
+    """Generated scaffolding (Alembic revisions) is not hand-maintained code.
+
+    Flagging a migration for low maintainability says nothing a maintainer can
+    act on — the file is emitted, not written — so it is out of scope for both
+    complexity and MI, the same way it is out of scope for docstring coverage.
+    """
+    parts = PurePosixPath(path).parts
+    return "alembic" in parts and "versions" in parts
+
+
 def run_complexity(ctx: ToolContext) -> list[FindingDraft]:
     drafts: list[FindingDraft] = []
     for entry in ctx.code_files:
-        if entry.ext != ".py":
+        if entry.ext != ".py" or _generated_source(entry.path):
             continue
         path = ctx.repo_root / entry.path
         try:

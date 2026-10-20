@@ -33,7 +33,7 @@ sys.path.insert(0, str(ROOT / "backend"))
 from app.config import get_settings
 from app.db import get_engine
 from app.models import Approval, Repository, User, UserRepository
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 
@@ -223,13 +223,12 @@ def main() -> int:
         owned = db.scalar(
             select(UserRepository).where(UserRepository.user_id == target.id).limit(1)
         )
-        total = len(
-            db.scalars(
-                select(Repository)
-                .join(UserRepository)
-                .where(UserRepository.user_id == target.id)
-            ).all()
-        )
+        total = db.scalar(
+            select(func.count())
+            .select_from(Repository)
+            .join(UserRepository)
+            .where(UserRepository.user_id == target.id)
+        ) or 0
         print(
             f"\nuser #{target.id} now owns {total} repositories (access={owned is not None})"
         )
