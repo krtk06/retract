@@ -24,7 +24,10 @@ include the `published`/`measured` scoring changes only after their tests pass.
 **Assumed hostname:** `retract-demo.duckdns.org` (DuckDNS + Caddy, per
 `docs/deploy-oracle-cloud.md`). If a custom domain is used, substitute it everywhere.
 
-**Assumed license:** MIT (recommended). Apache-2.0 is the alternative; see §7.
+**License:** MIT (confirmed). Apache-2.0 is the documented alternative; see §7.
+
+**LLM budgets:** **$2/month** for the demo and dev accounts; **$10/month** for each
+GitHub/email account; provider hard cap at the deployment total. See P0-1B.
 
 **Video URL:** the README skeleton below uses `https://youtu.be/VIDEO_ID` as a
 publication parameter. Replace it with the real YouTube/Loom URL after P0-4 records
@@ -257,7 +260,7 @@ P1-6 threat model ──► P2-1 blog #1
 
 | Phase | Focused effort | Calendar |
 | --- | --- | --- |
-| P0 | 35–45 hours | 5 working days at 7–9 focused hours/day |
+| P0 | 45–55 hours | 6 working days at 7–9 focused hours/day |
 | P1 | 70–100 hours | 2 weeks |
 | P2 | 120–200 hours | 4–6 weeks, gated |
 
@@ -456,7 +459,7 @@ the fix cannot land in P0, and record the deferral explicitly.
 
 ---
 
-### P0-1B: Rate limits, dev-login IP rules, and LLM spend caps
+### P0-1B: Rate limits, dev-login IP rules, and monthly LLM budgets
 
 **Why:** the dev-login bypass is convenient but must not become an open door. A public
 demo also needs bounded LLM spend. Today the dev-login endpoint has no rate limit, and
@@ -470,14 +473,25 @@ uvicorn does not trust the frontend proxy's forwarded headers.
 - Modify: `backend/app/routers/repos.py` (one repo per IP for dev accounts)
 - Modify: `frontend/nginx.conf` (real client IP from Caddy's `X-Forwarded-For`)
 - Modify: `infra/docker-compose.prod.yml` (trusted proxy CIDR, uvicorn forwarding)
+- Modify: `backend/app/models.py` (`AgentUsage`, `AgentUsageEvent`, `AgentSession`,
+  `User.llm_monthly_budget_usd`)
+- Create: `backend/alembic/versions/0010_agent_usage.py`
+- Create: `backend/app/routers/agent_usage.py` (session map, usage intake, budget check)
+- Create: `backend/app/agent_usage.py` (period math, cost/token accounting)
+- Modify: `backend/app/main.py` (register the new router)
+- Modify: `backend/app/deps.py` (service-token dependency for agent-only endpoints)
 - Modify: `agent/agent/agent.ts` (per-session token/cost caps)
 - Create: `agent/agent/lib/limits.ts` (exported cap constants)
 - Create: `agent/agent/lib/limits.test.ts`
+- Create: `agent/agent/instrumentation/usage.ts` (eve instrumentation provider)
+- Modify: `agent/agent/channels/eve.ts` (session→user map, budget pre-check)
 - Modify: `agent/Dockerfile`, `infra/docker-compose.prod.yml` (cap build args)
-- Modify: `.env.example`
-- Create: `docs/operations.md` limits table (or update it if P0-2 created it)
+- Modify: `.env.example` (budgets, prices)
+- Create: `docs/operations.md` limits/budget table (or update it if P0-2 created it)
 - Test: `backend/tests/test_rate_limit.py`,
-  `backend/tests/test_dev_login_limits.py`
+  `backend/tests/test_dev_login_limits.py`,
+  `backend/tests/test_agent_usage.py`,
+  `agent/agent/instrumentation/usage.test.ts`
 
 #### Step 1: Make the client IP real
 
@@ -568,45 +582,112 @@ covered by the one-repo rule (it is capped by the regular analysis rate limit an
 nightly reset). Shared NATs will share the one-repo budget; that is acceptable for a
 dev bypass.
 
-#### Step 4: Add LLM spend caps
+#### Step 4: Enforce monthly LLM budgets ($2 demo, $10 GitHub/email)
 
-There are three layers:
+The budget is **per account per UTC calendar month**:
 
-1. **Per-session cap in eve.** Add `maxTokenCostUsdPerSession` plus conservative token
-   limits in `agent/agent/agent.ts`:
+| Account type | Monthly budget |
+| --- | --- |
+| Demo account (`demo`) | **$2** |
+| Dev-login accounts | **$2** each |
+| GitHub / email accounts | **$10** each |
 
-   ```ts
-   limits: {
-     maxInputTokensPerSession: 200_000,
-     maxOutputTokensPerSession: 50_000,
-     maxTokenCostUsdPerSession: 0.50,
-   }
-   ```
+A deployment also has a global cap: **$2/month** for a demo-only deployment,
+**$10/month** when it serves real GitHub/email users. Enforce the lower of the user
+budget and the global budget. The provider key budget is the final hard stop.
 
-   For a demo-only deployment, build with `0.10` and 100k/20k; a deployment with real
-   users can use `0.50` and 200k/50k. Make these build-time constants or non-secret
-   build args, because the agent manifest is compiled. The provider budget is shared,
-   so keep the demo key separate from any production key.
+Configuration names: `RETRACT_DEMO_LLM_BUDGET_USD=2`,
+`RETRACT_USER_LLM_BUDGET_USD=10`, `RETRACT_GLOBAL_LLM_BUDGET_USD=2` (demo) or `10`
+(real deployment). The seed writes the demo/dev user’s
+`User.llm_monthly_budget_usd` from the demo value; new GitHub/email users get the
+standard value.
 
-   **Verify cost reporting.** If the provider does not return usage cost, the dollar
-   cap cannot be enforced; the token caps and the provider budget still apply. Test
-   this on the first live call and document which axes are actually enforced.
+**Data model:**
 
-2. **Rate-limit token minting, not sessions.** `eve-token` is refreshed roughly every
-   five minutes by the browser, so it is not a session counter. Limit it to 60/hour/user
-   to stop token-minting abuse without breaking a long chat. Do not use a 10/day limit:
-   that would lock a normal user out after ~50 minutes.
+- `User.llm_monthly_budget_usd` — default `10`; the seed sets `demo` and dev accounts
+  to `2`.
+- `AgentSession` — `session_id` primary key, `user_id`, `first_seen_at`,
+  `last_seen_at`. This maps an eve session to a real account.
+- `AgentUsage` — `(user_id, period)` unique, where `period` is `YYYY-MM` in UTC;
+  `input_tokens`, `output_tokens`, `cost_usd`, `updated_at`.
+- `AgentUsageEvent` — `idempotency_key` primary key, `user_id`, `session_id`, `model`,
+  tokens, cost, `created_at`. This is the audit row and the duplicate guard for
+  replayed model-call events.
 
-3. **Provider hard stop.** Put a monthly spend limit on the AI Gateway key or the
-   opencode-go key. This is the only cap that survives a bug in the application; set
-   it to a number you are willing to lose (for example $20/month for the demo). This
-   is the actual “spend cap” for email/GitHub users; the per-session cap bounds a
-   single conversation, while the provider budget bounds the month.
+**Backend endpoints (service-token only, `X-Agent-Token`, no browser access):**
 
-If you need a true per-user daily dollar ledger, that is P1 work: add an `agent_usage`
-table and have the agent report token usage after each turn. P0’s per-session cap +
-provider budget is a bounded approximation, not a billing system. Document that a
-chat session is not the same as a scan: deterministic scans make no LLM calls.
+- `POST /api/agent/sessions` — `{ "session_id": "...", "user_id": 123 }`; upsert the
+  mapping.
+- `POST /api/agent/usage` — `{ "idempotency_key": "...", "session_id": "...",
+  "model": "...", "input_tokens": 0, "output_tokens": 0, "cost_usd": 0.0 }`;
+  insert the event once, then increment the monthly aggregate.
+- `GET /api/agent/budget?user_id=123` — `{ "period": "2026-10",
+  "user_budget_usd": 10.0, "global_budget_usd": 10.0, "used_usd": 1.23,
+  "remaining_usd": 8.77 }`. `remaining_usd` is the lower of the user and global
+  remaining amounts.
+- Optional `GET /api/agent/usage/me` — show the signed-in user their own usage.
+
+**Agent integration:**
+
+1. **Map the session to the user.** In `agent/agent/channels/eve.ts`, handle
+   `turn.started`: `session.id` plus `session.auth.current.principalId` (or
+   `initiator.principalId` for a subagent) is posted to `/api/agent/sessions`.
+2. **Pre-check the budget.** In `onMessage`, read `ctx.eve.caller.principalId` and call
+   `GET /api/agent/budget?user_id=...`. If `remaining_usd <= 0`, throw a clear
+   `LLM budget exhausted for October 2026` error before dispatch. This is the user-facing
+   stop.
+3. **Record usage after every model call.** Add
+   `agent/agent/instrumentation/usage.ts` with `defineInstrumentation` and a
+   `model.call.completed` handler. It posts the event’s `idempotencyKey`, `scope.sessionId`,
+   model id, and `usage.inputTokens` / `usage.outputTokens` to `/api/agent/usage`.
+   Because the handler is idempotent, a replay cannot double-charge.
+4. **Cost source.** The `step.attempt.metadata` event carries provider metadata,
+   including gateway cost when available. Keep the cost for the matching `attemptId`
+   and include it on the completed model call. If the provider does not report cost,
+   compute it from tokens using `RETRACT_LLM_INPUT_COST_PER_MTOK` and
+   `RETRACT_LLM_OUTPUT_COST_PER_MTOK`. If those are unset, enforce a token budget as
+   the fallback (`RETRACT_LLM_MONTHLY_TOKEN_BUDGET`, e.g. 2M demo / 10M standard) and
+   document that dollars are not measurable for that provider.
+5. **Subagents count.** `turn.started` fires for child sessions too; map them to the
+   same user. Model calls made by subagents therefore consume the same budget.
+
+**Per-session cap in eve** is the second layer. Add conservative limits in
+`agent/agent/agent.ts`:
+
+```ts
+limits: {
+  maxInputTokensPerSession: 200_000,
+  maxOutputTokensPerSession: 50_000,
+  maxTokenCostUsdPerSession: 0.50,
+}
+```
+
+For a demo-only image, use `0.10` and 100k/20k. These are build-time constants or
+non-secret build args because the agent manifest is compiled. They stop one runaway
+conversation; the monthly ledger stops the month.
+
+**Rate-limit token minting, not sessions.** `eve-token` is refreshed roughly every
+five minutes, so it is not a session counter. Limit it to 60/hour/user. Do not use a
+10/day limit: that would lock a normal user out after ~50 minutes.
+
+**Provider hard stop.** Set the provider key budget to the deployment cap: $2 for a
+demo-only deployment, $10 for the real GitHub/email deployment. This is the only cap
+that survives an application bug. If one deployment serves both, set the provider cap
+to $10 and rely on the per-user ledger to keep the demo account at $2.
+
+**Failure behavior:** if the budget endpoint is unavailable, log and allow the turn;
+the provider budget is the hard stop. Document that a backend outage can let a user
+overspend temporarily, which is preferable to locking every account out. A single
+in-flight model call can overshoot the monthly cap by at most one call; the per-session
+cap bounds that overshoot.
+
+**Acceptance for the budget:**
+- [ ] A demo user is seeded with `$2`, a GitHub/email user with `$10`.
+- [ ] Usage is recorded from real model calls, not estimated from chat length.
+- [ ] Replaying the same model-call event does not double-count.
+- [ ] A user at the limit gets a clear error before a new turn starts.
+- [ ] The provider console shows the deployment cap ($2 demo / $10 standard).
+- [ ] The docs state which cost source is authoritative for the chosen provider.
 
 #### Step 5: Verify the limits end to end
 
@@ -617,22 +698,30 @@ chat session is not the same as a scan: deterministic scans make no LLM calls.
 - Real account analyzes repo A and repo B → allowed.
 - Spoofed `X-Forwarded-For` from an untrusted client does not change the bucket.
 - `eve-token` 61st request in an hour → 429.
-- Agent session over the cost cap stops with a clear message.
-- Provider budget is set and visible in the provider console.
+- Demo account reaches $2 in the current month → next turn is rejected with a clear
+  message.
+- GitHub/email account reaches $10 → next turn is rejected.
+- Replaying the same usage event does not increase the monthly total twice.
+- A new UTC month starts at zero while the prior month remains auditable.
+- Subagent model calls count against the same user budget.
+- Provider budget is set to $2 demo / $10 standard and visible in the provider console.
 
 **Acceptance:**
 - [ ] All login paths have an explicit rate limit.
 - [ ] Dev login is rate-limited and cannot analyze a second repository from one IP
       within the configured window. Verify this in local/dev or a staging instance;
       production keeps `RETRACT_DEV_LOGIN=0`.
+- [ ] Re-analyzing the same repository is allowed.
 - [ ] The IP used by the limiter is the browser IP behind Caddy + nginx, not the proxy.
 - [ ] Per-session LLM caps are configured; the cost and/or token axes the provider
       actually reports are verified on a live call.
-- [ ] A provider-level monthly budget is set.
-- [ ] Limits are documented in `docs/operations.md` and `docs/demo.md`.
+- [ ] Per-user monthly budgets are enforced ($2 demo, $10 GitHub/email).
+- [ ] A provider-level monthly budget is set to the deployment cap.
+- [ ] Limits and budgets are documented in `docs/operations.md` and `docs/demo.md`.
 
-**Effort:** 4–6 hours. **Risk:** the proxy/IP path is the subtle part; test it through
-the real Caddy + nginx stack, not only with `TestClient`.
+**Effort:** 8–12 hours. **Risk:** the proxy/IP path and the instrumentation-to-ledger
+plumbing are the subtle parts. Test the IP path through the real Caddy + nginx stack,
+and test usage accounting with replayed events, not only `TestClient`.
 
 ---
 
@@ -679,6 +768,11 @@ GitHub homepage, and the portfolio.
    - GitHub OAuth credentials.
    - SMTP URL and `RETRACT_MAIL_FROM`.
    - LLM provider settings and key.
+   - `RETRACT_DEMO_LLM_BUDGET_USD=2`, `RETRACT_USER_LLM_BUDGET_USD=10`,
+     `RETRACT_GLOBAL_LLM_BUDGET_USD=2` for a demo-only deployment (use `10` when it
+     serves real GitHub/email users).
+   - `RETRACT_LLM_INPUT_COST_PER_MTOK` / `OUTPUT_COST_PER_MTOK` if the provider does
+     not return cost metadata.
    - `RETRACT_LLM_HEADERS` if using opencode-go.
 7. `docker compose --env-file .env -f infra/docker-compose.prod.yml up -d --build --wait`.
 8. Run `scripts/smoke-prod.sh https://retract-demo.duckdns.org`.
@@ -720,8 +814,9 @@ with a score, a finding, the graph, agent chat, and an approval decision.
 **Design:**
 - Demo user: login `demo`, email `demo@retract.local` (or `demo@example.com`), verified,
   password from `RETRACT_DEMO_PASSWORD` (never committed). Hash it with
-  `app.security.hash_password`; set `email_verified=True` and `is_dev=False`. Do not
-  use the dev account: dev repos are shared and the account has different semantics.
+  `app.security.hash_password`; set `email_verified=True`, `is_dev=False`, and
+  `llm_monthly_budget_usd=2`. Do not use the dev account: dev repos are shared and the
+  account has different semantics.
 - Demo repositories: two public repos you own or have permission to feature. Prefer
   `krtk06/Chaty` and one well-known repo already in the benchmark; do not feature a
   third party’s weak score without context.
@@ -966,10 +1061,10 @@ first, then trim, and link to the moved text.
 **Why:** without a license, the code is “all rights reserved” by default. Companies,
 contributors, and some recruiters treat that as a blocker.
 
-**Recommendation:** MIT. It is the lowest-friction choice for a portfolio/dev tool and
-matches the project’s current stage. Apache-2.0 is better if you want an explicit
-patent grant and enterprise-friendly terms, but it adds a `NOTICE` obligation and more
-process than this project needs today.
+**Confirmed: MIT.** It is the lowest-friction choice for a portfolio/dev tool and
+matches the project’s current stage. Apache-2.0 would be better if you wanted an
+explicit patent grant and enterprise-friendly terms, but it adds a `NOTICE` obligation
+and more process than this project needs today.
 
 **Files:**
 - Create: `LICENSE` (MIT, copyright `2026 krtk06`)
@@ -1067,8 +1162,8 @@ agent cannot do and where the residual risks are.
      user).
 9. **Known limitations** — honest list: prompt injection can still mislead a reader;
    secrets may reach the model provider; analyzer parsers are attack surface; the
-   public demo is not for sensitive code; LLM cost is bounded per session and by a
-   provider budget, not yet by a per-user daily ledger.
+   public demo is not for sensitive code; LLM cost is bounded per session, per user per
+   month, and by a provider budget, but not yet by a real-time billing-grade ledger.
 10. **Dependency and disclosure policy** — Dependabot/CodeQL/Scorecard, pinned actions,
     coordinated disclosure.
 
@@ -1299,7 +1394,8 @@ Do not start P1 until all of these are true:
       reset works.
 - [ ] Dev login is rate-limited and limited to one repository per IP per 24h.
 - [ ] Email and GitHub login paths are rate-limited.
-- [ ] Per-session LLM caps and a provider monthly budget are set and verified.
+- [ ] Per-session LLM caps and per-user monthly budgets are set and verified:
+      **$2/month demo**, **$10/month GitHub/email**, plus a provider hard cap.
 - [ ] Three current screenshots are in `docs/assets/`.
 - [ ] README first screen passes the five-second test.
 - [ ] 2-minute video is published and embedded.
@@ -1561,8 +1657,8 @@ benchmark a cost dimension.
 - Tool failure/timeout rate.
 - Agent chat tokens and cost per session (scans themselves make no LLM calls by
   architecture — say that explicitly).
-- Optional P1 ledger: per-user/day input tokens, output tokens, and cost, so the P0
-  session cap + provider budget can become a real per-user quota.
+- Per-user monthly ledger (built in P0-1B): input tokens, output tokens, cost, budget,
+  remaining budget, and the share of users near their cap.
 - Cache hit rate for dependency metadata (add a Redis cache for PyPI/npm/OSV lookups;
   TTL 24h; counters). If no cache exists, report “N/A” rather than inventing a number.
 - Cost formula: `compute_seconds × instance_hourly_rate + LLM tokens × price`.
@@ -1720,8 +1816,8 @@ project is maintained.
 **Why:** a trace screenshot is proof the system is operated, not just built. It also
 helps debug real analyses.
 
-**Recommendation:** Sentry for speed. OpenTelemetry is more portable but needs a
-collector/backend; that is a P2 concern.
+**Confirmed: Sentry.** OpenTelemetry is more portable but needs a collector/backend;
+that is a P2 concern.
 
 **Files:**
 - Create: `backend/app/observability.py`
@@ -1929,7 +2025,7 @@ they require installation tokens, webhooks, and a multi-tenant model.
 | Paperwork | One `LICENSE` file. | `LICENSE`, a `NOTICE` file if one exists, and a note when you change files. |
 | Best for | A portfolio project that wants maximum adoption with minimum friction. | A company-facing tool where patent comfort matters. |
 
-**Recommendation: MIT now.** It is the shortest path to “safe to use” for a recruiter,
+**Confirmed: MIT.** It is the shortest path to “safe to use” for a recruiter,
 contributor, or small team. You can relicense before 1.0 if a company adoption story
 requires Apache-2.0; after outside contributions, relicensing needs contributor
 permission.
@@ -1944,7 +2040,7 @@ permission.
 | Cost | Free tier, then paid. | Infrastructure and maintenance. |
 | Best for | Shipping a trace screenshot and real error visibility now. | A self-hosted or enterprise deployment later. |
 
-**Recommendation: Sentry for P1.** It gives the trace screenshot and production error
+**Confirmed: Sentry for P1.** It gives the trace screenshot and production error
 visibility in an afternoon. Add OpenTelemetry instrumentation later if self-hosting or
 vendor neutrality becomes a requirement; the two can coexist.
 
@@ -1954,9 +2050,10 @@ vendor neutrality becomes a requirement; the two can coexist.
 | --- | --- | --- |
 | License | **MIT** | Lowest friction; see §7.1 |
 | Hostname | **`retract-demo.duckdns.org`** | Free, matches the existing guide |
-| Demo access | **Public credentials + nightly reset + dev-login limits + provider budget** | Meets the “recruiter can try it” goal while bounding abuse |
-| Dev login | **All normal limits + 5 logins/hour/IP + one repository per IP per 24h** | Prevents the bypass from becoming an open analysis service |
-| Email/GitHub login | **Existing limits + GitHub login/callback limits + LLM caps** | Bounds credential attacks and model spend |
+| Demo access | **Public credentials + nightly reset + dev-login limits + $2/month LLM budget** | Meets the “recruiter can try it” goal while bounding abuse |
+| Dev login | **All normal limits + 5 logins/hour/IP + one repository per IP per 24h; same repo may be re-analyzed** | Confirmed; prevents the bypass from becoming an open analysis service |
+| Email/GitHub login | **Existing limits + GitHub login/callback limits + $10/month LLM budget per account** | Bounds credential attacks and model spend |
+| LLM budgets | **$2/month demo and dev accounts; $10/month GitHub/email accounts; provider hard cap at the deployment total** | Confirmed numbers; enforce the lower of user and global caps |
 | LLM path for v0.1.0 | **Verify/fix opencode-go** | Confirmed; fall back to gateway only if the fix cannot land |
 | Minimal API timing | **Move into P1 before the Action** | Confirmed; the Action depends on it |
 | Benchmark leaderboard | **Markdown + SVG first** | Credible static report; interactive Pages later |
@@ -1964,6 +2061,11 @@ vendor neutrality becomes a requirement; the two can coexist.
 | Observability | **Sentry** | Fastest path to a trace; OTel later |
 | Branch protection | **Ruleset requiring CI after P1-7** | Improves Scorecard and protects `main`; admin bypass initially |
 | Blog home | **Own site, canonical link from dev.to** | SEO and ownership |
+
+**Budget interpretation:** the plan enforces a per-account monthly budget ($2 demo/dev,
+$10 GitHub/email) **and** a deployment global cap. If you meant only deployment totals
+($2 for the demo instance, $10 for the production instance), the per-user ledger can be
+dropped, saving 8–12 hours; the provider caps alone are then sufficient.
 
 If any decision changes, update the affected tasks before starting them.
 
@@ -2019,7 +2121,8 @@ This is aggressive but honest. If P0 slips, move the calendar, not the quality b
 - Demo: ≥2 completed analyses (one published, one pending approval), 1 verified
   finding, 1 agent answer.
 - Abuse controls: dev login 5/hour/IP, one repo/IP/24h, email/GitHub login limits,
-  per-session LLM cap, provider monthly budget.
+  per-session LLM caps, per-user monthly budgets ($2 demo, $10 GitHub/email), and a
+  provider hard cap.
 - README: first screen contains pitch, demo, video, 3 screenshots, benchmark.
 - Release: `v0.1.0` with multi-arch images.
 - Repo: homepage, 10+ topics, social preview, license, security policy.
