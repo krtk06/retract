@@ -429,36 +429,37 @@ environment does not have — public-CVE commit pairs, or a provider credential.
   signing secret, since the worker service was never given either secret. It receives
   both now.
 
-**Open limitation — the model is chosen at image build time**
+**Resolved — the model is a build-time input, and the key is not**
 
   Driving a live turn through the running stack (session created, message accepted,
   SSE stream flowing through nginx, model call attempted) showed everything wired
   correctly: the call reached the AI Gateway and failed only with "AI Gateway rejected
-  the provided API key". So a real key is all that stands between the current image and
-  live answers.
+  the provided API key". So a real key is all that stood between that image and live
+  answers.
 
-  It also exposed that `RETRACT_LLM_PROVIDER` and `RETRACT_MODEL` do nothing in the
+  It also exposed that `RETRACT_LLM_PROVIDER` and `RETRACT_MODEL` did nothing in the
   Docker image. eve compiles the agent definition — including the resolved model —
   into `.output/.eve/compile/compiled-agent-manifest.json` during `eve build`, which the
-  image runs before any `RETRACT_*` variable exists. The manifest therefore froze the
-  provider to its `?? "gateway"` default and the model to `anthropic/claude-sonnet-4.5`.
-  Verified: a container started with `RETRACT_LLM_PROVIDER=openai` and a valid
-  `RETRACT_API_KEY` still called the AI Gateway, and the manifest contained no
-  occurrence of `openai`. The `NODE_ENV=production` fixture-model guard is inert in the
-  image for the same reason — it holds for `eve start` on a host, not in the container.
+  image runs before any runtime `RETRACT_*` variable exists. The manifest froze the
+  provider to its `?? "gateway"` default and the model to
+  `anthropic/claude-sonnet-4.5`; a container started with
+  `RETRACT_LLM_PROVIDER=openai` still called the gateway.
 
-  Moving the build to container start was tried and does not work: `eve start` refuses to
-  boot without existing output, and building there fails with `EXDEV: cross-device link
-  not permitted` because eve renames `.eve/builds/<hash>/output` onto `/srv/agent/.output`
-  while `agent_state` is mounted at `.eve` — two filesystems.
+  The fix is to make provider, model, base URL, API mode, and the non-secret headers
+  **build args**, compiled into the image deliberately, and to keep the credential
+  runtime-only. The build receives a non-secret placeholder only so
+  `resolveCredential("openai")` can construct the client; eve does not embed it.
+  `scripts/verify-agent-build.sh` fails if the placeholder appears in `.output`, and a
+  live container built from the opencode-go arguments used its runtime key. Changing
+  the provider or model therefore requires rebuilding the agent, which is documented
+  in `docs/operations.md` and `docs/deploy-oracle-cloud.md`.
 
-  The corollary matters for security: a provider that needs a key (`openai`) would have
-  that key baked into the manifest at build time, so the image must never be built with
-  one. Leaving this open deliberately — the options are (a) find a supported way to
-  relocate eve's build output so it is same-filesystem and build at start, (b) make
-  provider and model build args and ship a provider-specific image, keeping keys
-  runtime-only, or (c) drop the `agent_state` volume so the build can happen at start.
-  Each trades cold-start time, image reusability, or durable agent state.
+  Building at container start was tried and does not work: `eve start` refuses to boot
+  without existing output, and building there fails with `EXDEV: cross-device link not
+  permitted` because eve renames `.eve/builds/<hash>/output` onto
+  `/srv/agent/.output` while `agent_state` is mounted at `.eve` — two filesystems. The
+  build-arg approach keeps durable agent state and a reusable image; it trades away
+  runtime model switching, which a single-purpose deployment does not need.
 
 **Browser review (agent-browser)**
 - Done for the migration: chat tab, an approval, and a cancellation, plus a live

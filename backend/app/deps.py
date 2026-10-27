@@ -15,6 +15,26 @@ AGENT_TOKEN_HEADER = "X-Agent-Token"
 AGENT_USER_HEADER = "X-Agent-User"
 
 
+def get_agent_service(
+    request: Request,
+) -> None:
+    """Authenticate the eve agent itself, with no browser fallback.
+
+    Budget and usage endpoints exist for the agent, not for people. Accepting a
+    session cookie here would let any signed-in browser write or read another
+    account's ledger, so this dependency checks only the shared service header and
+    fails closed when the secret is unset.
+    """
+    settings = get_settings()
+    presented = request.headers.get(AGENT_TOKEN_HEADER, "")
+    # Bytes, for the same reason as _agent_user: compare_digest raises on non-ASCII
+    # str, which would turn a malformed unauthenticated header into a 500.
+    if not settings.agent_token or not secrets.compare_digest(
+        presented.encode("utf-8"), settings.agent_token.encode("utf-8")
+    ):
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, detail="Invalid agent token")
+
+
 def get_current_user(request: Request, db: Session = Depends(get_db)) -> User:
     """Authenticate a browser session, or the eve agent's service credential.
 

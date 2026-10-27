@@ -81,12 +81,72 @@ class User(Base):
     # the one kind of user that shares the repository pool — everyone else's analyses
     # are private (see Repository.is_shared).
     is_dev: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    # Per-account monthly LLM budget in USD. Demo/dev accounts are created with the
+    # demo value (2); GitHub/email accounts default to the standard value (10). The
+    # deployment-wide ceiling is separate and enforced across all accounts.
+    llm_monthly_budget_usd: Mapped[float] = mapped_column(Float, default=10.0, nullable=False)
     created_at: Mapped[datetime] = mapped_column(default=utcnow)
 
     repositories: Mapped[list["Repository"]] = relationship(back_populates="added_by_user")
     repository_access: Mapped[list["UserRepository"]] = relationship(
         back_populates="user", cascade="all, delete-orphan"
     )
+
+
+class AgentSession(Base):
+    """Maps an eve session to the account whose budget it spends.
+
+    The agent is a separate service and its session ids are not user ids. The
+    channel maps every turn (including subagent child sessions) here before any
+    model call, and the usage intake resolves the user from this row. A session's
+    owner can change if a different caller continues it, so the mapping is upserted.
+    """
+
+    __tablename__ = "agent_sessions"
+
+    session_id: Mapped[str] = mapped_column(String(200), primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True, nullable=False)
+    first_seen_at: Mapped[datetime] = mapped_column(default=utcnow, nullable=False)
+    last_seen_at: Mapped[datetime] = mapped_column(default=utcnow, onupdate=utcnow, nullable=False)
+
+
+class AgentUsage(Base):
+    """The monthly aggregate that the budget check reads.
+
+    One row per (user, UTC ``YYYY-MM``). Tokens are recorded even when the provider
+    cannot report dollars, so the token-budget fallback remains enforceable.
+    """
+
+    __tablename__ = "agent_usage"
+    __table_args__ = (UniqueConstraint("user_id", "period", name="uq_agent_usage_user_period"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True, nullable=False)
+    period: Mapped[str] = mapped_column(String(7), index=True, nullable=False)
+    input_tokens: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    output_tokens: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    cost_usd: Mapped[float] = mapped_column(Float, default=0.0, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(default=utcnow, onupdate=utcnow, nullable=False)
+
+
+class AgentUsageEvent(Base):
+    """One audited model call, and the idempotency guard for replayed events.
+
+    The primary key is the instrumentation event's idempotency key, so a retry or a
+    replayed stream cannot charge the monthly aggregate twice. Keeping the row also
+    preserves the per-call audit trail after the aggregate is collapsed.
+    """
+
+    __tablename__ = "agent_usage_events"
+
+    idempotency_key: Mapped[str] = mapped_column(String(200), primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True, nullable=False)
+    session_id: Mapped[str] = mapped_column(String(200), index=True, nullable=False)
+    model: Mapped[str] = mapped_column(String(200), default="unknown", nullable=False)
+    input_tokens: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    output_tokens: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    cost_usd: Mapped[float] = mapped_column(Float, default=0.0, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(default=utcnow, nullable=False)
 
 
 class UserRepository(Base):

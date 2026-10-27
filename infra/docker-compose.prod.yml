@@ -64,8 +64,24 @@ services:
       RETRACT_GITHUB_CLIENT_ID: ${RETRACT_GITHUB_CLIENT_ID:-}
       RETRACT_GITHUB_CLIENT_SECRET: ${RETRACT_GITHUB_CLIENT_SECRET:-}
       RETRACT_GITHUB_OAUTH_REDIRECT_URI: ${PUBLIC_URL:-http://localhost}/api/auth/github/callback
+      # GitHub account linking sends a verification link; without SMTP sign-in still
+      # works but linking cannot complete. The worker does not send mail, so this
+      # stays on the API only.
+      RETRACT_SMTP_URL: ${RETRACT_SMTP_URL:-}
+      RETRACT_MAIL_FROM: ${RETRACT_MAIL_FROM:-Retract <no-reply@example.com>}
+      # Client-IP resolution. The API is not published; nginx is its only peer, and
+      # the dedicated network below makes its subnet knowable. Uvicorn and the
+      # application use the same list, so a forwarded header is trusted only from a
+      # real proxy. Never use `*` here or on a publicly reachable API.
+      RETRACT_TRUSTED_PROXY_CIDRS: ${RETRACT_TRUSTED_PROXY_CIDRS:-172.28.0.0/16}
+      # LLM budget ledger. The provider key's own budget is the final hard stop.
+      RETRACT_DEMO_LLM_BUDGET_USD: ${RETRACT_DEMO_LLM_BUDGET_USD:-2}
+      RETRACT_USER_LLM_BUDGET_USD: ${RETRACT_USER_LLM_BUDGET_USD:-10}
+      RETRACT_GLOBAL_LLM_BUDGET_USD: ${RETRACT_GLOBAL_LLM_BUDGET_USD:-2}
+      RETRACT_LLM_MONTHLY_TOKEN_BUDGET: ${RETRACT_LLM_MONTHLY_TOKEN_BUDGET:-}
     command: >
-      sh -c "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000 --proxy-headers"
+      sh -c "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000
+      --proxy-headers --forwarded-allow-ips=${RETRACT_TRUSTED_PROXY_CIDRS:-172.28.0.0/16}"
     volumes:
       - repo_data:/data
     depends_on:
@@ -134,7 +150,23 @@ services:
         condition: service_healthy
 
   retract-agent:
-    build: ../agent
+    build:
+      context: ../agent
+      # The agent manifest is compiled, so provider, model, base URL, API mode, and
+      # non-secret headers are build inputs. Changing them requires a rebuild:
+      #   docker compose --env-file .env -f infra/docker-compose.prod.yml build retract-agent
+      # The API key is not a build arg; the script supplies a non-secret placeholder
+      # at build time and eve does not embed it (scripts/verify-agent-build.sh checks
+      # the compiled output for credential leakage).
+      args:
+        RETRACT_LLM_PROVIDER: ${RETRACT_LLM_PROVIDER:-gateway}
+        RETRACT_MODEL: ${RETRACT_MODEL:-anthropic/claude-sonnet-4.5}
+        RETRACT_LLM_BASE_URL: ${RETRACT_LLM_BASE_URL:-}
+        RETRACT_LLM_API_MODE: ${RETRACT_LLM_API_MODE:-chat}
+        RETRACT_LLM_HEADERS: ${RETRACT_LLM_HEADERS:-}
+        RETRACT_AGENT_MAX_INPUT_TOKENS: ${RETRACT_AGENT_MAX_INPUT_TOKENS:-200000}
+        RETRACT_AGENT_MAX_OUTPUT_TOKENS: ${RETRACT_AGENT_MAX_OUTPUT_TOKENS:-50000}
+        RETRACT_AGENT_MAX_COST_USD: ${RETRACT_AGENT_MAX_COST_USD:-0.50}
     restart: unless-stopped
     environment:
       # Not cosmetic: eve.ts fails the auth walk closed on NODE_ENV=production when
@@ -151,7 +183,21 @@ services:
       # are safe to pass through and safe to leave blank.
       RETRACT_LLM_BASE_URL: ${RETRACT_LLM_BASE_URL:-}
       RETRACT_LLM_API_MODE: ${RETRACT_LLM_API_MODE:-chat}
+      # opencode-go rejects requests without `x-opencode-session`; this was missing
+      # from this file, so the compiled image could reach the endpoint only through
+      # its build-time copy, never through `.env` at run time.
+      RETRACT_LLM_HEADERS: ${RETRACT_LLM_HEADERS:-}
       RETRACT_LLM_API_KEY: ${RETRACT_LLM_API_KEY:-}
+      # Fallback cost source for providers whose SDK does not expose a cost field.
+      # The agent prices each completed model call from these.
+      RETRACT_LLM_INPUT_COST_PER_MTOK: ${RETRACT_LLM_INPUT_COST_PER_MTOK:-}
+      RETRACT_LLM_OUTPUT_COST_PER_MTOK: ${RETRACT_LLM_OUTPUT_COST_PER_MTOK:-}
+      # Per-session caps are also build inputs because eve compiles the agent
+      # definition; the runtime values must match or the manifest and live limits
+      # disagree. Rebuild the agent when changing them.
+      RETRACT_AGENT_MAX_INPUT_TOKENS: ${RETRACT_AGENT_MAX_INPUT_TOKENS:-200000}
+      RETRACT_AGENT_MAX_OUTPUT_TOKENS: ${RETRACT_AGENT_MAX_OUTPUT_TOKENS:-50000}
+      RETRACT_AGENT_MAX_COST_USD: ${RETRACT_AGENT_MAX_COST_USD:-0.50}
       # Only read when RETRACT_LLM_PROVIDER=openai, which fails fast without it.
       # Not previously passed through, so choosing `openai` here could not work at all.
       RETRACT_API_KEY: ${RETRACT_API_KEY:-}
@@ -201,3 +247,12 @@ volumes:
   postgres_data:
   repo_data:
   agent_state:
+
+networks:
+  # A fixed subnet so the API can trust forwarded headers from exactly this
+  # network and nothing else. Without it Docker picks an arbitrary private range
+  # and `--forwarded-allow-ips` would have to trust every private address.
+  default:
+    ipam:
+      config:
+        - subnet: 172.28.0.0/16

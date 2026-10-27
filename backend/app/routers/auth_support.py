@@ -265,6 +265,7 @@ def _resolve_github_account(db: Session, github_id: int, login: str, email: str 
         github_id=github_id,
         login=_unique_login(db, login),
         email=None if email_taken else email,
+        llm_monthly_budget_usd=get_settings().user_llm_budget_usd,
     )
     db.add(user)
     db.commit()

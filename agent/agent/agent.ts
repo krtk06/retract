@@ -10,6 +10,7 @@ import {
   resolveModelId,
 } from "./lib/credentials";
 import { fixtureModel } from "./lib/fixture-model";
+import { resolveSessionLimits } from "./lib/limits";
 
 /**
  * Model selection, driven entirely by the environment.
@@ -102,8 +103,5 @@ export default defineAgent({
   description:
     "Repository intelligence analyst for AI Engineering Intelligence: answers questions and runs deep reviews over a repository's symbol graph, deterministic findings, and trust layer.",
   reasoning: "medium",
-  limits: {
-    maxInputTokensPerSession: 2_000_000,
-    maxOutputTokensPerSession: 256_000,
-  },
+  limits: resolveSessionLimits(),
 });

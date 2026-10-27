@@ -18,5 +18,8 @@ export const symbolName = z
  */
 export function actingAs(ctx: ToolContext): string | undefined {
   const principal = ctx.session.auth.current ?? ctx.session.auth.initiator;
-  return principal?.principalId;
+  // The backend expects the JWT subject (the numeric user id). eve's principal id
+  // is prefixed with the issuer (`ai-intel:123`), which is not a login and would
+  // fail lookup, so it must not be sent as the acting-user header.
+  return principal?.subject;
 }

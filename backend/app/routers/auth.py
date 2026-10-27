@@ -122,6 +122,9 @@ def register(
         email=payload.email,
         login=_unique_login(db, payload.email.split("@", 1)[0]),
         password_hash=hash_password(payload.password),
+        # The standard account budget is a runtime setting; the model default is only
+        # a safety net for rows created outside this path.
+        llm_monthly_budget_usd=get_settings().user_llm_budget_usd,
     )
     db.add(user)
     try:
@@ -170,6 +173,7 @@ def login(
 
 @router.get("/github/login")
 def github_login(request: Request) -> RedirectResponse:
+    rate_limit.enforce(request, "github-login", limit=20, window_seconds=900)
     settings = get_settings()
     if not settings.github_client_id:
         return _auth_failure(request, AUTH_ERROR_NOT_CONFIGURED)
@@ -197,6 +201,7 @@ def github_callback(
     state: str,
     db: Session = Depends(get_db),
 ) -> RedirectResponse:
+    rate_limit.enforce(request, "github-callback", limit=20, window_seconds=900)
     settings = get_settings()
     store = _state_store()
     return_to = store.get(f"oauth_state:{state}")
@@ -250,6 +255,7 @@ def github_callback(
 
 @router.get("/dev/login")
 def dev_login(
+    request: Request,
     login: str = Query(default="dev", min_length=1, max_length=64),
     db: Session = Depends(get_db),
 ) -> Response:
@@ -257,15 +263,33 @@ def dev_login(
     settings = get_settings()
     if not settings.dev_login:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Not found")
+    # The flag enables the route; it does not make the route free. Five logins per
+    # hour per IP is enough for a developer switching accounts and stops a public
+    # deployment from minting unlimited dev accounts even if the flag is left on by
+    # mistake (the production guard independently refuses that).
+    rate_limit.enforce(request, "dev-login", limit=5, window_seconds=3600)
 
     user = db.scalar(select(User).where(User.login == login))
     if user is None:
         # Marked as a development account: these are the only users that share the
-        # repository pool (see Repository.is_shared).
-        user = User(github_id=None, login=login, is_dev=True)
+        # repository pool (see Repository.is_shared). They get the demo LLM budget,
+        # not the standard account budget — a bypass account is the cheapest one to
+        # create and must be the cheapest to run.
+        user = User(
+            github_id=None,
+            login=login,
+            is_dev=True,
+            llm_monthly_budget_usd=settings.demo_llm_budget_usd,
+        )
         db.add(user)
         db.commit()
         db.refresh(user)
+    elif user.is_dev and user.llm_monthly_budget_usd != settings.demo_llm_budget_usd:
+        # Accounts created before the budget column existed carry the standard
+        # default. Follow the configured demo amount on the next sign-in, without
+        # touching what they have already spent this month.
+        user.llm_monthly_budget_usd = settings.demo_llm_budget_usd
+        db.commit()
 
     response = JSONResponse({"ok": True, "user": UserOut.model_validate(user).model_dump()})
     _set_session_cookie(response, user)
@@ -316,6 +340,7 @@ def verify_email(
     indistinguishable to a link-follower, and separating them would let someone
     probe which tokens exist.
     """
+    rate_limit.enforce(request, "verify-email", limit=30, window_seconds=3600)
     settings = get_settings()
     digest = hashlib.sha256(token.encode()).hexdigest()
     row = db.scalar(
@@ -363,6 +388,12 @@ def resend_verification(
 
 
 @router.post("/eve-token", response_model=EveTokenOut)
-def eve_token(user: User = Depends(get_current_user)) -> EveTokenOut:
-    """Exchange the authenticated session for a short-lived eve agent token."""
+def eve_token(request: Request, user: User = Depends(get_current_user)) -> EveTokenOut:
+    """Exchange the authenticated session for a short-lived eve agent token.
+
+    The frontend refreshes this roughly every five minutes, so the bucket is an
+    hourly token-mint budget, not a session count: a 10/day limit would lock a
+    normal user out after about fifty minutes.
+    """
+    rate_limit.enforce(request, "eve-token", limit=60, window_seconds=3600, who=str(user.id))
     return EveTokenOut(token=create_eve_token(user.id), expires_in=EVE_TOKEN_TTL_SECONDS)
