@@ -56,6 +56,46 @@ instead also works.
   `/eve/v1/*` (the eve React SDK's base path). There is no UI at `/eve`; that path
   belongs to the API prefix only.
 
+### Demo locally (no hosting)
+
+A public deployment is optional. For a portfolio or review, run the dev stack and
+record it; that avoids DNS, OAuth, a TLS proxy, and a provider budget.
+
+```bash
+cp .env.example .env
+# set RETRACT_AGENT_TOKEN, RETRACT_JWT_SECRET, RETRACT_DEV_LOGIN=1,
+# and the LLM provider/key for the agent
+docker compose --env-file .env -f infra/docker-compose.yml up --build
+```
+
+Open http://localhost:5173 and choose **Dev login**. If 5173 or 8000 is already
+taken by another project, override the host ports:
+
+```bash
+RETRACT_FRONTEND_PORT=5176 RETRACT_API_PORT=8010 \
+  docker compose --env-file .env -f infra/docker-compose.yml up --build
+```
+
+Then open http://localhost:5176. A 2–3 minute walkthrough:
+
+1. Add `https://github.com/urllib3/urllib3` and start the analysis.
+2. Show the score and the per-pillar breakdown.
+3. Open a finding; show the cited file/line and the verification state.
+4. Open the Fixes tab and show the remediation plan.
+5. Ask the agent a question; show the cited answer.
+6. If you show an approval, keep it brief.
+
+The deterministic analysis runs without the LLM; the agent needs the provider key.
+The dev stack publishes Postgres and Redis on localhost for development. Do not use
+it as a public deployment.
+
+The storyboard, recording checklist, and screenshot list are in
+[`docs/demo.md`](docs/demo.md).
+
+![Retract score and pillar breakdown](docs/demo/03-overview.png)
+
+![A verified finding with its cited source](docs/demo/05-finding.png)
+
 ### Production
 
 ```bash
@@ -68,11 +108,11 @@ tier, a free DuckDNS name, and Caddy for TLS — see
 firewalls Oracle puts in front of a new instance, which is where a first deployment
 most often stalls.
 
-with `POSTGRES_USER`, `POSTGRES_PASSWORD`, `RETRACT_JWT_SECRET` and
-`RETRACT_AGENT_TOKEN` in `.env` (see `.env.example`). They are deliberately
-required with no defaults: refusing to start beats starting an agent that can
-reach the API unauthenticated. Note that *every* compose subcommand interpolates
-the file, so `ps` and `down` need those variables too.
+The production stack requires `POSTGRES_USER`, `POSTGRES_PASSWORD`,
+`RETRACT_JWT_SECRET` and `RETRACT_AGENT_TOKEN` in `.env` (see `.env.example`). They
+are deliberately required with no defaults: refusing to start beats starting an
+agent that can reach the API unauthenticated. Note that *every* compose subcommand
+interpolates the file, so `ps` and `down` need those variables too.
 
 The LLM credential is *not* in that list, because the agent validates it itself,
 per provider: `openai` reads `RETRACT_API_KEY` and `gateway` reads
