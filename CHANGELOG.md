@@ -25,6 +25,8 @@ All notable changes to this project are documented here. The format is
 - Production startup guards for secrets, cookies, CORS, and dev login.
 - Private repositories per user, with verified-email account linking.
 - Agent service authentication and acting-user scoping.
+- Agent instructions treat repository content, dependency metadata, and tool output
+  as untrusted data rather than instructions.
 - Rate limits on registration, login, GitHub OAuth, dev login, verification,
   eve-token minting, and analysis submission.
 - Per-account monthly LLM budgets, a deployment-wide ceiling, and per-session caps.
