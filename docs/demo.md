@@ -8,6 +8,7 @@ human approval, findings and fixes, the agent, privacy, metered spend, and deplo
 
 - **Watch:** [retract-film.mp4](https://github.com/krtk06/retract/releases/download/demo-film/retract-film.mp4)
 - **Captions:** [retract-film.srt](https://github.com/krtk06/retract/releases/download/demo-film/retract-film.srt)
+- **Source:** [retract-film-source.tar.gz](https://github.com/krtk06/retract/releases/download/demo-film/retract-film-source.tar.gz)
 - **Release:** [demo-film](https://github.com/krtk06/retract/releases/tag/demo-film)
 - **Format:** 1920×1080, 30 fps, H.264 High / AAC-LC, 3:07
 
