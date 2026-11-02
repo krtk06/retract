@@ -1,8 +1,37 @@
-# Recording the Retract demo
+# The Retract demo film
 
-A public deployment is optional. The fastest way to show the project is a 2–3
-minute recording of the local stack, plus five or six screenshots. It avoids DNS,
-OAuth, TLS, a cloud firewall, and a production LLM budget.
+[![Retract product film](retract-film-poster.png)](https://github.com/krtk06/retract/releases/download/demo-film/retract-film.mp4)
+
+The published film is the primary demo: a 3:07 narrated walkthrough of the problem,
+the six-pillar score, the deterministic analyzers, the symbol graph, verification and
+human approval, findings and fixes, the agent, privacy, metered spend, and deployment.
+
+- **Watch:** [retract-film.mp4](https://github.com/krtk06/retract/releases/download/demo-film/retract-film.mp4)
+- **Captions:** [retract-film.srt](https://github.com/krtk06/retract/releases/download/demo-film/retract-film.srt)
+- **Release:** [demo-film](https://github.com/krtk06/retract/releases/tag/demo-film)
+- **Format:** 1920×1080, 30 fps, H.264 High / AAC-LC, 3:07
+
+## Chapters
+
+| Time | Chapter |
+| --- | --- |
+| 0:00 | The inherited repository |
+| 0:25 | The six-pillar score |
+| 0:39 | Measured is not the same as clean |
+| 0:48 | Deterministic analysis |
+| 1:02 | The symbol graph |
+| 1:13 | Verification and human approval |
+| 1:35 | Findings and the fix plan |
+| 2:02 | History and the trust panel |
+| 2:10 | The eve agent |
+| 2:17 | Typed tools and specialist subagents |
+| 2:30 | Privacy and identity |
+| 2:40 | The stack and metered spend |
+| 2:52 | Run it yourself |
+| 2:59 | Close |
+
+The rest of this page is the production guide used to make the film. It also works
+for recording a shorter walkthrough of your own.
 
 ## What the demo should prove
 

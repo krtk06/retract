@@ -43,3 +43,8 @@ docs/reviews/*.har
 # (DESIGN.md, .impeccable/design.json, surface briefs) does ship.
 .impeccable/review/
 .impeccable/questions/
+
+# Large local media. The film and its captions/poster are published as GitHub
+# release assets; the production sources and audio stems stay local.
+docs/demo/*.mp4
+video/

@@ -11,6 +11,15 @@ store, no embedding retrieval. A verification layer re-checks every agent claim
 before it counts, and high-severity claims wait for a human. See `docs/RESEARCH.md`
 for the research basis and `implementation.md` for the build plan.
 
+## Demo
+
+[![Retract product film](docs/demo/retract-film-poster.png)](https://github.com/krtk06/retract/releases/download/demo-film/retract-film.mp4)
+
+A three-minute narrated walkthrough of the score, verified findings, fix plan, and
+agent — [watch the film](https://github.com/krtk06/retract/releases/download/demo-film/retract-film.mp4)
+or read the [captions](https://github.com/krtk06/retract/releases/download/demo-film/retract-film.srt).
+Prefer to run it yourself? See [Demo locally](#demo-locally-no-hosting).
+
 ## Architecture
 
 ```text
@@ -58,6 +67,7 @@ instead also works.
 
 ### Demo locally (no hosting)
 
+The recorded version is the [three-minute film](https://github.com/krtk06/retract/releases/download/demo-film/retract-film.mp4).
 A public deployment is optional. For a portfolio or review, run the dev stack and
 record it; that avoids DNS, OAuth, a TLS proxy, and a provider budget.
 
