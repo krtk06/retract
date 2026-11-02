@@ -97,8 +97,8 @@ reveal secrets.
   reduce the impact but do not eliminate it.
 - Secrets may reach the LLM provider until redaction lands.
 - Analyzer parsers are attack surface.
-- The public demo is a sandbox for public repositories, not for private or sensitive
-  code.
+- The public demo, when one is deployed, is a sandbox for public repositories,
+  not for private or sensitive code.
 - LLM spend is bounded per session, per account per month, and by the provider budget,
   but the ledger is not a billing-grade real-time meter.
 
