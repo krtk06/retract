@@ -6,6 +6,7 @@ build-backend = "setuptools.build_meta"
 name = "retract-backend"
 version = "0.1.0"
 description = "Retract — backend"
+license = { text = "MIT" }
 requires-python = ">=3.12"
 dependencies = [
     "fastapi>=0.115,<1.0",

@@ -1,5 +1,7 @@
 # Retract
 
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+
 Give it a GitHub repository — get back a **Repository Health Score** with verified,
 cited findings across code quality, security, testing, documentation, dependencies,
 and architecture.
@@ -19,6 +21,9 @@ A three-minute narrated walkthrough of the score, verified findings, fix plan, a
 agent — [watch the film](https://github.com/krtk06/retract/releases/download/demo-film/retract-film.mp4)
 or read the [captions](https://github.com/krtk06/retract/releases/download/demo-film/retract-film.srt).
 Prefer to run it yourself? See [Demo locally](#demo-locally-no-hosting).
+
+Benchmark: **100% recall / 91% deduplicated precision** on the fixture suite —
+[details](#benchmark).
 
 ## Architecture
 
@@ -440,7 +445,7 @@ RETRACT_LLM_PROVIDER=openai \
 RETRACT_LLM_BASE_URL=https://opencode.ai/zen/go/v1 \
 RETRACT_LLM_API_MODE=chat \
 RETRACT_LLM_API_KEY=... \
-RETRACT_MODEL=longcat-2.5-preview-free \
+RETRACT_MODEL=deepseek-v4.1-flash \
 npm run eval:live -- quality
 
 # or via the Vercel AI Gateway
@@ -467,3 +472,14 @@ Set `RETRACT_JUDGE_MODEL` if the judge should use the same provider as the agent
 - `infra/` — Docker Compose services
 - `benchmark/` — evaluation repos + ground truth
 - `docs/` — research notes, architecture decisions, per-phase review logs
+
+## Security
+
+Report vulnerabilities through GitHub's private advisory form; the policy and the
+trust model are in [`SECURITY.md`](SECURITY.md). In short: repository content is
+untrusted, the agent cannot run host code or read another account's repository, and
+high-severity claims require a human approval.
+
+## License
+
+MIT — see [`LICENSE`](LICENSE).
