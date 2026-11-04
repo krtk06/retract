@@ -34,6 +34,12 @@ human approval, findings and fixes, the agent, privacy, metered spend, and deplo
 The rest of this page is the production guide used to make the film. It also works
 for recording a shorter walkthrough of your own.
 
+## Scope
+
+The demo is the published film and the local Docker stack. There is no hosted demo
+and no YouTube upload by choice; the SRT is distributed with the release and linked
+from the portfolio. The film is 3:07 — the original 2-minute cut target is superseded.
+
 ## What the demo should prove
 
 Show the product, not the infrastructure:

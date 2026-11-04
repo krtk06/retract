@@ -3,6 +3,12 @@
 > **Execution note:** implement one task at a time, in order. Do not start P1 until
 > the P0 gate is green. Do not add analyzers or product features until the P0 gate is
 > green. Checkboxes are for tracking; each task ends with a verifiable check.
+>
+> **Scope update — 2026-11-04:** the demo deliverable is the published 3:07 product
+> film plus the local Docker stack. A public HTTPS deployment and a YouTube/Loom
+> upload were intentionally dropped. The `demo-film` GitHub release carries the film,
+> SRT, poster, and source archive. The P0 gate items for a live URL and a 2-minute
+> YouTube cut are superseded; the film is embedded in the README and the portfolio.
 
 **Goal:** Turn Retract from a well-engineered repository into a legible, deployable,
 provable product: a live HTTPS demo, a two-minute proof video, a README that leads
