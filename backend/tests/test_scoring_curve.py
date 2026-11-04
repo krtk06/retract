@@ -15,10 +15,12 @@ from sqlalchemy.orm import Session
 from app.analysis_engine.scoring import (
     COUNT_HALF_SCORE_PENALTY,
     HALF_SCORE_DENSITY,
+    PILLARS,
     WORST_PILLAR_HEADROOM,
     _pillar_score,
     _pillar_score_by_count,
     compute_score,
+    measured_from_tool_results,
 )
 from app.db import get_session_factory
 from app.models import Analysis, FindingStatus, Repository, Severity, User
@@ -97,6 +99,41 @@ def test_clean_repo_scores_full(make_analysis) -> None:
         assert all(p["score"] == 100 for p in score["pillars"].values())
     finally:
         session.close()
+
+
+def test_measured_is_reported_independently_of_the_finding_count(make_analysis) -> None:
+    """A clean analyzer is measured; a missing analyzer is not.
+
+    The old payload made zero findings mean "not measured", so a testing run that
+    checked every package and found nothing was indistinguishable from a tool that
+    never reported. The two states now travel separately.
+    """
+    session = get_session_factory()()
+    try:
+        analysis_id = make_analysis(5000)
+        measured = {pillar: False for pillar in PILLARS}
+        measured["testing"] = True
+        score = compute_score(session, analysis_id, measured=measured)
+
+        assert score["pillars"]["testing"]["findings"] == 0
+        assert score["pillars"]["testing"]["measured"] is True
+        assert score["pillars"]["documentation"]["measured"] is False
+    finally:
+        session.close()
+
+
+def test_tool_results_mark_their_pillars_measured() -> None:
+    measured = measured_from_tool_results(
+        [
+            {"ok": True, "tool": "tests"},
+            {"ok": True, "tool": "docs"},
+            {"ok": False, "tool": "deps"},
+        ]
+    )
+
+    assert measured["testing"] is True
+    assert measured["documentation"] is True
+    assert measured["dependencies"] is False
 
 
 def test_single_finding_in_a_tiny_repo_is_not_floored(make_analysis) -> None:

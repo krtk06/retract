@@ -337,9 +337,10 @@ just when the version does. `python -m app.benchmark` prints a sensitivity table
 over both constants for any analysis, which is how the value above was chosen —
 from two repositories and the trade-off between them, not from one anecdote.
 
-**Known limitation:** a pillar nobody measured scores 100 and flatters the mean.
-`psf/requests` has zero dependency findings and scores 100 there. Unmeasured is not
-the same as clean, and the current aggregation does not distinguish them.
+**Known limitation:** a pillar nobody measured still scores 100 in the arithmetic
+and flatters the mean. The score payload now records `measured` per pillar, so the
+UI labels that 100 "not measured" instead of presenting it as clean; the headline
+number itself still includes it.
 
 ## Fix with your agent
 

@@ -63,6 +63,20 @@ CATEGORY_PILLAR = {
     "tool-error": None,
 }
 
+# Which pillars each deterministic tool is capable of measuring. A tool that
+# reported successfully measured its pillars even when it found nothing: "clean"
+# and "nobody looked" are different answers and must not share a label.
+TOOL_PILLARS = {
+    "semgrep": ("security", "code-quality"),
+    "gitleaks": ("security",),
+    "deps": ("dependencies", "security"),
+    "complexity": ("code-quality",),
+    "duplication": ("code-quality",),
+    "tests": ("testing",),
+    "docs": ("documentation",),
+    "architecture": ("architecture",),
+}
+
 PILLAR_WEIGHTS = {
     "code-quality": 0.20,
     "security": 0.25,
@@ -154,12 +168,54 @@ def _pillar_score_by_count(weighted_penalty: float) -> int:
     return _clamp(100 / (1 + weighted_penalty / COUNT_HALF_SCORE_PENALTY))
 
 
-def compute_score(session: Session, analysis_id: int) -> dict:
+def _stored_measured(analysis: Analysis | None) -> dict[str, bool] | None:
+    """Reuse the measured map from a stored score, when the payload carries one.
+
+    Scores are recomputed after a human review or an agent intake. Those paths
+    have no tool results to consult, but the tool run that produced the score is
+    still the authority on what was measured. Legacy payloads predate the field
+    and return None so the caller falls back to the old count-based inference.
+    """
+    if analysis is None or not isinstance(analysis.score_json, dict):
+        return None
+    pillars = analysis.score_json.get("pillars")
+    if not isinstance(pillars, dict):
+        return None
+    if not any(
+        isinstance(pillars.get(pillar), dict) and "measured" in pillars[pillar]
+        for pillar in PILLARS
+    ):
+        return None
+    return {pillar: bool((pillars.get(pillar) or {}).get("measured", False)) for pillar in PILLARS}
+
+
+def measured_from_tool_results(results: Iterable[object] | None) -> dict[str, bool]:
+    """Map the chord's tool results to the pillars that were actually assessed.
+
+    A failed tool measured nothing. A successful one measured every pillar it is
+    responsible for, including when it returned zero findings.
+    """
+    measured = {pillar: False for pillar in PILLARS}
+    for result in results or ():
+        if not isinstance(result, dict) or not result.get("ok"):
+            continue
+        for pillar in TOOL_PILLARS.get(str(result.get("tool")), ()):
+            measured[pillar] = True
+    return measured
+
+
+def compute_score(
+    session: Session,
+    analysis_id: int,
+    measured: dict[str, bool] | None = None,
+) -> dict:
     analysis = session.get(Analysis, analysis_id)
     loc = analysis.loc if analysis is not None and analysis.loc else None
+    if measured is None:
+        measured = _stored_measured(analysis)
 
     findings = session.scalars(select(Finding).where(Finding.analysis_id == analysis_id)).all()
-    return aggregate(findings, loc)
+    return aggregate(findings, loc, measured=measured)
 
 
 def _tally_pillars(
@@ -199,7 +255,11 @@ def _pillar_score_for(penalty: float, kloc: float | None) -> float:
     return max(1, score) if penalty > 0 else score
 
 
-def aggregate(findings: Iterable[Finding], loc: int | None) -> dict:
+def aggregate(
+    findings: Iterable[Finding],
+    loc: int | None,
+    measured: dict[str, bool] | None = None,
+) -> dict:
     """Score an arbitrary set of findings as if it were a repository's finding set.
 
     Split out from :func:`compute_score` so the remediation planner can ask the
@@ -207,6 +267,11 @@ def aggregate(findings: Iterable[Finding], loc: int | None) -> dict:
     and get a number produced by the identical curve. A projection that used a
     different formula than the score it is predicting would be a second opinion
     dressed up as arithmetic.
+
+    ``measured`` says which pillars an analyzer actually assessed. When it is
+    omitted (projections, legacy callers), a pillar with findings is treated as
+    measured and one without is not. A caller holding the run's tool results
+    should pass the map explicitly so a clean pillar is not mislabelled.
     """
     penalty, counts, verified, hypotheses, dismissed = _tally_pillars(findings)
 
@@ -217,6 +282,7 @@ def aggregate(findings: Iterable[Finding], loc: int | None) -> dict:
     kloc = (loc / 1000) if loc else None
     pillars = {}
     for pillar in PILLARS:
+        tool_measured = bool(measured.get(pillar, False)) if measured is not None else False
         pillars[pillar] = {
             "score": _pillar_score_for(penalty[pillar], kloc),
             "findings": counts[pillar],
@@ -224,6 +290,9 @@ def aggregate(findings: Iterable[Finding], loc: int | None) -> dict:
             "hypotheses": hypotheses[pillar],
             "dismissed": dismissed[pillar],
             "weighted_penalty": round(penalty[pillar], 2),
+            # A finding is itself evidence that something looked, even when the
+            # finder was an agent rather than one of the deterministic tools.
+            "measured": tool_measured or counts[pillar] > 0,
         }
 
     weighted_mean = sum(pillars[p]["score"] * PILLAR_WEIGHTS[p] for p in PILLARS)

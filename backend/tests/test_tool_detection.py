@@ -12,10 +12,12 @@ These tests pin the corrected behaviour, including the docstring exemption for
 tests and generated migrations.
 """
 
+import json
 from pathlib import Path
 
 from app.services.ingestion import FileEntry, count_lines
 from app.services.tools.context import ToolContext
+from app.services.tools.deps import collect_dependencies
 from app.services.tools.docs import run_docs
 from app.services.tools.tests import run_tests
 
@@ -80,6 +82,23 @@ def test_package_detection_uses_the_importable_package(tmp_path: Path) -> None:
     assert not [f for f in findings if f.category == "missing-tests"]
 
 
+def test_package_detection_reports_a_package_no_test_imports(tmp_path: Path) -> None:
+    """Detection must actually find the package, not just fail to find a reason to complain.
+
+    Empty ``__init__.py`` files are common and have zero lines, so a detector that
+    reads only ``code_files`` (files with ``lines > 0``) sees no package boundary at
+    all and reports the testing pillar as measured-and-clean.
+    """
+    _write(tmp_path, "backend/app/__init__.py", "")
+    _write(tmp_path, "backend/app/core.py", "def work():\n    return 1\n")
+    _write(tmp_path, "backend/tests/test_other.py", "def test_other():\n    assert True\n")
+
+    findings = run_tests(_context(tmp_path))
+
+    missing = [f for f in findings if f.category == "missing-tests"]
+    assert [f.file_path for f in missing] == ["app"]
+
+
 def test_package_detection_reports_the_shallowest_package_once(tmp_path: Path) -> None:
     """A nested package must not be reported under its deepest component."""
     _write(tmp_path, "backend/app/__init__.py", "")
@@ -134,6 +153,45 @@ def test_duplicate_import_blocks_are_not_duplication(tmp_path: Path) -> None:
     from app.services.tools.duplication import run_duplication
 
     assert run_duplication(_context(tmp_path)) == []
+
+
+def test_dependencies_are_read_from_nested_manifests_and_lockfiles(tmp_path: Path) -> None:
+    """A monorepo keeps its manifests under subdirectories, not at the root.
+
+    A ranged npm spec is not an installed version, so the lockfile is the authority
+    for what the project actually resolved.
+    """
+    _write(
+        tmp_path,
+        "frontend/package.json",
+        json.dumps({"dependencies": {"react": "^18.3.1"}, "devDependencies": {"vitest": "~2.1.4"}}),
+    )
+    _write(
+        tmp_path,
+        "frontend/package-lock.json",
+        json.dumps(
+            {
+                "lockfileVersion": 3,
+                "packages": {
+                    "node_modules/react": {"version": "18.3.1"},
+                    "node_modules/vitest": {"version": "2.1.9"},
+                },
+            }
+        ),
+    )
+    _write(
+        tmp_path,
+        "backend/pyproject.toml",
+        '[project]\nname = "demo"\ndependencies = ["fastapi==0.115.0"]\n',
+    )
+
+    deps = collect_dependencies(_context(tmp_path))
+
+    assert {(d.name, d.version) for d in deps} == {
+        ("fastapi", "0.115.0"),
+        ("react", "18.3.1"),
+        ("vitest", "2.1.9"),
+    }
 
 
 def test_generated_migrations_are_not_maintainability_findings(tmp_path: Path) -> None:
