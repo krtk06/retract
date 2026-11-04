@@ -26,6 +26,9 @@ export interface ScorePillar {
   hypotheses: number;
   dismissed?: number;
   weighted_penalty?: number;
+  /** Whether an analyzer actually assessed this pillar. Absent on legacy scores,
+   *  where the client falls back to "a finding means something was measured". */
+  measured?: boolean;
 }
 
 export interface Score {

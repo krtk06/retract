@@ -34,6 +34,12 @@ services:
       RETRACT_DATABASE_URL: postgresql+psycopg://postgres:postgres@postgres:5432/ai_intel
       RETRACT_REDIS_URL: redis://redis:6379/0
       RETRACT_DATA_DIR: /data
+      # The Docker dev server is on 5173 by default; the native
+      # `scripts/dev-local.sh` path uses 5175. Keep the container's OAuth/CORS
+      # origin self-consistent, and allow a different host port when 5173 is
+      # already taken by another project.
+      RETRACT_FRONTEND_URL: http://localhost:${RETRACT_FRONTEND_PORT:-5173}
+      RETRACT_CORS_ORIGINS: http://localhost:${RETRACT_FRONTEND_PORT:-5173}
     command: >
       sh -c "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000"
     volumes:
@@ -44,7 +50,7 @@ services:
       redis:
         condition: service_healthy
     ports:
-      - "8000:8000"
+      - "${RETRACT_API_PORT:-8000}:8000"
 
   retract-worker:
     build: ../backend
@@ -99,6 +105,19 @@ services:
   retract-agent:
     build:
       context: ../agent
+      # eve compiles the provider and model into the image, so the dev stack needs
+      # the same build inputs as production. Without these, the image freezes the
+      # Dockerfile defaults (gateway/anthropic) and a runtime `RETRACT_LLM_PROVIDER`
+      # change is ignored.
+      args:
+        RETRACT_LLM_PROVIDER: ${RETRACT_LLM_PROVIDER:-mock}
+        RETRACT_MODEL: ${RETRACT_MODEL:-}
+        RETRACT_LLM_BASE_URL: ${RETRACT_LLM_BASE_URL:-}
+        RETRACT_LLM_API_MODE: ${RETRACT_LLM_API_MODE:-chat}
+        RETRACT_LLM_HEADERS: ${RETRACT_LLM_HEADERS:-}
+        RETRACT_AGENT_MAX_INPUT_TOKENS: ${RETRACT_AGENT_MAX_INPUT_TOKENS:-200000}
+        RETRACT_AGENT_MAX_OUTPUT_TOKENS: ${RETRACT_AGENT_MAX_OUTPUT_TOKENS:-50000}
+        RETRACT_AGENT_MAX_COST_USD: ${RETRACT_AGENT_MAX_COST_USD:-0.50}
     env_file:
       - path: ../.env
         required: false
@@ -115,7 +134,7 @@ services:
     depends_on:
       - retract-api
     ports:
-      - "3000:3000"
+      - "${RETRACT_AGENT_PORT:-3000}:3000"
 
   retract-frontend:
     build:
@@ -125,7 +144,7 @@ services:
       VITE_API_PROXY: http://retract-api:8000
       VITE_EVE_PROXY: http://retract-agent:3000
     ports:
-      - "5173:5173"
+      - "${RETRACT_FRONTEND_PORT:-5173}:5173"
     depends_on:
       - retract-api
       - retract-agent

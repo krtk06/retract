@@ -1,5 +1,6 @@
 """Application settings, loaded from environment with prefix RETRACT_."""
 
+import ipaddress
 from functools import lru_cache
 from pathlib import Path
 from urllib.parse import urlsplit
@@ -82,6 +83,26 @@ class Settings(BaseSettings):
     # On by default; tests turn it off so they are not limited by their own volume.
     rate_limit_enabled: bool = True
 
+    # Forwarded headers are trusted only when the direct peer is in one of these
+    # comma-separated CIDRs. The production Compose network pins 172.28.0.0/16;
+    # uvicorn receives the same list via --forwarded-allow-ips.
+    trusted_proxy_cidrs: str = "127.0.0.1/32"
+
+    # Dev-only: one repository per client IP per window. Re-analyzing the same
+    # repository is allowed. This is a convenience guard, not a security boundary.
+    dev_repo_per_ip_ttl_seconds: int = 24 * 3600
+
+    # Per-account monthly LLM budgets in USD, and the deployment-wide ceiling
+    # enforced across every account. The provider key budget remains the final
+    # hard stop. Demo/dev accounts use the demo value; GitHub/email accounts the
+    # standard value.
+    demo_llm_budget_usd: float = 2.0
+    user_llm_budget_usd: float = 10.0
+    global_llm_budget_usd: float = 2.0
+    # Fallback when a provider reports neither a dollar cost nor token prices.
+    # Blank disables the token ceiling.
+    llm_monthly_token_budget: str = ""
+
     # Dev-only: allow local:// path URLs (for the seedy benchmark repo).
     allow_local_repos: bool = False
 
@@ -97,6 +118,41 @@ class Settings(BaseSettings):
     @property
     def cors_origin_list(self) -> list[str]:
         return [o.strip() for o in self.cors_origins.split(",") if o.strip()]
+
+    @property
+    def trusted_proxy_network_list(
+        self,
+    ) -> list[ipaddress.IPv4Network | ipaddress.IPv6Network]:
+        """Parsed proxy CIDRs; a malformed entry refuses to start rather than trusting nothing."""
+        networks: list[ipaddress.IPv4Network | ipaddress.IPv6Network] = []
+        for raw in self.trusted_proxy_cidrs.split(","):
+            entry = raw.strip()
+            if not entry:
+                continue
+            try:
+                networks.append(ipaddress.ip_network(entry, strict=False))
+            except ValueError as exc:
+                raise ValueError(
+                    f"RETRACT_TRUSTED_PROXY_CIDRS contains {entry!r}, which is not an IP "
+                    "address or CIDR"
+                ) from exc
+        return networks
+
+    @property
+    def llm_monthly_token_budget_tokens(self) -> int | None:
+        """The per-user token ceiling, or None when disabled."""
+        raw = self.llm_monthly_token_budget.strip()
+        if not raw:
+            return None
+        try:
+            value = int(raw)
+        except ValueError as exc:
+            raise ValueError(
+                f"RETRACT_LLM_MONTHLY_TOKEN_BUDGET must be an integer or blank (got {raw!r})"
+            ) from exc
+        if value < 0:
+            raise ValueError("RETRACT_LLM_MONTHLY_TOKEN_BUDGET cannot be negative")
+        return value or None
 
     @property
     def is_development(self) -> bool:

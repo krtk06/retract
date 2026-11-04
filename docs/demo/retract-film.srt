@@ -1,0 +1,75 @@
+1
+00:00:03,150 --> 00:00:11,963
+A repository can look healthy from the outside. A clean README. A passing badge. A promising dependency. Then you inherit it.
+
+2
+00:00:12,523 --> 00:00:25,370
+Most reviews still run on vibes. A glance at the docs. A hunch about the maintainers. Or a model's opinion with no evidence you can check. For a decision this expensive, that is not good enough.
+
+3
+00:00:25,930 --> 00:00:38,921
+Retract gives a GitHub repository a health score with verified, cited findings across six pillars: security, code quality, testing, architecture, documentation, and dependencies.
+
+4
+00:00:39,481 --> 00:00:48,281
+The score is composed from what the analyzers actually measured. A pillar nobody could assess is labelled not measured, never treated as clean.
+
+5
+00:00:48,841 --> 00:01:01,569
+It clones the repository and runs deterministic tools first. Semgrep, gitleaks, dependency scanning, complexity, duplication, tests, docs, and architecture.
+
+6
+00:01:02,129 --> 00:01:12,645
+A tree-sitter symbol graph maps every import and call, so structural answers come from the code, never from a model's guess. No embeddings. No vector store.
+
+7
+00:01:13,205 --> 00:01:22,801
+Every claim is re-checked against the source before it counts. Tool-confirmed findings are verified. Agent-only claims remain hypotheses.
+
+8
+00:01:23,361 --> 00:01:34,728
+High-severity claims wait for a human signature. The approval is recorded, and dismissals feed calibration. The agent cannot publish a score or approve its own finding.
+
+9
+00:01:35,288 --> 00:01:40,273
+The result is a dossier, not a dashboard. A score with its per-pillar schedule.
+
+10
+00:01:40,833 --> 00:01:47,584
+Findings cited to file and line, with the exact excerpt. Open one and the source is right there.
+
+11
+00:01:48,144 --> 00:01:55,300
+Explore the symbol graph directly: callers, callees, imports, and the path between two symbols.
+
+12
+00:01:55,860 --> 00:02:02,070
+A remediation plan ordered by points gained and effort, ready to download or hand to the agent.
+
+13
+00:02:02,630 --> 00:02:09,467
+History to see whether the repository is getting better or worse, and a trust panel that says what was measured and what was not.
+
+14
+00:02:10,027 --> 00:02:17,385
+Ask the eve agent why. It answers from the symbol graph and the tool results, and cites the file and line it actually read.
+
+15
+00:02:17,945 --> 00:02:29,685
+A typed tool for every graph question. Five specialist subagents for security, code, tests, architecture, and docs. One analysis-scoped session.
+
+16
+00:02:30,245 --> 00:02:39,721
+Repositories are private to the account that added them. GitHub identity and email are verified. Consequential actions pass through an approval gate.
+
+17
+00:02:40,281 --> 00:02:52,401
+FastAPI, Postgres, Redis, Celery, and a React workspace. Model spend is metered per account. A benchmark harness keeps precision and recall honest.
+
+18
+00:02:52,961 --> 00:02:59,048
+Deploy it with Docker, or run it locally. Either way, the same evidence trail comes with it.
+
+19
+00:02:59,608 --> 00:03:03,375
+Retract. Repository health, computed not vibes.

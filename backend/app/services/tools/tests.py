@@ -58,7 +58,10 @@ def run_tests(ctx: ToolContext) -> list[FindingDraft]:
     # Package-level: top-level source packages never imported by any test file.
     test_contents = "\n".join(_read(ctx.repo_root / p) for p in py_test_files + js_test_files)
     drafts: list[FindingDraft] = []
-    for package in _source_packages(code_files):
+    # Pass every inventoried file, not `code_files`: an empty `__init__.py` has zero
+    # lines and is dropped by the `lines > 0` filter, so reading only code files
+    # hides the package boundary the detector is built around.
+    for package in _source_packages(ctx.files):
         pattern = re.compile(rf"(?:from|import)\s+{re.escape(package)}\b")
         if not pattern.search(test_contents):
             drafts.append(
@@ -86,7 +89,7 @@ def _read(path: Path) -> str:
         return ""
 
 
-def _source_packages(code_files: list[FileEntry]) -> list[str]:
+def _source_packages(files: list[FileEntry]) -> list[str]:
     """The importable package names, not the repository's top-level directories.
 
     A package root may be nested (`backend/app`), and the tests import it by its
@@ -99,11 +102,11 @@ def _source_packages(code_files: list[FileEntry]) -> list[str]:
     """
     package_dirs = {
         str(Path(f.path).parent)
-        for f in code_files
+        for f in files
         if f.ext == ".py" and Path(f.path).name == "__init__.py"
     }
     packages: set[str] = set()
-    for entry in code_files:
+    for entry in files:
         if entry.ext != ".py":
             continue
         parts = Path(entry.path).parts

@@ -18,7 +18,7 @@ where a working deployment most often fails, and neither failure names its cause
 
 - An Oracle Cloud account (the Always Free tier is enough).
 - Your GitHub OAuth app (the "Retract" one) — you will update its callback URL.
-- The opencode-go API key already in your local `.env`.
+- An API key for the chosen LLM provider (opencode-go in this guide).
 
 ---
 
@@ -156,7 +156,15 @@ HTTP_PORT=8080
 # --- GitHub OAuth app ---
 RETRACT_GITHUB_CLIENT_ID=<from the OAuth app>
 RETRACT_GITHUB_CLIENT_SECRET=<from the OAuth app>
-RETRACT_GITHUB_OAUTH_REDIRECT_URI=https://retract-demo.duckdns.org/api/auth/github/callback
+# PUBLIC_URL above is the source of truth in the Compose topology: it derives the
+# callback URL, the frontend origin, and CORS. Set this explicit line only when
+# running outside Compose (a local uvicorn, for example).
+# RETRACT_GITHUB_OAUTH_REDIRECT_URI=https://retract-demo.duckdns.org/api/auth/github/callback
+
+# --- Proxy trust (required behind Caddy + nginx) ---
+# The API is reachable only from the Compose network. Trust forwarded headers from
+# exactly that subnet, never `*` and never a public address.
+RETRACT_TRUSTED_PROXY_CIDRS=172.28.0.0/16
 
 # --- Email verification (Gmail app password) ---
 # Without this, verification links cannot be sent, so a GitHub sign-in can never
@@ -172,21 +180,58 @@ RETRACT_LLM_PROVIDER=openai
 RETRACT_LLM_BASE_URL=https://opencode.ai/zen/go/v1
 RETRACT_LLM_API_MODE=chat
 RETRACT_LLM_API_KEY=<your oc_sk_… key>
-RETRACT_MODEL=longcat-2.5-preview-free
-# Single-quoted: the file is sourced by bash, and unquoted braces lose their quotes.
+RETRACT_MODEL=deepseek-v4.1-flash
+# Required by opencode-go: it rejects a request without a session header and asks
+# clients to identify themselves with their own user agent.
 RETRACT_LLM_HEADERS='{"x-opencode-session":"retract-prod","user-agent":"retract-agent/0.1.0"}'
+
+# --- Spend controls (per UTC calendar month) ---
+# Demo-only deployment: $2 per demo/dev account and $2 across the deployment.
+# Use RETRACT_USER_LLM_BUDGET_USD=10 and RETRACT_GLOBAL_LLM_BUDGET_USD=10 when
+# serving real GitHub/email accounts. Set the provider key's own budget to the
+# deployment cap as well; that is the final hard stop.
+RETRACT_DEMO_LLM_BUDGET_USD=2
+RETRACT_USER_LLM_BUDGET_USD=10
+RETRACT_GLOBAL_LLM_BUDGET_USD=2
+# opencode-go does not expose cost through the OpenAI-compatible SDK, so these
+# token prices are the authoritative dollar source. Re-check them before relying
+# on the ledger: deepseek-v4.1-flash was $0.25/M input and output when verified.
+RETRACT_LLM_INPUT_COST_PER_MTOK=0.25
+RETRACT_LLM_OUTPUT_COST_PER_MTOK=0.25
+# Optional fallback when dollars cannot be measured at all.
+RETRACT_LLM_MONTHLY_TOKEN_BUDGET=
+
+# --- Per-session caps (build-time; rebuild the agent when changing them) ---
+RETRACT_AGENT_MAX_INPUT_TOKENS=200000
+RETRACT_AGENT_MAX_OUTPUT_TOKENS=50000
+RETRACT_AGENT_MAX_COST_USD=0.50
 ```
 
 Notes that matter:
 
 - `PUBLIC_URL` **must** be `https://…`. The session cookie is `Secure` in production,
-  so a deployment served over plain HTTP cannot sign anyone in.
+  so a deployment served over plain HTTP cannot sign anyone in. In Compose it also
+  becomes the GitHub callback URL and the allowed origin.
 - `RETRACT_ENVIRONMENT=production` is set by the compose file itself; leave it.
+- **The provider, model, base URL, API mode, and non-secret headers are build-time
+  inputs.** eve compiles the agent definition into its image. After changing any of
+  them, rebuild the agent:
+  `docker compose --env-file .env -f infra/docker-compose.prod.yml build retract-agent`.
+  The API key is *not* a build input; it is read at run time, and the build uses a
+  non-secret placeholder. `scripts/verify-agent-build.sh` fails if that placeholder
+  ever appears in the compiled output.
+- **SMTP is required for GitHub account linking.** Without it, GitHub sign-in still
+  works but creates a separate account and verification links cannot be delivered.
+- The backend image builds on both amd64 and arm64; gitleaks is selected and
+  checksum-verified for the target architecture.
 - Do **not** set `RETRACT_DEV_LOGIN=1`. The backend refuses to start in production
   with it, along with a short/published `RETRACT_JWT_SECRET`, a missing agent token,
   `RETRACT_AUTH_COOKIE_SECURE` off, `RETRACT_CORS_ORIGINS=*`, or
   `RETRACT_ALLOW_LOCAL_REPOS=1`.
 - `.env` is gitignored. Keep it that way.
+
+The full limit and budget table, and which cost source is authoritative, is in
+[`docs/operations.md`](operations.md).
 
 ## 8. Point the GitHub OAuth app at the hostname
 
@@ -216,6 +261,13 @@ step 7 that was left unset or a callback URL that does not match step 8.
 ## 10. Verify
 
 ```bash
+scripts/smoke-prod.sh https://retract-demo.duckdns.org
+```
+
+The script checks the health endpoint, the frontend, TLS, and that the agent refuses
+anonymous callers. Run it once now and after every deploy. Its individual checks:
+
+```bash
 curl -s https://retract-demo.duckdns.org/api/health
 # {"status":"ok","db":"ok","redis":"ok"}
 
@@ -234,6 +286,9 @@ Then in a browser:
    `RETRACT_AGENT_TOKEN` differs between the API and the agent in `.env`.
 
 ## Operating it
+
+The day-two runbook — limits, budget accounting, backups, upgrades, and what each
+provider reports — is [`docs/operations.md`](operations.md). The essentials:
 
 ```bash
 # logs (follow one service, or all)

@@ -47,16 +47,22 @@ class Dep:
 
 
 def collect_dependencies(ctx: ToolContext) -> list[Dep]:
-    """Parse dependency manifests into a flat list."""
+    """Parse dependency manifests into a flat list.
+
+    Manifests are discovered anywhere in the checkout, not only at the root: a
+    monorepo commonly keeps them in `backend/`, `frontend/` and `agent/`, and a
+    root-only scan reports that repository as having no dependencies at all.
+    """
     deps: list[Dep] = []
     for entry in ctx.files:
         path = ctx.repo_root / entry.path
-        if entry.path == "pyproject.toml":
+        name = Path(entry.path).name
+        if name == "pyproject.toml":
             deps.extend(_parse_pyproject(path, entry.path))
-        elif entry.path.startswith("requirements") and entry.ext == ".txt":
+        elif name.startswith("requirements") and entry.ext == ".txt":
             deps.extend(_parse_requirements(path, entry.path))
-        elif entry.path == "package.json":
-            deps.extend(_parse_package_json(path, entry.path))
+        elif name == "package.json":
+            deps.extend(_parse_package_json(path, entry.path, _lockfile_versions(path.parent)))
     return deps
 
 
@@ -111,19 +117,55 @@ def _parse_pyproject(path: Path, source: str) -> list[Dep]:
     return out
 
 
-def _parse_package_json(path: Path, source: str) -> list[Dep]:
+def _lockfile_versions(project_dir: Path) -> dict[str, str]:
+    """Resolved versions from the sibling package-lock.json, when there is one.
+
+    A package.json usually carries ranges (`^18.3.1`), which are not installed
+    versions. The lockfile is what the project actually resolved, so it is the
+    authority for an npm audit. Supports lockfile v2/v3 (`packages`) and v1
+    (`dependencies`).
+    """
+    try:
+        data = json.loads((project_dir / "package-lock.json").read_text())
+    except (OSError, ValueError):
+        return {}
+    versions: dict[str, str] = {}
+    packages = data.get("packages")
+    if isinstance(packages, dict):
+        for key, value in packages.items():
+            if not isinstance(key, str) or not key.startswith("node_modules/"):
+                continue
+            if not isinstance(value, dict) or not isinstance(value.get("version"), str):
+                continue
+            versions[key.removeprefix("node_modules/")] = value["version"]
+    dependencies = data.get("dependencies")
+    if isinstance(dependencies, dict):
+        for name, value in dependencies.items():
+            if isinstance(value, dict) and isinstance(value.get("version"), str):
+                versions.setdefault(name, value["version"])
+    return versions
+
+
+def _parse_package_json(path: Path, source: str, locked: dict[str, str] | None = None) -> list[Dep]:
     try:
         data = json.loads(path.read_text())
     except (OSError, ValueError):
         return []
+    locked = locked or {}
     out: list[Dep] = []
     for section in ("dependencies", "devDependencies"):
         for name, spec in (data.get(section) or {}).items():
-            spec_str = str(spec)
-            # npm ranges (>=, ^, ~, *, x) are not exact pins — skip them.
-            if any(ch in spec_str for ch in ">^~*x"):
+            spec_str = str(spec).strip()
+            if spec_str.startswith(("workspace:", "file:", "link:", "git+", "http")):
                 continue
-            version = spec_str
+            # A ranged spec is not an installed version. Prefer the lockfile's
+            # resolved version; without one there is nothing exact to audit.
+            if any(ch in spec_str for ch in ">^~*x"):
+                version = locked.get(name)
+                if not version:
+                    continue
+            else:
+                version = spec_str.removeprefix("v")
             out.append(Dep(name, version, "npm", source))
     return out
 

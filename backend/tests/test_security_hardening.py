@@ -80,16 +80,16 @@ def test_a_token_without_a_version_still_signs_in(client: TestClient) -> None:
 def limited(monkeypatch: pytest.MonkeyPatch):
     """Turn the limiter on with an in-memory store, independent of app settings."""
     store = fakeredis.FakeRedis(decode_responses=True)
+    settings = get_settings().model_copy(update={"rate_limit_enabled": True})
     monkeypatch.setattr(rate_limit, "_redis", lambda: store)
-    monkeypatch.setattr(
-        rate_limit, "get_settings", lambda: type("S", (), {"rate_limit_enabled": True})()
-    )
+    monkeypatch.setattr(rate_limit, "get_settings", lambda: settings)
     return store
 
 
 class _FakeRequest:
     def __init__(self, host: str = "203.0.113.7") -> None:
         self.client = type("C", (), {"host": host})()
+        self.headers: dict[str, str] = {}
 
 
 def test_the_limiter_allows_up_to_the_limit_then_refuses(limited) -> None:
@@ -118,7 +118,9 @@ def test_the_limiter_fails_open_when_redis_is_down(monkeypatch) -> None:
 
     monkeypatch.setattr(rate_limit, "_redis", boom)
     monkeypatch.setattr(
-        rate_limit, "get_settings", lambda: type("S", (), {"rate_limit_enabled": True})()
+        rate_limit,
+        "get_settings",
+        lambda: get_settings().model_copy(update={"rate_limit_enabled": True}),
     )
     # No exception: the request is allowed.
     rate_limit.enforce(_FakeRequest(), "login", limit=1, window_seconds=60)

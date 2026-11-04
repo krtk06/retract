@@ -45,6 +45,23 @@ describe("ScoreHero", () => {
     expect(screen.getByText("not measured")).toBeInTheDocument();
   });
 
+  it("renders a score for a measured pillar with no findings", () => {
+    render(
+      <ScoreHero
+        score={{
+          ...score,
+          pillars: {
+            ...score.pillars,
+            testing: { ...score.pillars.testing, measured: true },
+          },
+        }}
+      />,
+    );
+
+    const testing = screen.getByRole("progressbar", { name: "Testing" });
+    expect(testing).toHaveAttribute("aria-valuenow", "100");
+  });
+
   it("keeps the existing count-basis warning verbatim", () => {
     render(<ScoreHero score={{ ...score, basis: "count" }} />);
     expect(

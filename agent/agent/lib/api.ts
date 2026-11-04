@@ -14,13 +14,14 @@
 const DEFAULT_API_URL = "http://localhost:8110";
 
 export class ApiError extends Error {
-  constructor(
-    readonly status: number,
-    readonly path: string,
-    message: string,
-  ) {
+  readonly status: number;
+  readonly path: string;
+
+  constructor(status: number, path: string, message: string) {
     super(`${status} ${path}: ${message}`);
     this.name = "ApiError";
+    this.status = status;
+    this.path = path;
   }
 }
 

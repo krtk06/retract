@@ -10,16 +10,50 @@ COPY . .
 
 # Build once so `eve start` serves the compiled Nitro output.
 #
-# KNOWN LIMITATION: eve compiles the agent definition — including the *resolved model* —
-# into .output/.eve/compile/compiled-agent-manifest.json at build time, so in this image
-# RETRACT_LLM_PROVIDER, RETRACT_MODEL and the NODE_ENV fixture-model guard are resolved
-# from the *build* environment and ignored at run time. Verified: a container started with
-# RETRACT_LLM_PROVIDER=openai and a valid RETRACT_API_KEY still called the AI Gateway,
-# and the manifest contained no occurrence of "openai". Note the corollary — a provider
-# needing a key (openai) would have that key baked into the manifest, so it must never be
-# built with one. Build args are the supported way to select the provider; see
-# implementation.md for the options and the reason this is not simply moved to start-up.
-RUN npm run build
+# eve compiles the resolved model and routing into
+# .output/.eve/compile/compiled-agent-manifest.json, and also bundles the module that
+# re-resolves process.env at request time. Both are driven by the build environment, so
+# the provider, model, base URL, API mode, and non-secret headers are build args.
+# Changing them requires rebuilding this image; the runtime container must be started
+# with the same values or the manifest and the live model disagree.
+#
+# The credential is deliberately NOT a build arg. `agent.ts` resolves it at build time
+# (the module is imported then) but eve does not embed it in the output; verified by
+# grepping .output for the build key. A non-secret placeholder satisfies the build-time
+# check, and the runtime environment supplies the real key. `scripts/verify-agent-build.sh`
+# fails if a credential ever does appear in the compiled output.
+ARG RETRACT_LLM_PROVIDER=gateway
+ARG RETRACT_MODEL=anthropic/claude-sonnet-4.5
+ARG RETRACT_LLM_BASE_URL=
+ARG RETRACT_LLM_API_MODE=chat
+# Only non-secret headers belong here. If a header contains a credential, add a lazy
+# fetch wrapper instead; build args are visible in image history.
+ARG RETRACT_LLM_HEADERS=
+ARG RETRACT_BUILD_API_KEY=build-time-placeholder-not-a-credential
+# Per-session caps. eve compiles the agent definition, so these are build inputs;
+# the running container receives the same values from compose.
+ARG RETRACT_AGENT_MAX_INPUT_TOKENS=200000
+ARG RETRACT_AGENT_MAX_OUTPUT_TOKENS=50000
+ARG RETRACT_AGENT_MAX_COST_USD=0.50
+
+RUN RETRACT_LLM_PROVIDER="${RETRACT_LLM_PROVIDER}" \
+    RETRACT_MODEL="${RETRACT_MODEL}" \
+    RETRACT_LLM_BASE_URL="${RETRACT_LLM_BASE_URL}" \
+    RETRACT_LLM_API_MODE="${RETRACT_LLM_API_MODE}" \
+    RETRACT_LLM_HEADERS="${RETRACT_LLM_HEADERS}" \
+    RETRACT_LLM_API_KEY="${RETRACT_BUILD_API_KEY}" \
+    RETRACT_AGENT_MAX_INPUT_TOKENS="${RETRACT_AGENT_MAX_INPUT_TOKENS}" \
+    RETRACT_AGENT_MAX_OUTPUT_TOKENS="${RETRACT_AGENT_MAX_OUTPUT_TOKENS}" \
+    RETRACT_AGENT_MAX_COST_USD="${RETRACT_AGENT_MAX_COST_USD}" \
+    npm run build
+
+# The placeholder must not survive into the image either. The real key is runtime-only,
+# but a failed guard here means the compile step serialized a credential-shaped value,
+# which is the failure mode scripts/verify-agent-build.sh exists to catch.
+RUN if grep -rqF "${RETRACT_BUILD_API_KEY}" .output; then \
+      echo "build credential leaked into .output; refusing to ship the image" >&2; \
+      exit 1; \
+    fi
 
 # Run unprivileged. /srv/agent is owned by root so the image contents cannot be
 # edited by the running process; the workflow state directory is the one place it

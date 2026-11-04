@@ -135,6 +135,12 @@ def analyze_repo(
     # one account occupy the shared queue indefinitely — so the budget is per user.
     rate_limit.enforce(request, "analyze", limit=30, window_seconds=3600, who=str(user.id))
 
+    # Development bypass accounts share a repository pool and are cheap to create;
+    # cap them at one repository per client IP per window. Re-analyzing the same
+    # repository remains allowed. Real accounts are untouched.
+    if user.is_dev:
+        rate_limit.claim_dev_repo(request, repo_id)
+
     active = db.scalar(
         select(Analysis).where(
             Analysis.repository_id == repo_id, Analysis.status.in_(_ACTIVE_STATUSES)

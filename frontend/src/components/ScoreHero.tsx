@@ -83,10 +83,12 @@ export function ScoreHero({ score }: { score: Score | null }) {
         {PILLARS.map((pillar, index) => {
           const data = score.pillars[pillar];
           if (!data) return null;
-          // A pillar with no findings scores 100, which is indistinguishable from
-          // "checked and clean" unless it is labelled. Nothing was found because
-          // nothing was measured, and the number must not read as reassurance.
-          const unmeasured = data.findings === 0;
+          // A measured pillar with no findings is clean and scores 100. A pillar
+          // nothing assessed also scores 100, so the two must not share a label.
+          // Legacy payloads have no `measured` field; fall back to the old
+          // inference for them rather than claiming every old pillar was measured.
+          const unmeasured =
+            data.measured === false || (data.measured === undefined && data.findings === 0);
           return (
             <div key={pillar} className="flex flex-wrap items-center gap-x-3 gap-y-1.5 sm:flex-nowrap">
               <span className="w-[7rem] shrink-0 text-[13px] text-muted">
@@ -115,10 +117,17 @@ export function ScoreHero({ score }: { score: Score | null }) {
         })}
       </div>
 
-      {PILLARS.some((pillar) => score.pillars[pillar]?.findings === 0) && (
+      {PILLARS.some((pillar) => {
+        const data = score.pillars[pillar];
+        return (
+          data != null &&
+          (data.measured === false ||
+            (data.measured === undefined && data.findings === 0))
+        );
+      }) && (
         <p className="mt-5 border-t border-line pt-4 text-[13px] leading-relaxed text-faint">
-          A dimension with no findings is shown as &ldquo;not measured&rdquo;: nothing was found
-          because nothing triggered that analyzer, which is not the same as clean.
+          A dimension no analyzer could assess is shown as &ldquo;not measured&rdquo;. A
+          dimension that was assessed and found nothing reports 100, which is clean.
         </p>
       )}
     </section>

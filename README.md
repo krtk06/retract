@@ -1,5 +1,7 @@
 # Retract
 
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+
 Give it a GitHub repository — get back a **Repository Health Score** with verified,
 cited findings across code quality, security, testing, documentation, dependencies,
 and architecture.
@@ -10,6 +12,18 @@ reviews over the repository's **symbol graph** and those tool results — no vec
 store, no embedding retrieval. A verification layer re-checks every agent claim
 before it counts, and high-severity claims wait for a human. See `docs/RESEARCH.md`
 for the research basis and `implementation.md` for the build plan.
+
+## Demo
+
+[![Retract product film](docs/demo/retract-film-poster.png)](https://github.com/krtk06/retract/releases/download/demo-film/retract-film.mp4)
+
+A three-minute narrated walkthrough of the score, verified findings, fix plan, and
+agent — [watch the film](https://github.com/krtk06/retract/releases/download/demo-film/retract-film.mp4)
+or read the [captions](https://github.com/krtk06/retract/releases/download/demo-film/retract-film.srt).
+Prefer to run it yourself? See [Demo locally](#demo-locally-no-hosting).
+
+Benchmark: **100% recall / 91% deduplicated precision** on the fixture suite —
+[details](#benchmark).
 
 ## Architecture
 
@@ -56,6 +70,47 @@ instead also works.
   `/eve/v1/*` (the eve React SDK's base path). There is no UI at `/eve`; that path
   belongs to the API prefix only.
 
+### Demo locally (no hosting)
+
+The recorded version is the [three-minute film](https://github.com/krtk06/retract/releases/download/demo-film/retract-film.mp4).
+A public deployment is optional. For a portfolio or review, run the dev stack and
+record it; that avoids DNS, OAuth, a TLS proxy, and a provider budget.
+
+```bash
+cp .env.example .env
+# set RETRACT_AGENT_TOKEN, RETRACT_JWT_SECRET, RETRACT_DEV_LOGIN=1,
+# and the LLM provider/key for the agent
+docker compose --env-file .env -f infra/docker-compose.yml up --build
+```
+
+Open http://localhost:5173 and choose **Dev login**. If 5173 or 8000 is already
+taken by another project, override the host ports:
+
+```bash
+RETRACT_FRONTEND_PORT=5176 RETRACT_API_PORT=8010 \
+  docker compose --env-file .env -f infra/docker-compose.yml up --build
+```
+
+Then open http://localhost:5176. A 2–3 minute walkthrough:
+
+1. Add `https://github.com/urllib3/urllib3` and start the analysis.
+2. Show the score and the per-pillar breakdown.
+3. Open a finding; show the cited file/line and the verification state.
+4. Open the Fixes tab and show the remediation plan.
+5. Ask the agent a question; show the cited answer.
+6. If you show an approval, keep it brief.
+
+The deterministic analysis runs without the LLM; the agent needs the provider key.
+The dev stack publishes Postgres and Redis on localhost for development. Do not use
+it as a public deployment.
+
+The storyboard, recording checklist, and screenshot list are in
+[`docs/demo.md`](docs/demo.md).
+
+![Retract score and pillar breakdown](docs/demo/03-overview.png)
+
+![A verified finding with its cited source](docs/demo/05-finding.png)
+
 ### Production
 
 ```bash
@@ -68,11 +123,11 @@ tier, a free DuckDNS name, and Caddy for TLS — see
 firewalls Oracle puts in front of a new instance, which is where a first deployment
 most often stalls.
 
-with `POSTGRES_USER`, `POSTGRES_PASSWORD`, `RETRACT_JWT_SECRET` and
-`RETRACT_AGENT_TOKEN` in `.env` (see `.env.example`). They are deliberately
-required with no defaults: refusing to start beats starting an agent that can
-reach the API unauthenticated. Note that *every* compose subcommand interpolates
-the file, so `ps` and `down` need those variables too.
+The production stack requires `POSTGRES_USER`, `POSTGRES_PASSWORD`,
+`RETRACT_JWT_SECRET` and `RETRACT_AGENT_TOKEN` in `.env` (see `.env.example`). They
+are deliberately required with no defaults: refusing to start beats starting an
+agent that can reach the API unauthenticated. Note that *every* compose subcommand
+interpolates the file, so `ps` and `down` need those variables too.
 
 The LLM credential is *not* in that list, because the agent validates it itself,
 per provider: `openai` reads `RETRACT_API_KEY` and `gateway` reads
@@ -282,9 +337,10 @@ just when the version does. `python -m app.benchmark` prints a sensitivity table
 over both constants for any analysis, which is how the value above was chosen —
 from two repositories and the trade-off between them, not from one anecdote.
 
-**Known limitation:** a pillar nobody measured scores 100 and flatters the mean.
-`psf/requests` has zero dependency findings and scores 100 there. Unmeasured is not
-the same as clean, and the current aggregation does not distinguish them.
+**Known limitation:** a pillar nobody measured still scores 100 in the arithmetic
+and flatters the mean. The score payload now records `measured` per pillar, so the
+UI labels that 100 "not measured" instead of presenting it as clean; the headline
+number itself still includes it.
 
 ## Fix with your agent
 
@@ -390,7 +446,7 @@ RETRACT_LLM_PROVIDER=openai \
 RETRACT_LLM_BASE_URL=https://opencode.ai/zen/go/v1 \
 RETRACT_LLM_API_MODE=chat \
 RETRACT_LLM_API_KEY=... \
-RETRACT_MODEL=longcat-2.5-preview-free \
+RETRACT_MODEL=deepseek-v4.1-flash \
 npm run eval:live -- quality
 
 # or via the Vercel AI Gateway
@@ -417,3 +473,14 @@ Set `RETRACT_JUDGE_MODEL` if the judge should use the same provider as the agent
 - `infra/` — Docker Compose services
 - `benchmark/` — evaluation repos + ground truth
 - `docs/` — research notes, architecture decisions, per-phase review logs
+
+## Security
+
+Report vulnerabilities through GitHub's private advisory form; the policy and the
+trust model are in [`SECURITY.md`](SECURITY.md). In short: repository content is
+untrusted, the agent cannot run host code or read another account's repository, and
+high-severity claims require a human approval.
+
+## License
+
+MIT — see [`LICENSE`](LICENSE).

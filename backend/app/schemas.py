@@ -210,6 +210,56 @@ class EveTokenOut(BaseModel):
     expires_in: int
 
 
+class AgentSessionIn(BaseModel):
+    """The eve session-to-account mapping the agent posts before a turn."""
+
+    session_id: str = Field(min_length=1, max_length=200)
+    user_id: int = Field(ge=1)
+
+
+class AgentSessionOut(BaseModel):
+    """The account an eve session is charged to."""
+
+    session_id: str
+    user_id: int
+
+
+class AgentUsageIn(BaseModel):
+    """One completed model call, as reported by eve instrumentation.
+
+    The idempotency key is the primary key of the audit row: replaying the same
+    event must not increase the monthly aggregate twice.
+    """
+
+    idempotency_key: str = Field(min_length=1, max_length=200)
+    session_id: str = Field(min_length=1, max_length=200)
+    model: str = Field(default="unknown", min_length=1, max_length=200)
+    input_tokens: int = Field(default=0, ge=0)
+    output_tokens: int = Field(default=0, ge=0)
+    cost_usd: float = Field(default=0.0, ge=0)
+
+
+class AgentUsageOut(BaseModel):
+    recorded: bool
+
+
+class AgentBudgetOut(BaseModel):
+    """The budget check response consumed by the agent before dispatch."""
+
+    period: str
+    user_budget_usd: float
+    global_budget_usd: float
+    used_usd: float
+    user_used_usd: float
+    global_used_usd: float
+    remaining_usd: float
+    input_tokens: int
+    output_tokens: int
+    used_tokens: int
+    token_budget: int | None = None
+    remaining_tokens: int | None = None
+
+
 class FindingOut(BaseModel):
     """One finding as returned to the dashboard."""
 

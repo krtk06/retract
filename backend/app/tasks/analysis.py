@@ -196,7 +196,7 @@ def finalize_analysis(_results: list, analysis_id: int) -> dict:
     """Verify LLM findings, calibrate confidence, then compute the honest score."""
     from app.analysis_engine import approvals, verify
     from app.analysis_engine import calibration as calibration_mod
-    from app.analysis_engine.scoring import compute_score
+    from app.analysis_engine.scoring import compute_score, measured_from_tool_results
 
     bus = get_bus()
     session = get_session_factory()()
@@ -236,7 +236,11 @@ def finalize_analysis(_results: list, analysis_id: int) -> dict:
         except Exception as exc:  # noqa: BLE001
             logger.exception("calibration failed for analysis %s: %s", analysis_id, exc)
 
-        score = compute_score(session, analysis_id)
+        # The chord hands back one result per tool. It is the only record of which
+        # analyzers reported, and therefore the only honest source for "measured":
+        # a successful tool with zero findings measured its pillars and found them
+        # clean; a failed tool measured nothing.
+        score = compute_score(session, analysis_id, measured=measured_from_tool_results(_results))
         analysis.score_json = score
         analysis.status = AnalysisStatus.DONE
         analysis.finished_at = datetime.now(UTC)

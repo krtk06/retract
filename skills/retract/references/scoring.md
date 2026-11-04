@@ -28,7 +28,9 @@ overall = min(weighted_mean, worst_pillar + 15)
 - **A pillar with findings floors at 1**, never 0 — still terrible, still
   ordered, never ambiguous with "not measured".
 - A pillar no analyzer measured scores 100 and can never lower the cap.
-  The UI shows it as "not measured", which is not the same as clean.
+  Each pillar carries `measured`; the UI shows an unmeasured one as "not
+  measured", which is not the same as clean. A successful analyzer that found
+  nothing is measured and reports 100.
 - **15** above the worst pillar is the cap's slack (`WORST_PILLAR_HEADROOM`);
   **0.001** KLOC is the density floor (`MIN_KLOC`), only a guard against
   division by zero when LOC exists but is tiny.
