@@ -97,9 +97,20 @@ jobs:
       - name: Backend dependencies
         run: pip install -e "backend[dev]"
       - name: Audit Python dependencies
-        # semgrep 1.179-1.181 hard-pins mcp==1.29.0; the fixed mcp releases are not
-        # resolvable until semgrep ships an updated pin.
-        run: pip-audit --ignore-vuln CVE-2026-59951
+        # semgrep 1.179-1.183 pins mcp==1.29.0 and opentelemetry-api~=1.37.0. The
+        # fixed mcp (1.30.0/2.2.0) and opentelemetry (1.45.1) releases are not
+        # resolvable until semgrep updates those pins. Retract invokes semgrep as
+        # a subprocess and never exposes its MCP server or receives OTel
+        # tracestate headers, so the paths these CVEs describe are not reachable
+        # through the API. Keep the ignores narrow and remove them when semgrep
+        # ships fixed pins.
+        run: |
+          pip-audit \
+            --ignore-vuln CVE-2026-59951 \
+            --ignore-vuln CVE-2026-116684 \
+            --ignore-vuln CVE-2026-116685 \
+            --ignore-vuln CVE-2026-116686 \
+            --ignore-vuln CVE-2026-114603
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: "24"

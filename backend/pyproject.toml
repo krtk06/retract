@@ -31,6 +31,8 @@ dependencies = [
     # >=1.179 because 1.178 pins `pyjwt~=2.13.0`, which holds the vulnerable release
     # below the floor set above; 1.179 moved to `pyjwt>=2.15`. semgrep is only ever
     # run as a subprocess here, so its Python pin matters solely for resolution.
+    # 1.179-1.183 still pin mcp==1.29.0 and opentelemetry-api~=1.37.0; CI carries
+    # narrow ignores for the advisories against those pins. See the dependency job.
     "semgrep>=1.179",
     "tree-sitter==0.24.0",
     "tree-sitter-python==0.23.6",
